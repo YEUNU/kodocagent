@@ -131,6 +131,7 @@ kodocagent config set law-key <발급받은_LAW_OC_키>
 | `kodocagent config show` | 현재 설정 표시 (API 키 마스킹) |
 | `kodocagent mcp list` | MCP 서버 상태 목록 |
 | `kodocagent mcp test <server>` | 특정 MCP 서버 연결 테스트 + 툴 목록 |
+| `kodocagent clean` | 스테이징 전체 + 30일 경과 백업 정리 (`--all`로 백업 전체 삭제) |
 | `kodocagent update` | 최신 버전으로 업데이트 |
 | `kodocagent --version` | 버전 출력 |
 
@@ -138,7 +139,7 @@ kodocagent config set law-key <발급받은_LAW_OC_키>
 
 | 명령 | 설명 |
 |------|------|
-| `/model` | 프로바이더/모델 전환 (키 있는 프로바이더만 표시) |
+| `/model` | 프로바이더/모델 전환 (키 있는 프로바이더만 표시, 직접 입력도 가능) |
 | `/clear` | 새 세션 시작 |
 | `/help` | 도움말 |
 | `/exit` | 종료 |

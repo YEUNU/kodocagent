@@ -1,7 +1,12 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export const KODOC_HOME = join(homedir(), ".kodocagent");
+/**
+ * 홈 디렉터리 — KODOCAGENT_HOME 환경변수로 오버라이드 가능.
+ * (테스트 격리 필수: vitest.setup.ts가 임시 디렉터리로 설정해
+ *  테스트가 실제 ~/.kodocagent에 쓰는 것을 차단한다)
+ */
+export const KODOC_HOME = process.env.KODOCAGENT_HOME ?? join(homedir(), ".kodocagent");
 
 export const KODOC_PATHS = {
   home: KODOC_HOME,

@@ -11,7 +11,7 @@
  * 테스트 호환성: baseDir 파라미터로 KODOC_PATHS 우회 가능
  */
 
-import { copyFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { KODOC_PATHS } from "@kodocagent/shared";
 import { createTwoFilesPatch } from "diff";
@@ -111,6 +111,86 @@ export function markdownDiff(beforeMd: string, afterMd: string, label: string): 
   return createTwoFilesPatch(`a/${label}`, `b/${label}`, beforeMd, afterMd, undefined, undefined, {
     context: 3,
   });
+}
+
+/**
+ * 특정 세션의 스테이징 디렉터리를 삭제한다.
+ * 세션 종료 시 자동 정리에 사용한다.
+ *
+ * @param sessionId  정리할 세션 ID
+ * @param baseDir    테스트 시 KODOC_PATHS.staging 대체 경로 (선택)
+ */
+export async function cleanSessionStaging(sessionId: string, baseDir?: string): Promise<void> {
+  const stagingRoot = baseDir ?? KODOC_PATHS.staging;
+  const sessionDir = join(stagingRoot, sessionId);
+  await rm(sessionDir, { recursive: true, force: true });
+}
+
+/**
+ * 스테이징 루트 전체를 비운다 (모든 세션 스테이징 삭제).
+ *
+ * @param baseDir  테스트 시 KODOC_PATHS.staging 대체 경로 (선택)
+ * @returns        삭제된 항목(세션 디렉터리/파일) 수
+ */
+export async function cleanAllStaging(baseDir?: string): Promise<number> {
+  const stagingRoot = baseDir ?? KODOC_PATHS.staging;
+
+  let entries: string[];
+  try {
+    entries = await readdir(stagingRoot);
+  } catch {
+    return 0;
+  }
+
+  let count = 0;
+  for (const entry of entries) {
+    const fullPath = join(stagingRoot, entry);
+    await rm(fullPath, { recursive: true, force: true });
+    count++;
+  }
+  return count;
+}
+
+/**
+ * mtime 기준으로 오래된 백업 파일을 삭제한다.
+ *
+ * @param maxAgeDays  이 일수 이상 경과한 파일 삭제 (기본값: 30)
+ * @param baseDir     테스트 시 KODOC_PATHS.backups 대체 경로 (선택)
+ * @returns           { deleted: number; kept: number }
+ */
+export async function cleanOldBackups(
+  maxAgeDays = 30,
+  baseDir?: string,
+): Promise<{ deleted: number; kept: number }> {
+  const backupsRoot = baseDir ?? KODOC_PATHS.backups;
+
+  let entries: string[];
+  try {
+    entries = await readdir(backupsRoot);
+  } catch {
+    return { deleted: 0, kept: 0 };
+  }
+
+  const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+  let deleted = 0;
+  let kept = 0;
+
+  for (const entry of entries) {
+    const fullPath = join(backupsRoot, entry);
+    try {
+      const info = await stat(fullPath);
+      if (info.mtimeMs < cutoff) {
+        await rm(fullPath, { recursive: true, force: true });
+        deleted++;
+      } else {
+        kept++;
+      }
+    } catch {
+      // 상태 조회 실패 시 건너뜀
+    }
+  }
+
+  return { deleted, kept };
 }
 
 /**

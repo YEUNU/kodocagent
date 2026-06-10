@@ -89,6 +89,8 @@ markdownToHwpx(markdown: string, options?: { templateArrayBuffer?: ArrayBuffer, 
 
 ## 4. 설정 파일
 
+> 홈 디렉터리(`~/.kodocagent`)는 `KODOCAGENT_HOME` 환경변수로 오버라이드 가능 (테스트 격리·포터블 설치용).
+
 ### `~/.kodocagent/config.json` (mode 0600, zod 검증)
 
 ```jsonc
@@ -230,6 +232,8 @@ propose_* 호출
 
 비대화형(non-TTY) 실행 시: 모든 `propose_*`는 자동 거절 + "대화형 터미널에서 실행하세요" 메시지 (v1에는 `--yes` 자동승인 없음 — 안전 우선).
 
+세션 종료(정상 종료·EOF·SIGINT) 시 해당 세션의 스테이징 디렉터리를 자동 삭제한다 (`cleanSessionStaging` — 실패는 무시). `kodocagent clean` 명령으로 스테이징 전체 + 30일 경과 백업을 수동 정리할 수 있다.
+
 ## 8. CLI (`packages/cli`)
 
 ### 명령
@@ -242,12 +246,13 @@ propose_* 호출
 | `kodocagent sessions` | 세션 목록 |
 | `kodocagent config set <key> <value>` / `config show` | 설정 (api-key.anthropic, law-key, model 등) |
 | `kodocagent mcp list` / `mcp test <server>` | MCP 서버 상태 확인 |
+| `kodocagent clean` | 스테이징 전체 + 30일 경과 백업 정리 (`--all`로 백업 전체 삭제) |
 | `kodocagent update` | 셀프 업데이트 (§9) |
 | `kodocagent --version` | 버전 |
 
 ### 채팅 내 슬래시 명령
 
-`/model`(프로바이더·모델 전환 — 키 있는 프로바이더만 표시), `/clear`(새 세션), `/help`, `/exit`
+`/model`(프로바이더·모델 전환 — 키 있는 프로바이더만 표시, "직접 입력..." 선택 시 임의 모델 ID 입력 가능·BYOK 미등재 ID 허용), `/clear`(새 세션), `/help`, `/exit`
 
 ### 온보딩 (최초 실행)
 

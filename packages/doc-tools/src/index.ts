@@ -27,6 +27,11 @@ export const SUPPORTED_WRITE_EXTENSIONS = [".hwpx", ".docx", ".xlsx", ".md", ".t
 export const HWP_WRITE_CONVERSION = { from: ".hwp", to: ".hwpx" } as const;
 
 export { resolveSafePath } from "./security.js";
+export {
+  cleanAllStaging,
+  cleanOldBackups,
+  cleanSessionStaging,
+} from "./staging.js";
 export { listFilesTool } from "./tools/list-files.js";
 export { proposeEditTool } from "./tools/propose-edit.js";
 export { proposeFormFillTool } from "./tools/propose-form-fill.js";

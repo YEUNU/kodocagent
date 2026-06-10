@@ -43,6 +43,7 @@ kodocagent --continue
 | `kodocagent config show` | 현재 설정 표시 |
 | `kodocagent mcp list` | MCP 서버 상태 목록 |
 | `kodocagent mcp test <server>` | MCP 서버 연결 테스트 |
+| `kodocagent clean` | 스테이징 전체 + 30일 경과 백업 정리 (`--all`로 백업 전체) |
 | `kodocagent update` | 최신 버전으로 업데이트 |
 | `kodocagent --version` | 버전 출력 |
 

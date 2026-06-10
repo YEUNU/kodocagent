@@ -8,6 +8,7 @@ import { KodocError } from "@kodocagent/shared";
 import chalk from "chalk";
 import { Command } from "commander";
 import { runChat } from "./chat.js";
+import { runClean } from "./clean-cmd.js";
 import { configSet, configShow } from "./config-cmd.js";
 import { mcpList, mcpTest } from "./mcp-cmd.js";
 import { needsOnboarding, runOnboarding } from "./onboarding.js";
@@ -152,6 +153,22 @@ mcpCmd
   });
 
 // ──────────────────────────────────────────────
+// clean 서브커맨드
+// ──────────────────────────────────────────────
+
+program
+  .command("clean")
+  .description("스테이징 전체 + 오래된 백업(기본: 30일 경과) 정리")
+  .option("--all", "날짜 무관 백업 전체 삭제")
+  .action(async (opts: { all?: boolean }) => {
+    try {
+      await runClean(opts);
+    } catch (err: unknown) {
+      handleError(err);
+    }
+  });
+
+// ──────────────────────────────────────────────
 // update 서브커맨드
 // ──────────────────────────────────────────────
 
@@ -261,6 +278,9 @@ async function runSingleTurn(prompt: string): Promise<void> {
   }
   process.stdout.write("\n");
   await mcpManager.disconnect();
+  // 단발 질의 종료 시 세션 스테이징 정리 (실패는 무시)
+  const { cleanSessionStaging } = await import("@kodocagent/doc-tools");
+  cleanSessionStaging(store.id).catch(() => {});
 }
 
 program.parse();

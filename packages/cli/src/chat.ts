@@ -10,7 +10,7 @@
  * - Ctrl+C: 현재 턴 중단 / 두 번째 Ctrl+C: 종료
  */
 import * as readline from "node:readline/promises";
-import { isCancel, select } from "@clack/prompts";
+import { isCancel, select, text } from "@clack/prompts";
 import {
   AgentSession,
   createModel,
@@ -21,7 +21,7 @@ import {
   SessionStore,
   ToolRegistry,
 } from "@kodocagent/core";
-import { createDocTools } from "@kodocagent/doc-tools";
+import { cleanSessionStaging, createDocTools } from "@kodocagent/doc-tools";
 import type { KodocConfig } from "@kodocagent/shared";
 import { KNOWN_MODELS, resolveApiKey } from "@kodocagent/shared";
 import chalk from "chalk";
@@ -120,6 +120,8 @@ export async function runChat(opts: {
       if (ctrlCCount >= 2) {
         process.stdout.write(chalk.yellow("\n종료합니다.\n"));
         rl.close();
+        // SIGINT 경로: best-effort 스테이징 정리
+        cleanSessionStaging(store.id).catch(() => {});
         mcpManager.disconnect().finally(() => process.exit(0));
       } else {
         process.stdout.write(chalk.dim("\n(한 번 더 Ctrl+C를 누르면 종료됩니다)\n"));
@@ -204,9 +206,8 @@ export async function runChat(opts: {
           process.stdout.write(event.text);
           hasOutput = true;
         } else if (event.type === "tool-call") {
-          // 툴콜은 dim 1줄 표시
-          const argsPreview = JSON.stringify(event.args).slice(0, 60);
-          process.stdout.write(chalk.dim(`\n⚙ ${event.toolName}(${argsPreview})\n`));
+          // 툴콜은 핵심 인자 포함 dim 1줄 표시
+          process.stdout.write(chalk.dim(`\n⚙ ${formatToolCall(event.toolName, event.args)}\n`));
         } else if (event.type === "tool-result") {
           // 툴 결과는 생략 (모델에게 전달됨)
         } else if (event.type === "approval-required") {
@@ -232,7 +233,57 @@ export async function runChat(opts: {
   }
 
   rl.close();
+  // 정상 종료 (/exit, EOF): 세션 스테이징 정리 (실패는 무시)
+  cleanSessionStaging(store.id).catch(() => {});
   await mcpManager.disconnect();
+}
+
+/**
+ * 툴콜 표시 문자열 생성.
+ * - mcp__ 툴: "서버명__툴명" 형태로 압축
+ * - 나머지: path/dir/pathA 등 첫 번째 path류 인자 또는 첫 string 값을 괄호 안에 표시
+ * - 50자 초과 시 말줄임 처리
+ */
+function formatToolCall(toolName: string, args: unknown): string {
+  const MAX_LEN = 50;
+
+  // mcp__ 툴: "mcp__서버__툴" → 서버/툴명만 표시
+  if (toolName.startsWith("mcp__")) {
+    const parts = toolName.split("__");
+    const display = parts.slice(1).join("__"); // 서버__툴명
+    return display.length > MAX_LEN ? `${display.slice(0, MAX_LEN)}…` : display;
+  }
+
+  // 인자에서 핵심 값 추출
+  let keyArg = "";
+  if (args && typeof args === "object" && !Array.isArray(args)) {
+    const argsObj = args as Record<string, unknown>;
+    // path류 키 우선 탐색
+    const pathKeys = ["path", "dir", "pathA", "pathB", "filePath", "target"];
+    for (const key of pathKeys) {
+      const val = argsObj[key];
+      if (typeof val === "string" && val) {
+        // 긴 경로면 basename만 사용
+        const short =
+          val.includes("/") || val.includes("\\") ? (val.split(/[/\\]/).pop() ?? val) : val;
+        keyArg = short;
+        break;
+      }
+    }
+    // path류 없으면 첫 번째 string 값
+    if (!keyArg) {
+      for (const val of Object.values(argsObj)) {
+        if (typeof val === "string" && val) {
+          keyArg = val;
+          break;
+        }
+      }
+    }
+  }
+
+  const argPart = keyArg ? `(${keyArg})` : "";
+  const full = `${toolName}${argPart}`;
+  return full.length > MAX_LEN ? `${full.slice(0, MAX_LEN)}…` : full;
 }
 
 /** 새 세션 스토어 생성 */
@@ -280,7 +331,7 @@ async function handleSlashCommand(
 }
 
 /** /model 명령 처리 */
-async function handleModelSwitch(config: KodocConfig): Promise<{ config: KodocConfig } | null> {
+async function handleModelSwitch(_config: KodocConfig): Promise<{ config: KodocConfig } | null> {
   // API 키가 있는 프로바이더만 표시
   type ProviderOption = { value: string; label: string; hint?: string };
   const options: ProviderOption[] = [];
@@ -318,9 +369,49 @@ async function handleModelSwitch(config: KodocConfig): Promise<{ config: KodocCo
 
   const selected = String(result);
   if (selected === "__custom__") {
-    // TODO: readline으로 커스텀 입력 받기 — M1에서는 간단히 처리
-    process.stdout.write(chalk.dim("커스텀 모델 입력은 config set 명령을 사용하세요.\n"));
-    return null;
+    const customInput = await text({
+      message: "모델 ID를 입력하세요 (예: anthropic/claude-opus-4-8 또는 프로바이더:모델ID):",
+      placeholder: "provider:model-id",
+      validate(value) {
+        if (!value?.trim()) return "모델 ID를 입력해야 합니다.";
+        return undefined;
+      },
+    });
+
+    if (isCancel(customInput) || !customInput) return null;
+
+    const modelInput = String(customInput).trim();
+    if (!modelInput) return null;
+
+    // "provider:modelId" 형태이면 분리, 아니면 현재 provider 유지
+    let provider = loadedConfig.provider as KodocConfig["provider"];
+    let modelId: string;
+
+    if (modelInput.includes(":")) {
+      const colonIdx = modelInput.indexOf(":");
+      provider = modelInput.slice(0, colonIdx) as KodocConfig["provider"];
+      modelId = modelInput.slice(colonIdx + 1);
+    } else {
+      modelId = modelInput;
+    }
+
+    if (!modelId) return null;
+
+    // KNOWN_MODELS에 없는 경우 안내
+    const knownForProvider = KNOWN_MODELS[provider as keyof typeof KNOWN_MODELS] ?? [];
+    const isKnown = (knownForProvider as readonly string[]).includes(modelId);
+    if (!isKnown) {
+      process.stdout.write(
+        chalk.dim("등록되지 않은 모델 ID입니다 — 프로바이더가 지원하는지 확인하세요\n"),
+      );
+    }
+
+    const newConfig = { ...loadedConfig };
+    newConfig.provider = provider;
+    newConfig.model = modelId;
+    await saveConfig(newConfig);
+
+    return { config: newConfig };
   }
 
   const [provider, modelId] = selected.split(":");

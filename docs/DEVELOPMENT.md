@@ -33,6 +33,7 @@
    - 사용자 노출 메시지는 한국어 (원인 + 해결 방법)
    - 외부 라이브러리 API는 추측 금지 — `node_modules`의 `.d.ts`를 직접 확인
    - 경로는 NFC 정규화 + cwd 이하 검증
+   - **테스트는 실제 `~/.kodocagent`에 절대 쓰지 않는다** — `vitest.setup.ts`가 `KODOCAGENT_HOME`을 임시 디렉터리로 강제하며, 새 코드도 이 경로 체계(`KODOC_PATHS`)만 사용할 것
 
 ## 3. Git 전략
 

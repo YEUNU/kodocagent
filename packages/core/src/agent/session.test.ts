@@ -1,6 +1,4 @@
 import { mkdir, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { KodocConfig } from "@kodocagent/shared";
 import type { LanguageModel } from "ai";
 import { MockLanguageModelV3, simulateReadableStream } from "ai/test";
@@ -252,4 +250,114 @@ describe("AgentSession", () => {
     const complete = events.find((e) => e.type === "turn-complete");
     expect(complete).toBeTruthy();
   });
+});
+
+// ─────────────────────────────────────────────────────────
+// 세션 재개 통합 테스트
+// ─────────────────────────────────────────────────────────
+
+describe("세션 재개 (loadHistory)", () => {
+  beforeEach(async () => {
+    await mkdir(testSessionsDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(testSessionsDir, { recursive: true, force: true });
+  });
+
+  it("멀티턴 기록 저장 → 재개 → 모의 모델이 이전 컨텍스트를 수신한다", async () => {
+    // 1단계: 원본 세션에 멀티턴 기록 저장
+    const store = await SessionStore.create({
+      cwd: "/test",
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      createdAt: new Date().toISOString(),
+    });
+
+    // user → assistant(text) → user → assistant 기록
+    await store.appendUser("첫 번째 질문입니다");
+    await store.appendAssistant({
+      role: "assistant",
+      content: [{ type: "text", text: "첫 번째 응답입니다" }],
+    } as import("ai").ModelMessage);
+    await store.appendUser("두 번째 질문입니다");
+    await store.appendAssistant({
+      role: "assistant",
+      content: [{ type: "text", text: "두 번째 응답입니다" }],
+    } as import("ai").ModelMessage);
+
+    // 2단계: 동일 세션 ID로 새 SessionStore 로드
+    const resumedStore = await SessionStore.load(store.id);
+
+    // 3단계: 모의 모델 생성 (doStreamCalls로 호출 인자 자동 캡처)
+    type AnyStreamPart = Record<string, unknown>;
+    const resumeStreamParts: AnyStreamPart[] = [
+      { type: "stream-start", warnings: [] },
+      { type: "text-start", id: "t1" },
+      { type: "text-delta", id: "t1", delta: "재개된 세션 응답" },
+      { type: "text-end", id: "t1" },
+      {
+        type: "finish",
+        finishReason: "stop",
+        usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+      },
+    ];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const resumeMockModel = new MockLanguageModelV3({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      doStream: async () => ({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        stream: simulateReadableStream<any>({
+          chunks: resumeStreamParts,
+          initialDelayInMs: null,
+          chunkDelayInMs: null,
+        }),
+        request: { body: "{}" },
+        response: {},
+      }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any) as unknown as LanguageModel;
+
+    // 4단계: AgentSession 생성 + loadHistory() 호출
+    const resumedSession = new AgentSession({
+      config: testConfig,
+      model: resumeMockModel,
+      tools: new ToolRegistry(),
+      approvalHandler: async () => ({ approved: true }),
+      store: resumedStore,
+      cwd: "/test",
+    });
+
+    await resumedSession.loadHistory();
+
+    // 5단계: run() 실행
+    const controller = new AbortController();
+    for await (const _event of resumedSession.run("세 번째 질문입니다", controller.signal)) {
+      // 이벤트 소비
+    }
+
+    // 6단계: MockLanguageModelV3의 doStreamCalls로 수신된 prompt 확인
+    const rawModel = resumeMockModel as unknown as import("ai/test").MockLanguageModelV3;
+    expect(rawModel.doStreamCalls).toHaveLength(1);
+
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const callOpts = rawModel.doStreamCalls[0]!;
+    // callOpts.prompt은 LanguageModelV3Prompt = Array<LanguageModelV3Message>
+    const prompt = callOpts.prompt as Array<{ role: string; content: unknown }>;
+
+    // user 메시지 확인
+    const userMsgs = prompt.filter((m) => m.role === "user");
+    expect(userMsgs.length).toBeGreaterThanOrEqual(3); // 기존 2개 + 새 1개
+
+    // assistant 메시지 포함 확인
+    const assistantMsgs = prompt.filter((m) => m.role === "assistant");
+    expect(assistantMsgs.length).toBeGreaterThanOrEqual(2);
+
+    // 이전 user 메시지 텍스트가 포함됐는지 JSON으로 확인
+    const promptJson = JSON.stringify(prompt);
+    expect(promptJson).toContain("첫 번째 질문입니다");
+    expect(promptJson).toContain("두 번째 질문입니다");
+    expect(promptJson).toContain("세 번째 질문입니다");
+  }, 15000);
 });
