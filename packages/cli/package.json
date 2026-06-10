@@ -21,6 +21,7 @@
   "dependencies": {
     "@clack/prompts": "^1.5.1",
     "@kodocagent/core": "workspace:*",
+    "@kodocagent/doc-tools": "workspace:*",
     "@kodocagent/shared": "workspace:*",
     "chalk": "^5.6.2",
     "commander": "^15.0.0"

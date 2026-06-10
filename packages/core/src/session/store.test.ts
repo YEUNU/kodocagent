@@ -1,0 +1,141 @@
+import { mkdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { generateSessionId, latestSession, listSessions, SessionStore } from "./store.js";
+
+// vi.hoisted는 최상위로 호이스팅되므로 내부에서 node: 모듈을 직접 require로 사용
+const { testSessionsDir } = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { join } = require("node:path") as typeof import("node:path");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { tmpdir } = require("node:os") as typeof import("node:os");
+  return { testSessionsDir: join(tmpdir(), `kodocagent-test-sessions-${Date.now()}`) };
+});
+
+vi.mock("@kodocagent/shared", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@kodocagent/shared")>();
+  return {
+    ...original,
+    KODOC_PATHS: {
+      ...original.KODOC_PATHS,
+      sessions: testSessionsDir,
+    },
+  };
+});
+
+describe("SessionStore", () => {
+  beforeEach(async () => {
+    await mkdir(testSessionsDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(testSessionsDir, { recursive: true, force: true });
+  });
+
+  it("세션을 생성하고 ID가 반환된다", async () => {
+    const store = await SessionStore.create({
+      cwd: "/test",
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      createdAt: new Date().toISOString(),
+    });
+    expect(store.id).toBeTruthy();
+    expect(store.meta.provider).toBe("anthropic");
+  });
+
+  it("사용자 메시지를 추가하고 로드할 수 있다", async () => {
+    const store = await SessionStore.create({
+      cwd: "/test",
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      createdAt: new Date().toISOString(),
+    });
+    await store.appendUser("안녕하세요");
+    const messages = await store.loadMessages();
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.role).toBe("user");
+    expect(messages[0]!.content).toBe("안녕하세요");
+  });
+
+  it("세션을 로드하면 meta가 복원된다", async () => {
+    const original = await SessionStore.create({
+      cwd: "/project",
+      provider: "openai",
+      model: "gpt-5.5",
+      createdAt: new Date().toISOString(),
+    });
+    const loaded = await SessionStore.load(original.id);
+    expect(loaded.meta.cwd).toBe("/project");
+    expect(loaded.meta.provider).toBe("openai");
+    expect(loaded.meta.model).toBe("gpt-5.5");
+  });
+
+  it("여러 메시지를 append하고 전체를 로드할 수 있다", async () => {
+    const store = await SessionStore.create({
+      cwd: "/test",
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      createdAt: new Date().toISOString(),
+    });
+    await store.appendUser("첫 번째 메시지");
+    await store.appendAssistant({ role: "assistant", content: "첫 번째 응답" });
+    await store.appendUser("두 번째 메시지");
+
+    const messages = await store.loadMessages();
+    expect(messages).toHaveLength(3);
+    expect(messages[0]!.role).toBe("user");
+    expect(messages[1]!.role).toBe("assistant");
+    expect(messages[2]!.role).toBe("user");
+  });
+
+  it("list()는 세션 목록을 mtime 역순으로 반환한다", async () => {
+    const s1 = await SessionStore.create({
+      cwd: "/a",
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      createdAt: new Date().toISOString(),
+    });
+    // 약간의 시간 차이를 두기 위해 대기
+    await new Promise((r) => setTimeout(r, 10));
+    const s2 = await SessionStore.create({
+      cwd: "/b",
+      provider: "openai",
+      model: "gpt-5.5",
+      createdAt: new Date().toISOString(),
+    });
+
+    const sessions = await listSessions();
+    expect(sessions.length).toBeGreaterThanOrEqual(2);
+    // 최신이 먼저
+    const ids = sessions.map((s) => s.id);
+    expect(ids.indexOf(s2.id)).toBeLessThan(ids.indexOf(s1.id));
+  });
+
+  it("latest()는 가장 최근 세션을 반환한다", async () => {
+    await SessionStore.create({
+      cwd: "/old",
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      createdAt: new Date().toISOString(),
+    });
+    await new Promise((r) => setTimeout(r, 10));
+    const latest = await SessionStore.create({
+      cwd: "/latest",
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      createdAt: new Date().toISOString(),
+    });
+
+    const result = await latestSession();
+    expect(result?.id).toBe(latest.id);
+  });
+
+  it("generateSessionId는 시간 정렬 가능한 ID를 생성한다", () => {
+    const id1 = generateSessionId();
+    const id2 = generateSessionId();
+    // 형식: YYYYMMDD-HHMMSS-xxxxxx
+    expect(id1).toMatch(/^\d{8}-\d{6}-[a-z0-9]{6}$/);
+    expect(id1).not.toBe(id2);
+  });
+});

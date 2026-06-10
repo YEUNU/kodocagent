@@ -32,6 +32,9 @@ importers:
       '@kodocagent/core':
         specifier: workspace:*
         version: link:../core
+      '@kodocagent/doc-tools':
+        specifier: workspace:*
+        version: link:../doc-tools
       '@kodocagent/shared':
         specifier: workspace:*
         version: link:../shared
