@@ -32,7 +32,16 @@ describe("resolveSafePath", () => {
   });
 
   it("절대 경로가 cwd 밖이면 거절된다", async () => {
-    await expect(resolveSafePath(testDir, "/etc/passwd")).rejects.toThrow("허용되지 않는 경로");
+    // 플랫폼 독립: cwd 밖에 실제 존재하는 파일을 만들어 검증 (/etc/passwd는 Windows에 없음)
+    const outsideDir = join(tmpdir(), `kodocagent-test-outside-${Date.now()}`);
+    await mkdir(outsideDir, { recursive: true });
+    const outsideFile = join(outsideDir, "secret.txt");
+    await writeFile(outsideFile, "secret", "utf-8");
+    try {
+      await expect(resolveSafePath(testDir, outsideFile)).rejects.toThrow("허용되지 않는 경로");
+    } finally {
+      await rm(outsideDir, { recursive: true, force: true });
+    }
   });
 
   it("서브 디렉터리 이하 경로는 허용된다", async () => {
@@ -50,8 +59,8 @@ describe("resolveSafePath", () => {
     // (실제 파일 시스템에 NFD로 저장된 경우 realpath가 NFD로 반환할 수 있으나
     //  security 함수는 NFC 정규화 후 비교하므로 에러가 나지 않아야 함)
     const result = await resolveSafePath(testDir, nfdName);
-    // cwd 이하이면 허용
-    expect(result).toContain(testDir);
+    // cwd 이하이면 허용 — Windows 8.3 단축 경로(RUNNER~1 등) 대응 위해 realpath 기준 비교
+    expect(result).toContain(realTestDir);
   });
 
   it("cwd 자체 경로는 허용된다", async () => {
