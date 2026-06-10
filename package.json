@@ -12,7 +12,8 @@
     "test": "vitest run --passWithNoTests",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "changeset": "changeset"
+    "changeset": "changeset",
+    "audit": "pnpm audit --prod"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",

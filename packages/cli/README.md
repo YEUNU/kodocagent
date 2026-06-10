@@ -1,0 +1,55 @@
+# kodocagent
+
+**한국어 특화 문서 AI 에이전트** — HWP/HWPX/DOCX/XLSX 문서를 읽고 수정하며, 한국 법령을 확인해 문서를 검토·추천하는 터미널 에이전트.
+
+## 설치
+
+```bash
+# npm 글로벌 설치
+npm install -g kodocagent
+
+# pnpm 글로벌 설치
+pnpm add -g kodocagent
+
+# npx로 바로 실행
+npx kodocagent@latest
+```
+
+**요구 사항**: Node.js 20 이상
+
+## 빠른 시작
+
+```bash
+# 최초 실행 — 온보딩 (프로바이더·API 키 설정)
+kodocagent
+
+# 단발 질의
+kodocagent -p "이 계약서에서 위약금 조항을 찾아줘"
+
+# 세션 재개
+kodocagent --continue
+```
+
+## CLI 명령
+
+| 명령 | 설명 |
+|------|------|
+| `kodocagent` | 채팅 시작 (최초 실행 시 온보딩) |
+| `kodocagent -p "<질문>"` | 단발 질의 (쓰기 툴 비활성) |
+| `kodocagent --continue` | 가장 최근 세션 재개 |
+| `kodocagent --resume <id>` | 지정한 세션 ID 재개 |
+| `kodocagent sessions` | 세션 목록 |
+| `kodocagent config set <key> <value>` | 설정값 저장 |
+| `kodocagent config show` | 현재 설정 표시 |
+| `kodocagent mcp list` | MCP 서버 상태 목록 |
+| `kodocagent mcp test <server>` | MCP 서버 연결 테스트 |
+| `kodocagent update` | 최신 버전으로 업데이트 |
+| `kodocagent --version` | 버전 출력 |
+
+## 자세한 문서
+
+전체 문서, 기능 설명, 개발자 섹션은 [GitHub 저장소](https://github.com/YEUNU/kodocagent)를 참고하세요.
+
+## 라이선스
+
+MIT

@@ -1,0 +1,8 @@
+---
+"kodocagent": minor
+"@kodocagent/core": minor
+"@kodocagent/doc-tools": minor
+"@kodocagent/shared": minor
+---
+
+v0.1.0 첫 릴리스: 에이전트 루프(BYOK 3사), HWP/HWPX/DOCX/XLSX 읽기·쓰기(미리보기+승인), MCP 클라이언트(korean-law 기본 번들), OTA 업데이트 체크

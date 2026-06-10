@@ -11,6 +11,7 @@ import { runChat } from "./chat.js";
 import { configSet, configShow } from "./config-cmd.js";
 import { mcpList, mcpTest } from "./mcp-cmd.js";
 import { needsOnboarding, runOnboarding } from "./onboarding.js";
+import { checkForUpdate, runUpdate } from "./update.js";
 import { cliVersion } from "./version.js";
 
 // Windows: stdout UTF-8 강제
@@ -43,6 +44,14 @@ program
       // 온보딩 체크
       if (needsOnboarding()) {
         await runOnboarding();
+      }
+
+      // OTA 업데이트 체크 (3s 타임아웃 — 캐시 히트 시 즉시 반환)
+      const newVersion = await checkForUpdate(cliVersion()).catch(() => null);
+      if (newVersion) {
+        process.stdout.write(
+          chalk.yellow(`새 버전 v${newVersion} 사용 가능 — 'kodocagent update'로 업데이트하세요\n`),
+        );
       }
 
       if (options.print) {
@@ -137,6 +146,21 @@ mcpCmd
   .action(async (server: string) => {
     try {
       await mcpTest(server);
+    } catch (err: unknown) {
+      handleError(err);
+    }
+  });
+
+// ──────────────────────────────────────────────
+// update 서브커맨드
+// ──────────────────────────────────────────────
+
+program
+  .command("update")
+  .description("최신 버전으로 업데이트 (npm/pnpm 글로벌 설치)")
+  .action(async () => {
+    try {
+      await runUpdate();
     } catch (err: unknown) {
       handleError(err);
     }
