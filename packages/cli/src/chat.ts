@@ -23,6 +23,7 @@ import { createDocTools } from "@kodocagent/doc-tools";
 import type { KodocConfig } from "@kodocagent/shared";
 import { KNOWN_MODELS, resolveApiKey } from "@kodocagent/shared";
 import chalk from "chalk";
+import { createCliApprovalHandler } from "./approve.js";
 
 /** 슬래시 커맨드 도움말 */
 const HELP_TEXT = `
@@ -158,7 +159,7 @@ export async function runChat(opts: {
       config,
       model,
       tools,
-      approvalHandler: async () => ({ approved: false, reason: "M1에서는 쓰기 승인 미지원" }),
+      approvalHandler: createCliApprovalHandler(),
       store,
       cwd,
     });
@@ -181,6 +182,8 @@ export async function runChat(opts: {
           process.stdout.write(chalk.dim(`\n⚙ ${event.toolName}(${argsPreview})\n`));
         } else if (event.type === "tool-result") {
           // 툴 결과는 생략 (모델에게 전달됨)
+        } else if (event.type === "approval-required") {
+          // 렌더링은 createCliApprovalHandler가 이미 처리함 (이벤트 수신 로그용)
         } else if (event.type === "turn-complete") {
           if (event.usage) {
             process.stdout.write(

@@ -13,5 +13,11 @@ export { loadConfig, saveConfig } from "./config/config.js";
 export { createModel } from "./providers/registry.js";
 export type { SessionMeta, SessionSummary } from "./session/store.js";
 export { generateSessionId, latestSession, listSessions, SessionStore } from "./session/store.js";
-export type { ToolContext, ToolDefinition, ToolExecuteOptions } from "./tools/registry.js";
+export type {
+  ApprovalEventEmitter,
+  ProposeOutcome,
+  ToolContext,
+  ToolDefinition,
+  ToolExecuteOptions,
+} from "./tools/registry.js";
 export { ToolRegistry } from "./tools/registry.js";

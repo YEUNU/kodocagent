@@ -28,20 +28,20 @@ describe("list_files", () => {
   });
 
   it("파일 목록을 반환한다", async () => {
-    const result = await listFilesTool.execute({ input: {}, ctx });
+    const result = await listFilesTool.execute!({ input: {}, ctx });
     expect(result).toContain("문서.hwpx");
     expect(result).toContain("보고서.docx");
   });
 
   it("node_modules를 스킵한다", async () => {
-    const result = await listFilesTool.execute({ input: {}, ctx });
+    const result = await listFilesTool.execute!({ input: {}, ctx });
     expect(result).not.toContain("pkg.js");
     // node_modules 디렉터리 자체도 없어야 함 (SKIP_DIRS에 있으므로)
     expect(result).not.toContain("node_modules");
   });
 
   it("문서 파일이 먼저 표시된다", async () => {
-    const result = await listFilesTool.execute({ input: {}, ctx });
+    const result = await listFilesTool.execute!({ input: {}, ctx });
     const lines = result.split("\n");
     const hwpxIdx = lines.findIndex((l) => l.includes("문서.hwpx"));
     const tsIdx = lines.findIndex((l) => l.includes("script.ts"));
@@ -50,12 +50,12 @@ describe("list_files", () => {
   });
 
   it("서브 디렉터리 내 파일도 포함된다", async () => {
-    const result = await listFilesTool.execute({ input: {}, ctx });
+    const result = await listFilesTool.execute!({ input: {}, ctx });
     expect(result).toContain("nested.txt");
   });
 
   it("특정 서브 디렉터리만 조회할 수 있다", async () => {
-    const result = await listFilesTool.execute({ input: { dir: "subdir" }, ctx });
+    const result = await listFilesTool.execute!({ input: { dir: "subdir" }, ctx });
     expect(result).toContain("nested.txt");
     expect(result).not.toContain("문서.hwpx");
   });

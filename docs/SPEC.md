@@ -64,8 +64,10 @@ parse(input: string /*경로*/ | ArrayBuffer | Buffer, options?: ParseOptions): 
 compare(a: ArrayBuffer, b: ArrayBuffer, options?): Promise<DiffResult>
 // DiffResult: { stats: {added, removed, modified, unchanged}, /* block-level diffs */ }
 
-// 3) 폼 채우기 — 라벨→값 매핑, 서식 보존
-fillForm(buffer: ArrayBuffer, values: Record<string, string>, options?: { format?: "hwpx-preserve" }): Promise<ArrayBuffer>
+// 3) 폼 필드 추출 — ⚠ 2.7.6에는 fillForm이 없음 (M2 구현 시 확인).
+//    폼 채우기는 extractFormFields(blocks)로 현재 값을 읽고 마크다운 치환 후
+//    markdownToHwpx(템플릿=원본)로 재생성하는 방식으로 구현함
+extractFormFields(blocks: IRBlock[]): FormField[]
 
 // 4) 마크다운→HWPX — templateArrayBuffer에 원본을 넘기면 원본 스타일 보존
 markdownToHwpx(markdown: string, options?: { templateArrayBuffer?: ArrayBuffer, warnings?: string[], images?: ExtractedImage[] }): Promise<ArrayBuffer>
@@ -200,7 +202,7 @@ class AgentSession {
 | 툴 | 시그니처 | 구현 |
 |---|---|---|
 | `propose_edit` | `(path, newMarkdown, summary)` | `.hwp`/`.hwpx` → `markdownToHwpx(md, {templateArrayBuffer: 원본})`, `.docx` → `docx` 라이브러리로 재생성(서식 손실을 proposal에 명시), `.md`/`.txt` → 그대로 |
-| `propose_form_fill` | `(path, fields: Record<string,string>, summary)` | kordoc `fillForm(buffer, fields, {format: "hwpx-preserve"})` |
+| `propose_form_fill` | `(path, fields: Record<string,string>, summary)` | kordoc `extractFormFields` + 마크다운 치환 + `markdownToHwpx`(원본 템플릿) — 2.7.6에 fillForm 부재 |
 | `propose_sheet_edit` | `(path, updates: {sheet, cell, value}[], summary)` | exceljs로 원본 워크북 로드 → 셀 단위 수정 → 서식 보존 저장 |
 | `write_new_document` | `(path, markdown)` | 확장자별: `.hwpx` kordoc / `.docx` docx / `.md` fs. 신규 파일이므로 diff 없이 내용 미리보기로 승인 |
 | `write_new_spreadsheet` | `(path, sheets: {name, rows: string[][]}[])` | exceljs 신규 생성 |

@@ -28,19 +28,38 @@ export const HWP_WRITE_CONVERSION = { from: ".hwp", to: ".hwpx" } as const;
 
 export { resolveSafePath } from "./security.js";
 export { listFilesTool } from "./tools/list-files.js";
+export { proposeEditTool } from "./tools/propose-edit.js";
+export { proposeFormFillTool } from "./tools/propose-form-fill.js";
+export { proposeSheetEditTool } from "./tools/propose-sheet-edit.js";
 export { readDocumentTool } from "./tools/read-document.js";
 export { readFileTool } from "./tools/read-file.js";
-export type { ToolContext, ToolDefinition } from "./types.js";
+export { writeNewDocumentTool } from "./tools/write-new-document.js";
+export { writeNewSpreadsheetTool } from "./tools/write-new-spreadsheet.js";
+export type { ProposeOutcome, ToolContext, ToolDefinition } from "./types.js";
 
 import { listFilesTool } from "./tools/list-files.js";
+import { proposeEditTool } from "./tools/propose-edit.js";
+import { proposeFormFillTool } from "./tools/propose-form-fill.js";
+import { proposeSheetEditTool } from "./tools/propose-sheet-edit.js";
 import { readDocumentTool } from "./tools/read-document.js";
 import { readFileTool } from "./tools/read-file.js";
+import { writeNewDocumentTool } from "./tools/write-new-document.js";
+import { writeNewSpreadsheetTool } from "./tools/write-new-spreadsheet.js";
 
 /**
- * 읽기 전용 doc 툴 배열을 반환한다.
+ * 모든 doc 툴 배열을 반환한다 (읽기 + 쓰기).
  * core의 ToolRegistry.register()에 등록해 사용한다.
  */
 export function createDocTools(_ctx: { cwd: string }) {
   // ctx는 런타임 시 ToolRegistry.setContext()로 주입되므로 여기서는 타입 힌트용
-  return [readDocumentTool, listFilesTool, readFileTool] as const;
+  return [
+    readDocumentTool,
+    listFilesTool,
+    readFileTool,
+    proposeEditTool,
+    proposeFormFillTool,
+    proposeSheetEditTool,
+    writeNewDocumentTool,
+    writeNewSpreadsheetTool,
+  ] as const;
 }

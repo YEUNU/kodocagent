@@ -39,9 +39,16 @@ export class AgentSession {
   private readonly messages: ModelMessage[] = [];
   private readonly openDocuments: string[] = [];
 
+  /** approval-required 이벤트를 run() 스트림에 전달하기 위한 큐 */
+  private pendingApprovalEvents: import("@kodocagent/shared").Proposal[] = [];
+
   constructor(private readonly opts: AgentSessionOptions) {
     opts.tools.setApprovalHandler(opts.approvalHandler);
     opts.tools.setContext({ cwd: opts.cwd, sessionId: opts.store.id });
+    // approval-required 이벤트를 캡처해 run() 스트림으로 전달
+    opts.tools.setApprovalEventEmitter((proposal) => {
+      this.pendingApprovalEvents.push(proposal);
+    });
   }
 
   /**
@@ -88,6 +95,13 @@ export class AgentSession {
       // fullStream으로 모든 이벤트를 구독한다
       for await (const part of result.fullStream) {
         if (signal.aborted) break;
+
+        // approval-required 이벤트를 방출 (UI가 렌더링할 수 있도록)
+        // 실제 승인/거절은 ApprovalHandler가 동기적으로 처리하므로 이미 완료됨
+        while (this.pendingApprovalEvents.length > 0) {
+          const proposal = this.pendingApprovalEvents.shift()!;
+          yield { type: "approval-required", proposal };
+        }
 
         switch (part.type) {
           case "text-delta": {
