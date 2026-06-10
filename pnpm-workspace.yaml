@@ -1,0 +1,9 @@
+packages:
+  - "packages/*"
+allowBuilds:
+  esbuild: true
+minimumReleaseAgeExclude:
+  - '@ai-sdk/anthropic@3.0.82'
+  - '@ai-sdk/gateway@3.0.127'
+  - '@ai-sdk/openai@3.0.69'
+  - ai@6.0.199

@@ -1,0 +1,37 @@
+{
+  "name": "@kodocagent/doc-tools",
+  "version": "0.1.0",
+  "description": "kodocagent 문서 툴 — kordoc/docx/exceljs 래퍼, 스테이징/백업/diff",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@clazic/kordoc": "^2.7.6",
+    "@kodocagent/shared": "workspace:*",
+    "diff": "^9.0.0",
+    "docx": "^9.7.1",
+    "exceljs": "^4.4.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5.8.0"
+  }
+}

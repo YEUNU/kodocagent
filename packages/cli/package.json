@@ -1,0 +1,32 @@
+{
+  "name": "kodocagent",
+  "version": "0.1.0",
+  "description": "한국어 특화 문서 AI 에이전트 — HWP/HWPX/DOCX/XLSX 읽기·수정, 한국 법령 기반 검토",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "kodocagent": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json",
+    "dev": "tsup --watch"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.5.1",
+    "@kodocagent/core": "workspace:*",
+    "@kodocagent/shared": "workspace:*",
+    "chalk": "^5.6.2",
+    "commander": "^15.0.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5.8.0"
+  }
+}

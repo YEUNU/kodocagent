@@ -1,0 +1,39 @@
+{
+  "name": "@kodocagent/core",
+  "version": "0.1.0",
+  "description": "kodocagent 코어 — 에이전트 루프, BYOK 프로바이더, 툴 레지스트리, MCP 클라이언트, 세션",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.82",
+    "@ai-sdk/google": "^3.0.80",
+    "@ai-sdk/openai": "^3.0.69",
+    "@kodocagent/doc-tools": "workspace:*",
+    "@kodocagent/shared": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "ai": "^6.0.199",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5.8.0"
+  }
+}
