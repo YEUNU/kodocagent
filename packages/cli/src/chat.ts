@@ -16,6 +16,8 @@ import {
   createModel,
   listSessions,
   loadConfig,
+  loadMcpConfig,
+  McpManager,
   SessionStore,
   ToolRegistry,
 } from "@kodocagent/core";
@@ -56,6 +58,26 @@ export async function runChat(opts: {
 
   let config = await loadConfig();
   const cwd = process.cwd();
+
+  // MCP 초기화 (chat 시작 시 1회)
+  const mcpManager = new McpManager();
+  {
+    const { servers, skipped } = loadMcpConfig(cwd, config);
+    for (const s of skipped) {
+      mcpManager.addSkipped(s.name, s.reason);
+    }
+    if (servers.length > 0) {
+      await mcpManager.connect(servers);
+    }
+    // 실패/스킵 서버 1줄 고지 (CLI prints, core는 출력 안 함)
+    for (const s of mcpManager.status()) {
+      if (s.state === "failed") {
+        process.stdout.write(chalk.dim(`MCP [${s.name}] 연결 실패: ${s.reason ?? ""}\n`));
+      } else if (s.state === "skipped") {
+        process.stdout.write(chalk.dim(`MCP [${s.name}] 스킵: ${s.reason ?? ""}\n`));
+      }
+    }
+  }
 
   // 세션 로드 또는 신규 생성
   let store: SessionStore;
@@ -98,7 +120,7 @@ export async function runChat(opts: {
       if (ctrlCCount >= 2) {
         process.stdout.write(chalk.yellow("\n종료합니다.\n"));
         rl.close();
-        process.exit(0);
+        mcpManager.disconnect().finally(() => process.exit(0));
       } else {
         process.stdout.write(chalk.dim("\n(한 번 더 Ctrl+C를 누르면 종료됩니다)\n"));
       }
@@ -154,6 +176,10 @@ export async function runChat(opts: {
     for (const tool of createDocTools({ cwd })) {
       tools.register(tool as import("@kodocagent/core").ToolDefinition<unknown>);
     }
+    // MCP 툴 등록
+    for (const mcpTool of mcpManager.getToolDefinitions()) {
+      tools.register(mcpTool);
+    }
 
     const session = new AgentSession({
       config,
@@ -162,6 +188,7 @@ export async function runChat(opts: {
       approvalHandler: createCliApprovalHandler(),
       store,
       cwd,
+      mcpServers: mcpManager.connectedServerNames,
     });
 
     // 이전 메시지 로드 (재개 시)
@@ -205,6 +232,7 @@ export async function runChat(opts: {
   }
 
   rl.close();
+  await mcpManager.disconnect();
 }
 
 /** 새 세션 스토어 생성 */

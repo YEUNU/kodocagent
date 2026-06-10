@@ -1,0 +1,236 @@
+/**
+ * MCP 클라이언트 매니저
+ * docs/SPEC.md §4
+ *
+ * 연결 관리, 툴 목록 수집, 툴 실행을 담당한다.
+ * 불변 원칙: console.* 사용 금지, 한국어 에러 메시지
+ */
+
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { jsonSchema } from "ai";
+import type { ToolDefinition } from "../tools/registry.js";
+import type { ServerConnectionConfig } from "./config.js";
+
+// ── 상태 타입 ────────────────────────────────────────────────────────────────
+
+type ServerState = "connected" | "failed" | "skipped";
+
+interface CachedTool {
+  name: string;
+  description?: string;
+  inputSchema: { type: "object"; [key: string]: unknown };
+}
+
+interface ServerEntry {
+  name: string;
+  state: ServerState;
+  reason?: string;
+  toolCount: number;
+  client?: Client;
+  tools?: CachedTool[];
+}
+
+// ── 상수 ────────────────────────────────────────────────────────────────────
+
+const CONNECT_TIMEOUT_MS = 10_000;
+const MAX_MCP_TOOLS_WARN = 40;
+
+// ── McpManager ───────────────────────────────────────────────────────────────
+
+/**
+ * MCP 서버 연결·툴 수집·툴 실행을 관리한다.
+ *
+ * 모든 연결 오류는 격리된다 — connect()는 절대 throw하지 않는다.
+ */
+export class McpManager {
+  private readonly entries = new Map<string, ServerEntry>();
+  readonly warnings: string[] = [];
+
+  /**
+   * 주어진 서버 설정 목록으로 모두 연결을 시도한다.
+   * 개별 서버 연결 실패는 failed로 기록되고, 전체는 계속 진행된다.
+   */
+  async connect(configs: ServerConnectionConfig[]): Promise<void> {
+    for (const config of configs) {
+      await this._connectOne(config);
+    }
+
+    // 총 MCP 툴 수 경고
+    const totalTools = [...this.entries.values()].reduce((sum, e) => sum + e.toolCount, 0);
+    if (totalTools > MAX_MCP_TOOLS_WARN) {
+      this.warnings.push(
+        `MCP 툴이 ${totalTools}개로 권장 한도(${MAX_MCP_TOOLS_WARN}개)를 초과합니다. ` +
+          "불필요한 서버를 비활성화하거나 allowedTools로 제한하세요.",
+      );
+    }
+  }
+
+  private async _connectOne(config: ServerConnectionConfig): Promise<void> {
+    const { name } = config;
+    let transport: StdioClientTransport | StreamableHTTPClientTransport | undefined;
+
+    try {
+      const client = new Client({ name: "kodocagent", version: "0.1.0" });
+
+      if (config.type === "stdio") {
+        // process.env 병합 + 서버별 env 오버라이드
+        // StdioClientTransport는 env가 주어지면 PATH 등이 사라지므로 명시 병합
+        const mergedEnv: Record<string, string> = {};
+        for (const [k, v] of Object.entries(process.env)) {
+          if (v !== undefined) mergedEnv[k] = v;
+        }
+        if (config.env) {
+          Object.assign(mergedEnv, config.env);
+        }
+
+        transport = new StdioClientTransport({
+          command: config.command,
+          args: config.args ?? [],
+          env: mergedEnv,
+          stderr: "pipe",
+        });
+      } else {
+        // HTTP 타입
+        const url = new URL(config.url);
+        const opts = config.headers
+          ? { requestInit: { headers: config.headers as Record<string, string> } }
+          : undefined;
+        transport = new StreamableHTTPClientTransport(url, opts);
+      }
+
+      // 10s 타임아웃으로 연결
+      await Promise.race([
+        client.connect(transport),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("연결 타임아웃 (10초) — 서버가 응답하지 않습니다")),
+            CONNECT_TIMEOUT_MS,
+          ),
+        ),
+      ]);
+
+      // 툴 목록 조회
+      const toolsResult = await client.listTools();
+      const allTools = toolsResult.tools as CachedTool[];
+
+      // allowedTools 필터링
+      const allowedTools = config.allowedTools ?? null;
+      const filteredTools: CachedTool[] =
+        allowedTools != null ? allTools.filter((t) => allowedTools.includes(t.name)) : allTools;
+
+      this.entries.set(name, {
+        name,
+        state: "connected",
+        toolCount: filteredTools.length,
+        client,
+        tools: filteredTools,
+      });
+    } catch (err: unknown) {
+      // 타임아웃/실패 시 스폰된 프로세스·연결이 남지 않도록 transport 정리
+      await transport?.close().catch(() => {});
+      const reason = err instanceof Error ? err.message : String(err);
+      this.entries.set(name, {
+        name,
+        state: "failed",
+        reason: `연결 실패: ${reason}`,
+        toolCount: 0,
+      });
+    }
+  }
+
+  /**
+   * 연결된 모든 서버의 툴을 ToolDefinition 형태로 반환한다.
+   * 이름 네임스페이스: mcp__<server>__<tool>
+   * 설명 접두사: [<server>] <원래 설명>
+   */
+  getToolDefinitions(): ToolDefinition<unknown>[] {
+    const defs: ToolDefinition<unknown>[] = [];
+
+    for (const entry of this.entries.values()) {
+      if (entry.state !== "connected" || !entry.client || !entry.tools) continue;
+
+      for (const mcpTool of entry.tools) {
+        const toolName = `mcp__${entry.name}__${mcpTool.name}`;
+        const description = `[${entry.name}] ${mcpTool.description ?? mcpTool.name}`;
+
+        // AI SDK jsonSchema()로 MCP inputSchema를 FlexibleSchema로 변환
+        // 이렇게 하면 모델에 실제 스키마가 전달된다
+        const inputSch = jsonSchema<unknown>(
+          mcpTool.inputSchema as Parameters<typeof jsonSchema>[0],
+        );
+
+        const client = entry.client;
+        const mcpToolName = mcpTool.name;
+        const entryName = entry.name;
+
+        defs.push({
+          name: toolName,
+          description,
+          inputSchema: inputSch,
+          requiresApproval: false,
+          execute: async ({ input }) => {
+            try {
+              const result = await client.callTool({
+                name: mcpToolName,
+                arguments: input as Record<string, unknown>,
+              });
+              // content 배열의 텍스트 파트를 합친다
+              if ("content" in result && Array.isArray(result.content)) {
+                const textParts = (result.content as Array<{ type: string; text?: string }>)
+                  .filter((c) => c.type === "text")
+                  .map((c) => c.text ?? "");
+                return textParts.join("\n") || JSON.stringify(result.content);
+              }
+              return JSON.stringify(result);
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : String(err);
+              return `MCP 툴 오류 [${entryName}/${mcpToolName}]: ${msg}`;
+            }
+          },
+        });
+      }
+    }
+
+    return defs;
+  }
+
+  /** 연결된 서버 이름 목록 */
+  get connectedServerNames(): string[] {
+    return [...this.entries.values()].filter((e) => e.state === "connected").map((e) => e.name);
+  }
+
+  /** 각 서버의 상태 정보 반환 */
+  status(): Array<{ name: string; state: ServerState; toolCount: number; reason?: string }> {
+    return [...this.entries.values()].map((e) => ({
+      name: e.name,
+      state: e.state,
+      toolCount: e.toolCount,
+      reason: e.reason,
+    }));
+  }
+
+  /**
+   * 스킵된 서버를 상태에 기록한다.
+   * loadMcpConfig()에서 이미 스킵된 서버를 UI에 표시하기 위해 사용한다.
+   */
+  addSkipped(name: string, reason: string): void {
+    this.entries.set(name, { name, state: "skipped", reason, toolCount: 0 });
+  }
+
+  /** 모든 클라이언트를 정상 종료한다 */
+  async disconnect(): Promise<void> {
+    const closePromises: Promise<void>[] = [];
+    for (const entry of this.entries.values()) {
+      if (entry.client) {
+        closePromises.push(
+          entry.client.close().catch(() => {
+            // 종료 실패는 무시
+          }),
+        );
+      }
+    }
+    await Promise.all(closePromises);
+  }
+}

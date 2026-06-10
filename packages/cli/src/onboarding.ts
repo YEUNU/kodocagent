@@ -6,10 +6,10 @@
  */
 
 import { existsSync } from "node:fs";
-import { intro, isCancel, note, outro, password, select, text } from "@clack/prompts";
+import { confirm, intro, isCancel, outro, password, select, text } from "@clack/prompts";
 import { loadConfig, saveConfig } from "@kodocagent/core";
 import type { Provider } from "@kodocagent/shared";
-import { KODOC_PATHS, PROVIDERS } from "@kodocagent/shared";
+import { KODOC_PATHS, LAW_ENV_VAR, PROVIDERS } from "@kodocagent/shared";
 
 /**
  * 설정 파일이 없으면 true를 반환한다 (온보딩 필요 여부 판단).
@@ -64,25 +64,45 @@ export async function runOnboarding(): Promise<void> {
 
   const apiKey = String(apiKeyResult);
 
-  // 3. LAW_OC 키 입력 (선택)
-  note(
-    "국가법령정보센터 Open API 키(LAW_OC)를 등록하면 법령 검색 기능을 사용할 수 있습니다.\n" +
-      "발급: https://open.law.go.kr  →  오픈 API 신청",
-    "법령 기능 안내",
-  );
+  // 3. LAW_OC 키 입력 (선택) — env에도 config에도 없을 때만 묻는다
+  const hasLawKey = !!process.env[LAW_ENV_VAR];
+  let lawKey: string | null = null;
 
-  const lawKeyResult = await text({
-    message: "LAW_OC 키를 입력하세요 (Enter로 건너뛸 수 있습니다):",
-    placeholder: "(선택사항 — 나중에 kodocagent config set law-key <키> 로 설정 가능)",
-    defaultValue: "",
-  });
+  if (!hasLawKey) {
+    const wantLawKey = await confirm({
+      message:
+        "법령 조회 기능을 사용하려면 국가법령정보센터 무료 API 키가 필요합니다. 지금 입력할까요?",
+      initialValue: false,
+    });
 
-  if (isCancel(lawKeyResult)) {
-    process.stdout.write("설정이 취소되었습니다.\n");
-    process.exit(0);
+    if (isCancel(wantLawKey)) {
+      process.stdout.write("설정이 취소되었습니다.\n");
+      process.exit(0);
+    }
+
+    if (wantLawKey) {
+      const lawKeyResult = await text({
+        message: "LAW_OC 키를 입력하세요:",
+        placeholder: "open.law.go.kr 에서 발급한 키",
+        validate: (v) => {
+          if (!v || v.trim().length === 0) return "키를 입력해주세요.";
+          return undefined;
+        },
+      });
+
+      if (isCancel(lawKeyResult)) {
+        process.stdout.write("설정이 취소되었습니다.\n");
+        process.exit(0);
+      }
+
+      lawKey = String(lawKeyResult).trim() || null;
+    } else {
+      process.stdout.write(
+        "  https://open.law.go.kr 에서 무료 발급 후 " +
+          "'kodocagent config set law-key <키>' 로 등록하세요\n",
+      );
+    }
   }
-
-  const lawKey = String(lawKeyResult).trim() || null;
 
   // 4. 설정 저장
   const config = await loadConfig();

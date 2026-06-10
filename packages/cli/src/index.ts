@@ -9,6 +9,7 @@ import chalk from "chalk";
 import { Command } from "commander";
 import { runChat } from "./chat.js";
 import { configSet, configShow } from "./config-cmd.js";
+import { mcpList, mcpTest } from "./mcp-cmd.js";
 import { needsOnboarding, runOnboarding } from "./onboarding.js";
 import { cliVersion } from "./version.js";
 
@@ -114,6 +115,34 @@ configCmd
   });
 
 // ──────────────────────────────────────────────
+// mcp 서브커맨드
+// ──────────────────────────────────────────────
+
+const mcpCmd = program.command("mcp").description("MCP 서버 관리");
+
+mcpCmd
+  .command("list")
+  .description("MCP 서버 상태 목록 표시 (이름/상태/툴 수/사유)")
+  .action(async () => {
+    try {
+      await mcpList();
+    } catch (err: unknown) {
+      handleError(err);
+    }
+  });
+
+mcpCmd
+  .command("test <server>")
+  .description("지정한 MCP 서버에 연결해 툴 목록을 출력한다")
+  .action(async (server: string) => {
+    try {
+      await mcpTest(server);
+    } catch (err: unknown) {
+      handleError(err);
+    }
+  });
+
+// ──────────────────────────────────────────────
 // 에러 핸들러
 // ──────────────────────────────────────────────
 
@@ -136,13 +165,31 @@ function handleError(err: unknown): void {
 // ──────────────────────────────────────────────
 
 async function runSingleTurn(prompt: string): Promise<void> {
-  const { loadConfig, createModel, ToolRegistry, AgentSession, SessionStore } = await import(
-    "@kodocagent/core"
-  );
+  const {
+    loadConfig,
+    createModel,
+    ToolRegistry,
+    AgentSession,
+    SessionStore,
+    loadMcpConfig,
+    McpManager,
+  } = await import("@kodocagent/core");
 
   const config = await loadConfig();
   const model = createModel(config);
   const cwd = process.cwd();
+
+  // MCP 초기화 (단발 질의 — 읽기 툴 + MCP)
+  const mcpManager = new McpManager();
+  {
+    const { servers, skipped } = loadMcpConfig(cwd, config);
+    for (const s of skipped) {
+      mcpManager.addSkipped(s.name, s.reason);
+    }
+    if (servers.length > 0) {
+      await mcpManager.connect(servers);
+    }
+  }
 
   const store = await SessionStore.create({
     cwd,
@@ -157,6 +204,10 @@ async function runSingleTurn(prompt: string): Promise<void> {
   for (const tool of createDocTools({ cwd })) {
     tools.register(tool as import("@kodocagent/core").ToolDefinition<unknown>);
   }
+  // MCP 툴 등록
+  for (const mcpTool of mcpManager.getToolDefinitions()) {
+    tools.register(mcpTool);
+  }
 
   const session = new AgentSession({
     config,
@@ -168,10 +219,14 @@ async function runSingleTurn(prompt: string): Promise<void> {
     }),
     store,
     cwd,
+    mcpServers: mcpManager.connectedServerNames,
   });
 
   const controller = new AbortController();
-  process.on("SIGINT", () => controller.abort());
+  process.on("SIGINT", () => {
+    controller.abort();
+    mcpManager.disconnect().catch(() => {});
+  });
 
   for await (const event of session.run(prompt, controller.signal)) {
     if (event.type === "text-delta") {
@@ -181,6 +236,7 @@ async function runSingleTurn(prompt: string): Promise<void> {
     }
   }
   process.stdout.write("\n");
+  await mcpManager.disconnect();
 }
 
 program.parse();

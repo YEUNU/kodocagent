@@ -11,7 +11,7 @@
  */
 
 import type { ApprovalHandler, Proposal } from "@kodocagent/shared";
-import type { ToolSet } from "ai";
+import type { Schema, ToolSet } from "ai";
 import { tool } from "ai";
 import type { z } from "zod";
 
@@ -39,7 +39,8 @@ export interface ProposeOutcome {
 export interface ToolDefinition<TInput = unknown> {
   name: string;
   description: string;
-  inputSchema: z.ZodType<TInput>;
+  /** zod 스키마 또는 AI SDK jsonSchema() 반환값 모두 허용 */
+  inputSchema: z.ZodType<TInput> | Schema<TInput>;
   /** requiresApproval: true ⇔ propose 존재 */
   requiresApproval: boolean;
   /** 일반 툴 실행 함수 (requiresApproval=false인 경우) */
