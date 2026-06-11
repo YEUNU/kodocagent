@@ -1,6 +1,6 @@
 {
   "name": "@kodocagent/doc-tools",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "kodocagent 문서 툴 — kordoc/docx/exceljs 래퍼, 스테이징/백업/diff",
   "type": "module",
   "license": "MIT",

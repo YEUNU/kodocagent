@@ -1,6 +1,6 @@
 {
   "name": "@kodocagent/core",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "kodocagent 코어 — 에이전트 루프, BYOK 프로바이더, 툴 레지스트리, MCP 클라이언트, 세션",
   "type": "module",
   "license": "MIT",

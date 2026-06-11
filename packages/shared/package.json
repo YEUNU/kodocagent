@@ -1,6 +1,6 @@
 {
   "name": "@kodocagent/shared",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "kodocagent 공용 타입, 설정 스키마, 에러",
   "type": "module",
   "license": "MIT",
