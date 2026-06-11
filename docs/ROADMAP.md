@@ -30,11 +30,13 @@
 
 ### R1 — v0.1.0 첫 릴리스 (사용자 액션 차단 중)
 
+진행 상황 (2026-06-11): `NPM_TOKEN` 등록 ✅ / 버전 산출(`changeset version` 로컬 수행, v0.1.0) ✅ / 첫 publish 시도 → **E404: npm에 `@kodocagent` 스코프(조직) 부재**로 실패. 부분 배포 없음 확인.
+
 | # | 작업 | 담당 |
 |---|---|---|
-| 1 | 저장소 Settings → Actions → General → **"Allow GitHub Actions to create and approve pull requests"** 활성화 | **사용자** (보안 설정 — 에이전트 권한 차단됨) |
-| 2 | Settings → Secrets → Actions에 **`NPM_TOKEN`** 등록 (automation 토큰) | **사용자** |
-| 3 | Release 워크플로가 생성한 "chore: version packages" PR 검토·머지 → npm 자동 배포 | 사용자(머지) |
+| 1 | **npmjs.com에서 조직 `kodocagent` 생성** (프로필 → Add Organization → 이름 `kodocagent` → Free). `@kodocagent/*` 스코프 패키지의 소유 조직이 필요. NPM_TOKEN이 이 조직에 publish 권한을 갖는지 확인 | **사용자** |
+| 2 | (선택, 향후 자동화용) 저장소 Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests" 활성화 — 현재는 로컬 버전 산출로 우회 중 | **사용자** |
+| 3 | 조직 생성 후 Release 워크플로 재실행 → 4패키지 publish + GitHub Release 태그 | 에이전트 |
 | 4 | 클린 환경 `npx kodocagent@latest` 스모크 + 패치 배포로 업데이트 배너 확인 (SPEC §12 M4 잔여) | 에이전트 |
 
 ### E2E-2 — 실키 검증 잔여 (키 제공 시 진행)
