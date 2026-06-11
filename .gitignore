@@ -224,3 +224,5 @@ coverage/
 .DS_Store
 .idea/
 .env
+# electron-vite 빌드 출력 (biome lint 제외)
+packages/gui/out/

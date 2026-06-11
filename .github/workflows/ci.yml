@@ -14,6 +14,9 @@ jobs:
         # pnpm 11(빌드 도구)이 Node >=22.13 요구. 런타임 engines는 >=20 유지
         node: [22, 24]
     runs-on: ${{ matrix.os }}
+    env:
+      # electron 바이너리 다운로드 방지 (GUI typecheck/vite build에 불필요)
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -31,6 +34,8 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6

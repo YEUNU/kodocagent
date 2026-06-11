@@ -51,11 +51,13 @@
 - 근거: 로컬에 Rust 툴체인 부재(Tauri는 Rust 필수), 기존 Node/TS 툴체인 재사용, `@rhwp/editor`(iframe 웹 컴포넌트)와 자연 결합, electron-updater로 GUI OTA 가능
 - 트레이드오프: 번들 크기(~100MB). Tauri 전환은 추후 재검토 가능 (core가 UI 비종속이라 교체 비용 낮음)
 
-| 단계 | 산출물 | 완료 기준 |
-|---|---|---|
-| **M5a** GUI 스캐폴딩 | `packages/gui`(비공개 패키지): Electron + Vite + React, 채팅 화면(스트리밍), 승인 다이얼로그(diff 표시), 기존 `~/.kodocagent` 설정 공유 | 로컬에서 창 실행 → 실키 채팅 → propose 승인/거절 동작 |
-| **M5b** 문서 미리보기 | `@rhwp/editor` 임베드로 HWPX 시각 미리보기(승인 전 전/후), 문서 탐색 패널 | 실제 .hwpx 렌더링 + 승인 흐름에 미리보기 연동 |
-| **M5c** 패키징/배포 | electron-builder(맥 dmg/윈도 nsis), electron-updater(GitHub Releases 채널) | 설치본에서 자동 업데이트 확인 |
+| 단계 | 산출물 | 완료 기준 | 상태 |
+|---|---|---|---|
+| **M5a** GUI 스캐폴딩 | `packages/gui`(비공개 패키지): Electron 42 + electron-vite + React 19, 채팅 화면(스트리밍·툴콜 칩), 승인 다이얼로그(diff·사유 입력), IPC 승인 브릿지, cwd 폴더 선택, 기존 `~/.kodocagent` 설정 공유 | 로컬에서 창 실행 → 실키 채팅 → propose 승인/거절 동작 | ✅ 구현·기동 확인 (에러 0). **잔여: 화면 채팅·승인 수동 확인** — `cd packages/gui && pnpm dev` (OPENAI_API_KEY 필요) |
+| **M5b** 문서 미리보기 | `@rhwp/editor` 임베드로 HWPX 시각 미리보기(승인 전 전/후), 문서 탐색 패널, 마크다운 렌더링, GUI 온보딩, 세션 재개 UI | 실제 .hwpx 렌더링 + 승인 흐름에 미리보기 연동 | 예정 |
+| **M5c** 패키징/배포 | electron-builder(맥 dmg/윈도 nsis), electron-updater(GitHub Releases 채널) | 설치본에서 자동 업데이트 확인 | 예정 |
+
+M5a 참고: electron-vite는 vite 8 지원을 위해 6.0.0-beta.1 사용 중 — stable 출시 시 갱신. CI는 `ELECTRON_SKIP_BINARY_DOWNLOAD=1`로 바이너리 없이 빌드/타입체크/테스트만 수행.
 
 ## 운영 원칙 (요약)
 

@@ -1,0 +1,94 @@
+/**
+ * preload — contextBridge로 typed API 노출 (window.kodoc)
+ *
+ * 보안 원칙:
+ * - contextIsolation: true — 렌더러와 완전히 격리
+ * - nodeIntegration: false — Node API 직접 접근 불가
+ * - API 키/민감 데이터를 IPC로 전달하지 않음
+ */
+
+import { contextBridge, ipcRenderer } from "electron";
+import type { SerializedAgentEvent } from "../main/agent-bridge.js";
+
+export interface KodocApi {
+  chat: {
+    /** 사용자 메시지 전송 (AgentSession.run 실행) */
+    send: (text: string) => void;
+    /** AgentEvent 스트림 구독. unsubscribe 함수를 반환 */
+    onEvent: (cb: (ev: SerializedAgentEvent) => void) => () => void;
+    /** 현재 턴 중단 */
+    abort: () => void;
+  };
+  approval: {
+    /** 승인 응답 */
+    respond: (proposalId: string, approved: boolean, reason?: string) => void;
+  };
+  config: {
+    /** 설정 조회 (키 값은 boolean만) */
+    get: () => Promise<{
+      provider: string;
+      model: string | null;
+      hasKeys: Record<string, boolean>;
+    }>;
+  };
+  session: {
+    /** 새 세션 시작 */
+    new: () => void;
+  };
+  cwd: {
+    /** 폴더 선택 다이얼로그 → 새 cwd 반환 (취소 시 null) */
+    select: () => Promise<string | null>;
+    /** cwd 변경 이벤트 구독 */
+    onChange: (cb: (cwd: string) => void) => () => void;
+  };
+}
+
+const api: KodocApi = {
+  chat: {
+    send: (text: string) => {
+      ipcRenderer.send("chat:send", text);
+    },
+    onEvent: (cb: (ev: SerializedAgentEvent) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, ev: SerializedAgentEvent) => cb(ev);
+      ipcRenderer.on("agent:event", handler);
+      return () => {
+        ipcRenderer.removeListener("agent:event", handler);
+      };
+    },
+    abort: () => {
+      ipcRenderer.send("chat:abort");
+    },
+  },
+  approval: {
+    respond: (proposalId: string, approved: boolean, reason?: string) => {
+      ipcRenderer.send("approval:respond", proposalId, approved, reason);
+    },
+  },
+  config: {
+    get: () => ipcRenderer.invoke("config:get"),
+  },
+  session: {
+    new: () => {
+      ipcRenderer.send("session:new");
+    },
+  },
+  cwd: {
+    select: () => ipcRenderer.invoke("cwd:select"),
+    onChange: (cb: (cwd: string) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, cwd: string) => cb(cwd);
+      ipcRenderer.on("cwd:changed", handler);
+      return () => {
+        ipcRenderer.removeListener("cwd:changed", handler);
+      };
+    },
+  },
+};
+
+contextBridge.exposeInMainWorld("kodoc", api);
+
+// TypeScript 전역 타입 선언 (렌더러에서 window.kodoc 타입 사용)
+declare global {
+  interface Window {
+    kodoc: KodocApi;
+  }
+}

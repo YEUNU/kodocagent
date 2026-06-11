@@ -1,0 +1,30 @@
+{
+  "name": "@kodocagent/gui",
+  "version": "0.1.0",
+  "description": "kodocagent Electron 데스크톱 GUI",
+  "private": true,
+  "type": "module",
+  "main": "out/main/index.js",
+  "scripts": {
+    "build": "electron-vite build",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "dev": "electron-vite dev",
+    "preview": "electron-vite preview"
+  },
+  "dependencies": {
+    "@kodocagent/core": "workspace:*",
+    "@kodocagent/doc-tools": "workspace:*",
+    "@kodocagent/shared": "workspace:*",
+    "electron": "^42.4.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "electron-vite": "^6.0.0-beta.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16"
+  }
+}

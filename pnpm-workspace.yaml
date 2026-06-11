@@ -2,6 +2,7 @@ packages:
   - "packages/*"
 allowBuilds:
   esbuild: true
+  electron: true
 minimumReleaseAgeExclude:
   - '@ai-sdk/anthropic@3.0.82'
   - '@ai-sdk/gateway@3.0.127'
