@@ -26,9 +26,46 @@ importers:
 
   packages/cli:
     dependencies:
+      '@ai-sdk/anthropic':
+        specifier: ^3.0.82
+        version: 3.0.82(zod@4.4.3)
+      '@ai-sdk/google':
+        specifier: ^3.0.80
+        version: 3.0.80(zod@4.4.3)
+      '@ai-sdk/openai':
+        specifier: ^3.0.69
+        version: 3.0.69(zod@4.4.3)
       '@clack/prompts':
         specifier: ^1.5.1
         version: 1.5.1
+      '@clazic/kordoc':
+        specifier: ^2.7.6
+        version: 2.7.6
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(zod@4.4.3)
+      ai:
+        specifier: ^6.0.199
+        version: 6.0.199(zod@4.4.3)
+      chalk:
+        specifier: ^5.6.2
+        version: 5.6.2
+      commander:
+        specifier: ^15.0.0
+        version: 15.0.0
+      diff:
+        specifier: ^9.0.0
+        version: 9.0.0
+      docx:
+        specifier: ^9.7.1
+        version: 9.7.1
+      exceljs:
+        specifier: ^4.4.0
+        version: 4.4.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
       '@kodocagent/core':
         specifier: workspace:*
         version: link:../core
@@ -38,13 +75,6 @@ importers:
       '@kodocagent/shared':
         specifier: workspace:*
         version: link:../shared
-      chalk:
-        specifier: ^5.6.2
-        version: 5.6.2
-      commander:
-        specifier: ^15.0.0
-        version: 15.0.0
-    devDependencies:
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(postcss@8.5.15)(typescript@6.0.3)

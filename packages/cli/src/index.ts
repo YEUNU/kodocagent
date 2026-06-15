@@ -3,7 +3,17 @@
  * docs/SPEC.md §8
  */
 
-import { listSessions } from "@kodocagent/core";
+import {
+  AgentSession,
+  createModel,
+  listSessions,
+  loadConfig,
+  loadMcpConfig,
+  McpManager,
+  SessionStore,
+  ToolRegistry,
+} from "@kodocagent/core";
+import { cleanSessionStaging, createDocTools } from "@kodocagent/doc-tools";
 import { KodocError } from "@kodocagent/shared";
 import chalk from "chalk";
 import { Command } from "commander";
@@ -206,16 +216,6 @@ function handleError(err: unknown): void {
 // ──────────────────────────────────────────────
 
 async function runSingleTurn(prompt: string): Promise<void> {
-  const {
-    loadConfig,
-    createModel,
-    ToolRegistry,
-    AgentSession,
-    SessionStore,
-    loadMcpConfig,
-    McpManager,
-  } = await import("@kodocagent/core");
-
   const config = await loadConfig();
   const model = createModel(config);
   const cwd = process.cwd();
@@ -241,7 +241,6 @@ async function runSingleTurn(prompt: string): Promise<void> {
 
   const tools = new ToolRegistry();
   // 단발 질의는 읽기 툴만 활성
-  const { createDocTools } = await import("@kodocagent/doc-tools");
   for (const tool of createDocTools({ cwd })) {
     tools.register(tool as import("@kodocagent/core").ToolDefinition<unknown>);
   }
@@ -279,7 +278,6 @@ async function runSingleTurn(prompt: string): Promise<void> {
   process.stdout.write("\n");
   await mcpManager.disconnect();
   // 단발 질의 종료 시 세션 스테이징 정리 (실패는 무시)
-  const { cleanSessionStaging } = await import("@kodocagent/doc-tools");
   cleanSessionStaging(store.id).catch(() => {});
 }
 

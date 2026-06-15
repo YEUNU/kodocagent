@@ -19,6 +19,7 @@ import {
   loadMcpConfig,
   McpManager,
   SessionStore,
+  saveConfig as saveConfigCore,
   ToolRegistry,
 } from "@kodocagent/core";
 import { cleanSessionStaging, createDocTools } from "@kodocagent/doc-tools";
@@ -427,6 +428,5 @@ async function handleModelSwitch(_config: KodocConfig): Promise<{ config: KodocC
 
 // saveConfig import (config-cmd에서 재사용)
 async function saveConfig(config: KodocConfig): Promise<void> {
-  const { saveConfig: sc } = await import("@kodocagent/core");
-  await sc(config);
+  await saveConfigCore(config);
 }

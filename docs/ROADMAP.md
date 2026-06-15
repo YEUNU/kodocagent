@@ -28,15 +28,15 @@
 | 4 | **read_document 픽스처 보강** — .docx/.xlsx 실파싱 테스트 부재 | exceljs/md-to-docx로 생성한 픽스처 → kordoc parse 마크다운 검증 |
 | 5 | 채팅 툴콜 표시에 핵심 인자(path 등) 1줄 요약 | `⚙ propose_edit(보고서.hwpx)` 형태 |
 
-### R1 — v0.1.0 첫 릴리스 (사용자 액션 차단 중)
+### R1 — v0.1.0 첫 릴리스 (준비 완료)
 
-진행 상황 (2026-06-11): `NPM_TOKEN` 등록 ✅ / 버전 산출(`changeset version` 로컬 수행, v0.1.0) ✅ / 첫 publish 시도 → **E404: npm에 `@kodocagent` 스코프(조직) 부재**로 실패. 부분 배포 없음 확인.
+진행 상황 (2026-06-15): `NPM_TOKEN` 등록 ✅ / 버전 산출(`changeset version` 로컬 수행, v0.1.0) ✅ / ~~첫 publish 시도 → E404: npm에 `@kodocagent` 스코프(조직) 부재~~ → **해결**: 단일 패키지 번들링으로 전환. `@kodocagent/*` 내부 패키지를 `private: true`로 표시하고 CLI 빌드 시 번들링 — npm 조직 불필요.
 
 | # | 작업 | 담당 |
 |---|---|---|
-| 1 | **npmjs.com에서 조직 `kodocagent` 생성** (프로필 → Add Organization → 이름 `kodocagent` → Free). `@kodocagent/*` 스코프 패키지의 소유 조직이 필요. NPM_TOKEN이 이 조직에 publish 권한을 갖는지 확인 | **사용자** |
+| 1 | ~~npmjs.com에서 조직 `kodocagent` 생성~~ → **단일 패키지 번들링으로 해결됨**. `@kodocagent/*` 내부 패키지는 워크스페이스 전용(`private: true`) + CLI에 번들됨. npm 조직 불필요. | 완료 |
 | 2 | (선택, 향후 자동화용) 저장소 Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests" 활성화 — 현재는 로컬 버전 산출로 우회 중 | **사용자** |
-| 3 | 조직 생성 후 Release 워크플로 재실행 → 4패키지 publish + GitHub Release 태그 | 에이전트 |
+| 3 | Release 워크플로 재실행 → `kodocagent@0.1.0` publish + GitHub Release 태그 (changesets가 private 패키지를 자동으로 건너뜀) | 에이전트 |
 | 4 | 클린 환경 `npx kodocagent@latest` 스모크 + 패치 배포로 업데이트 배너 확인 (SPEC §12 M4 잔여) | 에이전트 |
 
 ### E2E-2 — 실키 검증 잔여 (키 제공 시 진행)

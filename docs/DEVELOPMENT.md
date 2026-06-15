@@ -58,14 +58,16 @@
 pnpm changeset (변경 기록) ──▶ main 푸시
                               └▶ release.yml (changesets/action)
                                  ├─ "Version Packages" PR 자동 생성
-                                 └─ 그 PR 머지 시 ──────────────▶ 4패키지 publish + v* 태그
+                                 └─ 그 PR 머지 시 ──────────────▶ kodocagent publish + v* 태그
 사용자: npx kodocagent@latest ◀── OTA 업데이트 체크(24h)가 새 버전 감지 ──┘
 ```
 
 - 워크플로: [.github/workflows/release.yml](../.github/workflows/release.yml)
-- **필요 시크릿**: 저장소 Settings → Secrets에 `NPM_TOKEN` (npm automation 토큰, 4패키지 publish 권한)
-- 버전 정책: 0.x 동안 minor=기능, patch=수정. 4패키지는 changesets가 독립 버전 관리(내부 의존은 patch 연동)
-- npm 첫 배포 전 확인: `kodocagent`, `@kodocagent/*` 이름 미점유 (2026-06-10 확인 완료)
+- **필요 시크릿**: 저장소 Settings → Secrets에 `NPM_TOKEN` (npm automation 토큰)
+- **배포 패키지**: `kodocagent` 단일 패키지만 publish. `@kodocagent/core`, `@kodocagent/doc-tools`, `@kodocagent/shared`는 `"private": true`로 표시된 워크스페이스 전용 패키지 — changesets가 자동으로 publish 대상에서 제외하며, 빌드 시 CLI에 번들링됨.
+- **npm 조직 불필요**: 스코프 패키지를 배포하지 않으므로 `@kodocagent` npm 조직을 생성할 필요가 없다.
+- 버전 정책: 0.x 동안 minor=기능, patch=수정. 내부 패키지는 버전 관리 불필요(워크스페이스 전용).
+- npm 첫 배포 전 확인: `kodocagent` 이름 미점유 (2026-06-10 확인 완료)
 
 ## 6. 마일스톤 운영 절차 (반복)
 

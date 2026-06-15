@@ -47,6 +47,10 @@ kodocagent --continue
 | `kodocagent update` | 최신 버전으로 업데이트 |
 | `kodocagent --version` | 버전 출력 |
 
+## 개발자 참고
+
+이 패키지는 모노레포의 `packages/cli`에 위치하며, 빌드 시 내부 워크스페이스 패키지(`@kodocagent/core`, `@kodocagent/doc-tools`, `@kodocagent/shared`)를 번들링해 단일 자급자족 npm 패키지로 배포됩니다. 내부 패키지는 `"private": true`로 npm에 배포되지 않습니다.
+
 ## 자세한 문서
 
 전체 문서, 기능 설명, 개발자 섹션은 [GitHub 저장소](https://github.com/YEUNU/kodocagent)를 참고하세요.

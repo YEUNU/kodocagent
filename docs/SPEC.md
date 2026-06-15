@@ -42,7 +42,7 @@ tsup 8.5 / vitest 4.1 / @biomejs/biome 2.4 / @changesets/cli 2.31 / TypeScript 5
 
 **v1에서 제외된 의존성**: `@rhwp/core`(브라우저 전용 — `measureTextWidth` canvas 필요, Node PNG 불가, 쓰기 API 미노출 → M5 GUI에서 `@rhwp/editor`로 사용), keytar(네이티브 모듈), ink(React 의존).
 
-**npm 이름 확보 확인**: `kodocagent`, `@kodocagent/*` 모두 미등록(사용 가능).
+**npm 배포 구조**: `kodocagent` 단일 패키지만 npm에 배포된다. `@kodocagent/core`, `@kodocagent/doc-tools`, `@kodocagent/shared`는 `"private": true` 워크스페이스 전용 패키지로, CLI 빌드 시 tsup `noExternal` 설정에 의해 `kodocagent` 번들에 인라인된다. 사용자는 `npm i -g kodocagent` 하나만 설치하면 모든 기능을 사용할 수 있다.
 
 ### 구현 시 재확인 항목 (문서화 시점에 미검증)
 
@@ -269,7 +269,7 @@ propose_* 호출
 - 시작 시(24h 1회, `~/.kodocagent/update-check.json` 캐시) `https://registry.npmjs.org/kodocagent/latest` 조회(3s 타임아웃, 실패 무시)
 - 새 버전 존재 시 비차단 배너: `새 버전 vX.Y.Z — kodocagent update 로 업데이트`
 - `kodocagent update`: 실행 경로로 설치 방식 감지(글로벌 npm/pnpm → 해당 PM으로 `i -g kodocagent@latest`, npx → "항상 최신 사용 중" 안내)
-- 릴리스: changesets → GitHub Actions에서 4패키지 publish (`@kodocagent/shared|core|doc-tools` + `kodocagent`)
+- **배포 형태**: 단일 npm 패키지 `kodocagent`. 내부 워크스페이스 패키지(`@kodocagent/core|doc-tools|shared`)는 빌드 시 번들링되며 npm에는 배포되지 않음. changesets → GitHub Actions에서 `kodocagent` 패키지만 publish.
 
 ## 10. 에러 처리 정책
 

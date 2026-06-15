@@ -190,11 +190,13 @@ chcp 65001
 
 ```
 packages/
-├── shared/      # 공용 타입, zod 스키마, 에러
-├── core/        # 에이전트 루프, BYOK 프로바이더, 툴 레지스트리, MCP 클라이언트, 세션
-├── doc-tools/   # kordoc/docx/exceljs 래퍼, 스테이징/백업/diff
-└── cli/         # kodocagent CLI (REPL, 승인 프롬프트, 온보딩, 업데이트)
+├── shared/      # 공용 타입, zod 스키마, 에러  [워크스페이스 전용, npm 배포 안 함]
+├── core/        # 에이전트 루프, BYOK 프로바이더, 툴 레지스트리, MCP 클라이언트, 세션  [워크스페이스 전용]
+├── doc-tools/   # kordoc/docx/exceljs 래퍼, 스테이징/백업/diff  [워크스페이스 전용]
+└── cli/         # kodocagent CLI — 빌드 시 위 3개 패키지를 번들링해 단일 npm 패키지로 배포
 ```
+
+내부 패키지(`shared`, `core`, `doc-tools`)는 `"private": true`로 npm에 배포되지 않으며, CLI 빌드 시 `kodocagent` 패키지에 인라인됩니다. 사용자는 `npm i -g kodocagent` 하나만 설치하면 됩니다.
 
 ### 개발 환경 설정
 
