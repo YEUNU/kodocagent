@@ -32,6 +32,7 @@ export {
   cleanOldBackups,
   cleanSessionStaging,
 } from "./staging.js";
+export { compareDocumentsTool } from "./tools/compare-documents.js";
 export { listFilesTool } from "./tools/list-files.js";
 export { proposeEditTool } from "./tools/propose-edit.js";
 export { proposeFormFillTool } from "./tools/propose-form-fill.js";
@@ -42,6 +43,7 @@ export { writeNewDocumentTool } from "./tools/write-new-document.js";
 export { writeNewSpreadsheetTool } from "./tools/write-new-spreadsheet.js";
 export type { ProposeOutcome, ToolContext, ToolDefinition } from "./types.js";
 
+import { compareDocumentsTool } from "./tools/compare-documents.js";
 import { listFilesTool } from "./tools/list-files.js";
 import { proposeEditTool } from "./tools/propose-edit.js";
 import { proposeFormFillTool } from "./tools/propose-form-fill.js";
@@ -59,6 +61,7 @@ export function createDocTools(_ctx: { cwd: string }) {
   // ctx는 런타임 시 ToolRegistry.setContext()로 주입되므로 여기서는 타입 힌트용
   return [
     readDocumentTool,
+    compareDocumentsTool,
     listFilesTool,
     readFileTool,
     proposeEditTool,
