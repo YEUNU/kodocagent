@@ -111,7 +111,7 @@ export async function checkForUpdate(
 
   // 네트워크 요청
   try {
-    const res = await fetchFn("https://registry.npmjs.org/kodocagent/latest", {
+    const res = await fetchFn("https://registry.npmjs.org/@kodocagent/cli/latest", {
       signal: AbortSignal.timeout(3000),
       headers: { Accept: "application/json" },
     });
@@ -178,13 +178,13 @@ export async function runUpdate(): Promise<void> {
 
   if (method === "npx") {
     process.stdout.write(
-      "npx로 실행 중입니다. npx kodocagent@latest 는 항상 최신 버전을 사용합니다.\n",
+      "npx로 실행 중입니다. npx @kodocagent/cli@latest 는 항상 최신 버전을 사용합니다.\n",
     );
     return;
   }
 
   const cmd = method === "pnpm" ? "pnpm" : "npm";
-  const args = ["install", "-g", "kodocagent@latest"];
+  const args = ["install", "-g", "@kodocagent/cli@latest"];
 
   process.stdout.write(`${cmd} ${args.join(" ")} 실행 중...\n`);
 
@@ -201,7 +201,7 @@ export async function runUpdate(): Promise<void> {
       } else {
         reject(
           new Error(
-            `'${cmd} install -g kodocagent@latest' 실행이 실패했습니다 (종료 코드 ${code}). ` +
+            `'${cmd} install -g @kodocagent/cli@latest' 실행이 실패했습니다 (종료 코드 ${code}). ` +
               "네트워크 연결과 패키지 매니저 권한을 확인하세요.",
           ),
         );

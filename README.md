@@ -8,14 +8,16 @@
 
 ```bash
 # npm 글로벌 설치 (권장)
-npm install -g kodocagent
+npm install -g @kodocagent/cli
 
 # pnpm 글로벌 설치
-pnpm add -g kodocagent
+pnpm add -g @kodocagent/cli
 
 # npx로 바로 실행 (설치 불필요)
-npx kodocagent@latest
+npx @kodocagent/cli@latest
 ```
+
+설치 후 실행 명령은 `kodocagent` 입니다.
 
 **요구 사항**: Node.js 20 이상
 
@@ -196,7 +198,7 @@ packages/
 └── cli/         # kodocagent CLI — 빌드 시 위 3개 패키지를 번들링해 단일 npm 패키지로 배포
 ```
 
-내부 패키지(`shared`, `core`, `doc-tools`)는 `"private": true`로 npm에 배포되지 않으며, CLI 빌드 시 `kodocagent` 패키지에 인라인됩니다. 사용자는 `npm i -g kodocagent` 하나만 설치하면 됩니다.
+내부 패키지(`shared`, `core`, `doc-tools`)는 `"private": true`로 npm에 배포되지 않으며, CLI 빌드 시 `@kodocagent/cli` 패키지에 인라인됩니다. 사용자는 `npm i -g @kodocagent/cli` 하나만 설치하면 되고, 실행 명령은 `kodocagent` 입니다.
 
 ### 개발 환경 설정
 

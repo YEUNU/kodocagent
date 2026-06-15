@@ -24,18 +24,18 @@ jobs:
       - run: pnpm test
       # kodocagent 단일 패키지만 발행 (내부 패키지는 private — CLI 번들에 인라인).
       # 토큰 인증을 .npmrc에 명시해 npm/pnpm 모두에서 동작하도록 보장.
-      - name: Publish kodocagent to npm
+      - name: Publish @kodocagent/cli to npm
         run: |
           echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
           LOCAL=$(node -p "require('./packages/cli/package.json').version")
-          PUBLISHED=$(npm view kodocagent version 2>/dev/null || echo none)
+          PUBLISHED=$(npm view @kodocagent/cli version 2>/dev/null || echo none)
           echo "local=$LOCAL published=$PUBLISHED"
           if [ "$LOCAL" = "$PUBLISHED" ]; then
-            echo "kodocagent@$LOCAL 는 이미 발행됨 — 건너뜀"
+            echo "@kodocagent/cli@$LOCAL 는 이미 발행됨 — 건너뜀"
             exit 0
           fi
-          pnpm --filter kodocagent publish --no-git-checks --access public
-          git tag "kodocagent@$LOCAL"
-          git push origin "kodocagent@$LOCAL" || true
+          pnpm --filter @kodocagent/cli publish --no-git-checks --access public
+          git tag "v$LOCAL"
+          git push origin "v$LOCAL" || true
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

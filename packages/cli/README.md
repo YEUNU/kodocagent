@@ -1,18 +1,18 @@
-# kodocagent
+# @kodocagent/cli
 
-**한국어 특화 문서 AI 에이전트** — HWP/HWPX/DOCX/XLSX 문서를 읽고 수정하며, 한국 법령을 확인해 문서를 검토·추천하는 터미널 에이전트.
+**한국어 특화 문서 AI 에이전트** — HWP/HWPX/DOCX/XLSX 문서를 읽고 수정하며, 한국 법령을 확인해 문서를 검토·추천하는 터미널 에이전트. 설치 후 실행 명령은 `kodocagent` 입니다.
 
 ## 설치
 
 ```bash
 # npm 글로벌 설치
-npm install -g kodocagent
+npm install -g @kodocagent/cli
 
 # pnpm 글로벌 설치
-pnpm add -g kodocagent
+pnpm add -g @kodocagent/cli
 
 # npx로 바로 실행
-npx kodocagent@latest
+npx @kodocagent/cli@latest
 ```
 
 **요구 사항**: Node.js 20 이상
