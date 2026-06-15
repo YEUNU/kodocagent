@@ -34,8 +34,20 @@ interface ServerEntry {
 
 // ── 상수 ────────────────────────────────────────────────────────────────────
 
-const CONNECT_TIMEOUT_MS = 10_000;
+/** stdio 기본 타임아웃: npx 최초 다운로드 허용 (60초) */
+const STDIO_CONNECT_TIMEOUT_MS = 60_000;
+/** HTTP 기본 타임아웃 (15초) */
+const HTTP_CONNECT_TIMEOUT_MS = 15_000;
 const MAX_MCP_TOOLS_WARN = 40;
+
+// ── McpManager 옵션 ──────────────────────────────────────────────────────────
+
+export interface McpManagerOptions {
+  /** stdio 서버 연결 타임아웃(ms). 기본값: 60000 */
+  stdioConnectTimeoutMs?: number;
+  /** HTTP 서버 연결 타임아웃(ms). 기본값: 15000 */
+  httpConnectTimeoutMs?: number;
+}
 
 // ── McpManager ───────────────────────────────────────────────────────────────
 
@@ -47,6 +59,13 @@ const MAX_MCP_TOOLS_WARN = 40;
 export class McpManager {
   private readonly entries = new Map<string, ServerEntry>();
   readonly warnings: string[] = [];
+  private readonly stdioConnectTimeoutMs: number;
+  private readonly httpConnectTimeoutMs: number;
+
+  constructor(opts: McpManagerOptions = {}) {
+    this.stdioConnectTimeoutMs = opts.stdioConnectTimeoutMs ?? STDIO_CONNECT_TIMEOUT_MS;
+    this.httpConnectTimeoutMs = opts.httpConnectTimeoutMs ?? HTTP_CONNECT_TIMEOUT_MS;
+  }
 
   /**
    * 주어진 서버 설정 목록으로 모두 연결을 시도한다.
@@ -100,13 +119,22 @@ export class McpManager {
         transport = new StreamableHTTPClientTransport(url, opts);
       }
 
-      // 10s 타임아웃으로 연결
+      // 트랜스포트 타입별 타임아웃으로 연결
+      const timeoutMs =
+        config.type === "stdio" ? this.stdioConnectTimeoutMs : this.httpConnectTimeoutMs;
+      const timeoutSec = Math.round(timeoutMs / 1000);
       await Promise.race([
         client.connect(transport),
         new Promise<never>((_, reject) =>
           setTimeout(
-            () => reject(new Error("연결 타임아웃 (10초) — 서버가 응답하지 않습니다")),
-            CONNECT_TIMEOUT_MS,
+            () =>
+              reject(
+                new Error(
+                  `연결 타임아웃 (${timeoutSec}초) — 서버가 응답하지 않습니다. ` +
+                    "최초 실행 시 서버 다운로드로 지연될 수 있으니 잠시 후 다시 시도해 보세요.",
+                ),
+              ),
+            timeoutMs,
           ),
         ),
       ]);

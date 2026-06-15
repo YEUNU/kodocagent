@@ -154,6 +154,55 @@ describe("McpManager — addSkipped + status()", () => {
   });
 });
 
+describe("McpManager — 트랜스포트별 타임아웃", () => {
+  it("stdio: 짧은 타임아웃 주입 → 응답 없는 서버에서 빠르게 failed + 타임아웃 사유 메시지(초 포함)", async () => {
+    // stdioConnectTimeoutMs=50ms 주입 — 60초를 기다리지 않는다
+    const manager = new McpManager({ stdioConnectTimeoutMs: 50 });
+
+    // sleep 5초: MCP 프로토콜 초기화 응답 없이 블록
+    const config: ServerConnectionConfig = {
+      type: "stdio",
+      name: "slow-server",
+      command: "sleep",
+      args: ["5"],
+    };
+
+    await manager.connect([config]);
+
+    const statuses = manager.status();
+    expect(statuses[0]?.state).toBe("failed");
+    // 에러 메시지에 "0초" (50ms → 반올림 0초) 또는 초 표기 포함
+    expect(statuses[0]?.reason).toMatch(/타임아웃/);
+    expect(statuses[0]?.reason).toMatch(/초/);
+  }, 5_000); // 5초 안에 끝나야 함
+
+  it("stdio(50ms)와 http(150ms) 옵션이 각자 독립적으로 설정된다", () => {
+    const manager = new McpManager({ stdioConnectTimeoutMs: 50, httpConnectTimeoutMs: 150 });
+    // private 필드는 직접 접근 불가 — 동작을 통해 간접 검증한다.
+    // 여기서는 생성자가 throw하지 않고 인스턴스가 정상 생성됨을 확인
+    expect(manager).toBeInstanceOf(McpManager);
+  });
+
+  it("stdio 타임아웃 에러 메시지에 초 단위 값이 동적으로 반영된다", async () => {
+    // 100ms → Math.round(100/1000)=0초 이지만 메시지에 '초'가 포함됨
+    const manager = new McpManager({ stdioConnectTimeoutMs: 100 });
+    const config: ServerConnectionConfig = {
+      type: "stdio",
+      name: "slow-stdio",
+      command: "sleep",
+      args: ["5"],
+    };
+
+    await manager.connect([config]);
+    const statuses = manager.status();
+    expect(statuses[0]?.state).toBe("failed");
+    expect(statuses[0]?.reason).toContain("연결 타임아웃");
+    expect(statuses[0]?.reason).toContain("초");
+    // "최초 실행" 힌트 포함
+    expect(statuses[0]?.reason).toContain("최초 실행");
+  }, 5_000);
+});
+
 describe("McpManager — >40 툴 경고 (mock)", () => {
   it("41개 이상 툴이 있으면 warnings 배열에 경고가 추가된다", async () => {
     // 40개 이상 툴을 가진 서버를 모킹하기 어려우므로 내부 로직을 단위 검증

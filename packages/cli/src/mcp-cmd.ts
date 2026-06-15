@@ -106,6 +106,9 @@ export async function mcpTest(serverName: string): Promise<void> {
   }
 
   process.stdout.write(chalk.dim(`서버 '${serverName}' 연결 중...\n`));
+  if (serverConfig.type === "stdio") {
+    process.stdout.write(chalk.dim("  (최초 실행 시 서버 다운로드로 시간이 걸릴 수 있습니다)\n"));
+  }
 
   const manager = new McpManager();
   await manager.connect([serverConfig]);
