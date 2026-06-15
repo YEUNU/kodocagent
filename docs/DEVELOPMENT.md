@@ -53,17 +53,18 @@
 ## 5. 릴리스(배포) 파이프라인
 
 ```
-개발 머신                      GitHub                          npm
-─────────                     ──────                          ───
-pnpm changeset (변경 기록) ──▶ main 푸시
-                              └▶ release.yml (changesets/action)
-                                 ├─ "Version Packages" PR 자동 생성
-                                 └─ 그 PR 머지 시 ──────────────▶ kodocagent publish + v* 태그
+개발 머신                                  GitHub                       npm
+─────────                                 ──────                       ───
+pnpm changeset version (버전 산출) ──▶ main 푸시
+                                       └▶ release.yml
+                                          └─ 로컬 버전 ≠ 발행 버전이면 ──▶ kodocagent publish + 태그
 사용자: npx kodocagent@latest ◀── OTA 업데이트 체크(24h)가 새 버전 감지 ──┘
 ```
 
+저장소의 Actions PR 생성 권한이 비활성화되어 있어 changesets/action(Version PR 자동 생성) 대신 **로컬에서 `pnpm changeset version`을 실행해 버전을 산출·커밋**하고, 워크플로는 토큰 인증으로 직접 발행한다(멱등 — 이미 발행된 버전이면 건너뜀). PR 권한이 켜지면 changesets/action 방식으로 되돌릴 수 있다.
+
 - 워크플로: [.github/workflows/release.yml](../.github/workflows/release.yml)
-- **필요 시크릿**: 저장소 Settings → Secrets에 `NPM_TOKEN` (npm automation 토큰)
+- **필요 시크릿**: 저장소 Settings → Secrets에 `NPM_TOKEN` — npm **자동화(classic automation) 토큰** 권장. Granular 토큰이라면 신규 unscoped 패키지 발행 권한(전체 패키지 쓰기)이 있어야 함
 - **배포 패키지**: `kodocagent` 단일 패키지만 publish. `@kodocagent/core`, `@kodocagent/doc-tools`, `@kodocagent/shared`는 `"private": true`로 표시된 워크스페이스 전용 패키지 — changesets가 자동으로 publish 대상에서 제외하며, 빌드 시 CLI에 번들링됨.
 - **npm 조직 불필요**: 스코프 패키지를 배포하지 않으므로 `@kodocagent` npm 조직을 생성할 필요가 없다.
 - 버전 정책: 0.x 동안 minor=기능, patch=수정. 내부 패키지는 버전 관리 불필요(워크스페이스 전용).
