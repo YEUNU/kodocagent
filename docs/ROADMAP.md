@@ -50,7 +50,7 @@
 
 | # | 작업 | 완료 기준 |
 |---|---|---|
-| 1 | `compare_documents` 툴 노출 | kordoc `compare` 기반 두 문서 구조 diff 툴 등록 + 테스트 |
+| 1 | `compare_documents` 툴 노출 | ✅ `ee89c1e` — kordoc `compare` 기반 두 문서 구조 diff 툴 등록 + 테스트(실파일 검증) |
 | 2 | 세션 목록/재개 UX 개선 | `sessions`에 제목·요약·최근순, `--resume` 선택 UI |
 | 3 | 채팅 진행 표시·diff 렌더 개선 | 긴 툴 실행 스피너/단계 표시, 컬러 diff 가독성 |
 | 4 | 큰 문서·다중 MCP 안정성 | 대형 .xlsx/.hwpx 처리 시간·메모리 점검, 툴 수 폭증 경고 동작 확인 |
