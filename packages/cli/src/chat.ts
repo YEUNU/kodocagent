@@ -10,7 +10,7 @@
  * - Ctrl+C: 현재 턴 중단 / 두 번째 Ctrl+C: 종료
  */
 import * as readline from "node:readline/promises";
-import { isCancel, select, text } from "@clack/prompts";
+import { isCancel, select, spinner, text } from "@clack/prompts";
 import {
   AgentSession,
   createModel,
@@ -68,7 +68,23 @@ export async function runChat(opts: {
       mcpManager.addSkipped(s.name, s.reason);
     }
     if (servers.length > 0) {
-      await mcpManager.connect(servers);
+      const connectMsg = "MCP 서버 연결 중… (최초 실행 시 서버 다운로드로 시간이 걸릴 수 있습니다)";
+      // TTY에서만 clack 스피너 사용 — 비 TTY(파이프/리디렉션)에서는 raw-mode 진입이
+      // stdin(readline 입력)을 가로채고 이스케이프 코드를 도배하므로 평문 메시지로 대체.
+      if (process.stdout.isTTY === true) {
+        const s = spinner();
+        s.start(connectMsg);
+        await mcpManager.connect(servers);
+        const okCount = mcpManager.connectedServerNames.length;
+        s.stop(okCount > 0 ? `MCP 서버 ${okCount}개 연결됨` : "MCP 연결 완료");
+      } else {
+        process.stdout.write(chalk.dim(`${connectMsg}\n`));
+        await mcpManager.connect(servers);
+        const okCount = mcpManager.connectedServerNames.length;
+        process.stdout.write(
+          chalk.dim(`${okCount > 0 ? `MCP 서버 ${okCount}개 연결됨` : "MCP 연결 완료"}\n`),
+        );
+      }
     }
     // 실패/스킵 서버 1줄 고지 (CLI prints, core는 출력 안 함)
     for (const s of mcpManager.status()) {
@@ -107,11 +123,24 @@ export async function runChat(opts: {
 
   let ctrlCCount = 0;
   let currentController: AbortController | null = null;
+  // 턴 루프 바깥에서도 스피너 정리가 가능하도록 레퍼런스 유지
+  let sharedActiveInterval: ReturnType<typeof setInterval> | null = null;
+
+  function clearSharedSpinner(): void {
+    if (!sharedActiveInterval) return;
+    clearInterval(sharedActiveInterval);
+    sharedActiveInterval = null;
+    if (process.stdout.isTTY) {
+      // 80열 공백으로 덮어쓰기
+      process.stdout.write(`\r${" ".repeat(80)}\r`);
+    }
+  }
 
   // Ctrl+C 핸들러
   rl.on("SIGINT", () => {
     if (currentController) {
-      // 현재 턴 중단
+      // 현재 턴 중단 — 스피너도 함께 정리
+      clearSharedSpinner();
       currentController.abort();
       currentController = null;
       process.stdout.write(chalk.yellow("\n현재 응답이 중단되었습니다.\n"));
@@ -200,17 +229,66 @@ export async function runChat(opts: {
     currentController = new AbortController();
     process.stdout.write(chalk.bold("Assistant: "));
 
+    // 툴 인터벌 스피너 상태 (턴 단위)
+    const isTTY = process.stdout.isTTY === true;
+    const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let activeToolLabel = "";
+    let activeToolStartMs = 0;
+    let spinnerFrameIdx = 0;
+    // 스피너가 마지막으로 쓴 라인의 가시 문자 수(라인 클리어용)
+    let lastSpinnerWidth = 0;
+
+    /** 현재 활성 인터벌 스피너를 정지하고 라인을 클리어한다 */
+    function clearActiveSpinner(): void {
+      if (!sharedActiveInterval) return;
+      clearInterval(sharedActiveInterval);
+      sharedActiveInterval = null;
+      if (isTTY) {
+        // 스피너 줄 전체 지우기 (lastSpinnerWidth 또는 안전하게 80)
+        const clearLen = lastSpinnerWidth > 0 ? lastSpinnerWidth : 80;
+        process.stdout.write(`\r${" ".repeat(clearLen)}\r`);
+      }
+      lastSpinnerWidth = 0;
+    }
+
     try {
       let hasOutput = false;
       for await (const event of session.run(trimmed, currentController.signal)) {
         if (event.type === "text-delta") {
+          // text-delta 전에 혹시 스피너가 살아있으면 정리
+          clearActiveSpinner();
           process.stdout.write(event.text);
           hasOutput = true;
         } else if (event.type === "tool-call") {
           // 툴콜은 핵심 인자 포함 dim 1줄 표시
           process.stdout.write(chalk.dim(`\n⚙ ${formatToolCall(event.toolName, event.args)}\n`));
+
+          if (isTTY) {
+            // 이전 스피너 정리 후 새 스피너 시작
+            clearActiveSpinner();
+            activeToolLabel = formatToolCall(event.toolName, event.args);
+            activeToolStartMs = Date.now();
+            spinnerFrameIdx = 0;
+
+            sharedActiveInterval = setInterval(() => {
+              const frame = SPINNER_FRAMES[spinnerFrameIdx % SPINNER_FRAMES.length] ?? "⠋";
+              spinnerFrameIdx++;
+              const plainText = `${frame} ${activeToolLabel} 실행 중…`;
+              process.stdout.write(`\r${chalk.dim(plainText)}`);
+              // 가시 문자 너비는 평문 기준 (+1 은 \r 포함)
+              lastSpinnerWidth = plainText.length + 1;
+            }, 80);
+          }
         } else if (event.type === "tool-result") {
-          // 툴 결과는 생략 (모델에게 전달됨)
+          // 스피너 정지 후 완료/실패 한 줄 표시
+          const elapsedMs = Date.now() - activeToolStartMs;
+          const elapsedSec = (elapsedMs / 1000).toFixed(1);
+          clearActiveSpinner();
+
+          const statusLabel = event.isError ? "실패" : "완료";
+          process.stdout.write(
+            chalk.dim(`  └ ${activeToolLabel} ${statusLabel} (${elapsedSec}s)\n`),
+          );
         } else if (event.type === "approval-required") {
           // 렌더링은 createCliApprovalHandler가 이미 처리함 (이벤트 수신 로그용)
         } else if (event.type === "turn-complete") {
@@ -229,14 +307,19 @@ export async function runChat(opts: {
         process.stdout.write("\n");
       }
     } finally {
+      // 턴 종료 시 잔여 스피너 반드시 정리
+      clearActiveSpinner();
       currentController = null;
     }
   }
 
   rl.close();
-  // 정상 종료 (/exit, EOF): 세션 스테이징 정리 (실패는 무시)
-  cleanSessionStaging(store.id).catch(() => {});
+  // 정상 종료 (/exit, EOF): 세션 스테이징 정리 후 연결 종료
+  await cleanSessionStaging(store.id).catch(() => {});
   await mcpManager.disconnect();
+  // stdio MCP 서버(npx 자식 프로세스)가 이벤트 루프를 붙잡아 종료가 지연되는 경우가 있어
+  // 정리 완료 후 명시적으로 프로세스를 종료한다 (SIGINT 경로와 동일 정책).
+  process.exit(0);
 }
 
 /**
