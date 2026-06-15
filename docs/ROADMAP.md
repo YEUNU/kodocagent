@@ -22,7 +22,7 @@
 | M5a | Electron GUI 스캐폴딩 (채팅 + 승인 다이얼로그) — GUI 트랙 시작점 | `241ac65` |
 | R1 | **v0.1.0 npm 첫 발행** (`@kodocagent/cli`) | `b9540c9` |
 | 운영 | CI 그린(3 OS × Node 22/24), Actions v6, TS6 의존성 최신화 | `4b159d7` |
-| 검증 | 실키 E2E(2026-06-15): **OpenAI gpt-5.5 + Google gemini-3.5-flash** 읽기·요약(툴콜)·쓰기 거절+원본 무변경; **법령 MCP(korean-law)** 연동으로 근로기준법 제60조 조회→취업규칙 위반 식별·인용 성공 | — |
+| 검증 | 실키 E2E(2026-06-15): **OpenAI gpt-5.5 + Google gemini-3.5-flash + Anthropic claude-sonnet-4-6** 읽기·요약(툴콜)·쓰기 거절+원본 무변경; **법령 MCP(korean-law)** 연동으로 근로기준법 제60조 조회→취업규칙 위반 식별·인용 성공 | — |
 
 문서 매트릭스 회귀 현황(M4.5): XLSX/DOCX/HWPX 실파일 라운드트립 + 한자·특수기호(漢字 §1 ①) 보존 테스트 통과. **잔여 커버리지: PDF/MD/TXT 읽기, .hwp 실바이너리** → v0.2.0에서 보강.
 
@@ -40,7 +40,7 @@
 | 2 | OpenAI 실키 E2E 재검증 | `.env` 키로 읽기·요약·비대화형 쓰기 거절 재확인(코어 리팩터 후 무결성) | 없음(`.env`) | ✅ 통과(2026-06-15) — 3줄 요약 정확, 쓰기 거절+원본 해시 무변경 |
 | 3 | 한국어 에러·온보딩 카피 점검 + 에러 UX 픽스 | 카피 검수(명백한 이슈 없음) + 모델 API 오류 시 onError 원시 덤프 제거 | 없음 | ✅ `924b091` |
 | 4 | **CI 자동 발행 — OIDC Trusted Publishing 전환** | main 푸시 시 토큰 없이 자동 발행(provenance 포함). 2FA 토큰 문제 제거 | 🔧 npmjs 패키지 설정에 이 저장소 Trusted Publisher 등록(사용자 1회) | ✅ 워크플로 작성 완료(`release.yml`). 등록 + 실제 버전 범프 시 검증 |
-| 5 | Anthropic·Google 실키 채팅+툴콜 | 2사 각각 한국어 채팅 + read_document 툴콜 성공 | 🔑 `ANTHROPIC_API_KEY`(미제공) | Google ✅ 통과(2026-06-15) / Anthropic 키 대기 |
+| 5 | Anthropic·Google 실키 채팅+툴콜 | 2사 각각 한국어 채팅 + read_document 툴콜 성공 | — | ✅ Google·Anthropic 모두 통과(2026-06-15). **BYOK 3사 전체 실증 완료** |
 | 6 | 법령 MCP 실연동 | "근로기준법 제60조 확인해서 취업규칙 검토" → 법령 MCP 호출 → 조문 인용 제안 | `LAW_OC` 제공됨 | ✅ 통과(2026-06-15) — korean-law(9툴) 연결, 제60조 조회·인용, 연차 10일<15일 위반 식별 |
 | 7 | 대화형 승인 흐름 수동 확인 | diff→승인→백업→원자적 저장, 거절+사유→재제안 1회 | 터미널 직접 실행 | 사용자 |
 
@@ -91,6 +91,7 @@ GUI 참고: electron-vite는 vite 8 지원 위해 6.0.0-beta.1 사용 — stable
 ## 알려진 제약 (의존성)
 
 - **PDF 읽기(kordoc/pdfjs-dist)**: ① pnpm 개발 환경에서 wasm 경로 해석 버그로 비결정적 행(hang)/오류 발생(설치형 번들에서는 정상 추정) → 단위 테스트 제외. ② PDF 파싱 시 `process.cwd()`에 `.kordoc_ocr_tmp/`(OCR용 PNG) 임시 산출물을 남김 → `.gitignore` 처리. 사용자 cwd 오염은 kordoc 동작이며, 추후 업스트림 이슈 제기 검토. (`v0.2.0` 검증 중 발견)
+- **`ANTHROPIC_BASE_URL` 환경변수 footgun**: AI SDK는 `ANTHROPIC_BASE_URL`을 baseURL로 그대로 사용한다. Claude Code/Desktop은 이 값을 `https://api.anthropic.com`(끝에 `/v1` 없음)으로 주입하는데, 같은 셸에서 kodocagent를 실행하면 `…/messages`(/v1 누락)로 가서 **404 Not Found**가 난다. kodocagent 대상 사용자(개발자)가 이 환경을 가질 가능성이 높음. 대응안 검토 중: 공식 호스트인데 `/v1`이 빠진 경우만 정규화(커스텀 프록시는 보존). (`v0.2.0` 검증 중 발견)
 
 ## 운영 원칙 (요약)
 
