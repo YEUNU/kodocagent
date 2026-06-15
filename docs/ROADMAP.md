@@ -28,16 +28,17 @@
 | 4 | **read_document 픽스처 보강** — .docx/.xlsx 실파싱 테스트 부재 | exceljs/md-to-docx로 생성한 픽스처 → kordoc parse 마크다운 검증 |
 | 5 | 채팅 툴콜 표시에 핵심 인자(path 등) 1줄 요약 | `⚙ propose_edit(보고서.hwpx)` 형태 |
 
-### R1 — v0.1.0 첫 릴리스 (준비 완료)
+### R1 — v0.1.0 첫 릴리스 ✅ 완료 (2026-06-15)
 
-진행 상황 (2026-06-15): `NPM_TOKEN` 등록 ✅ / 버전 산출(`changeset version` 로컬 수행, v0.1.0) ✅ / ~~첫 publish 시도 → E404: npm에 `@kodocagent` 스코프(조직) 부재~~ → **해결**: 단일 패키지 번들링으로 전환. `@kodocagent/*` 내부 패키지를 `private: true`로 표시하고 CLI 빌드 시 번들링 — npm 조직 불필요.
+**`@kodocagent/cli@0.1.0` npm 발행 완료** — `npm i -g @kodocagent/cli` / `npx @kodocagent/cli@latest`, 실행 명령은 `kodocagent`. 클린 환경 스모크(npx 설치→`--version` 0.1.0, `--help` 명령 등록) 통과.
 
+발행까지의 경위(기록): unscoped `kodocagent`는 사용자 토큰이 `@kodocagent` 스코프 전용이라 403 → 패키지명을 `@kodocagent/cli`로 전환 → `@kodocagent` 조직이 발행 2FA를 요구하나 계정에 인증앱 2FA 미설정으로 토큰/세션 모두 403 → 사용자가 **인증앱 2FA 설정 후 `pnpm publish --otp=<앱코드>`로 수동 첫 발행** 성공.
+
+**남은 후속 (자동화 — 선택):**
 | # | 작업 | 담당 |
 |---|---|---|
-| 1 | ~~npmjs.com에서 조직 `kodocagent` 생성~~ → **단일 패키지 번들링으로 해결됨**. `@kodocagent/*` 내부 패키지는 워크스페이스 전용(`private: true`) + CLI에 번들됨. npm 조직 불필요. | 완료 |
-| 2 | (선택, 향후 자동화용) 저장소 Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests" 활성화 — 현재는 로컬 버전 산출로 우회 중 | **사용자** |
-| 3 | Release 워크플로 재실행 → `kodocagent@0.1.0` publish + GitHub Release 태그 (changesets가 private 패키지를 자동으로 건너뜀) | 에이전트 |
-| 4 | 클린 환경 `npx kodocagent@latest` 스모크 + 패치 배포로 업데이트 배너 확인 (SPEC §12 M4 잔여) | 에이전트 |
+| 1 | CI 자동 발행: `@kodocagent` 조직이 발행 2FA를 요구하므로, `NPM_TOKEN`을 **"bypass 2FA" 켜진 Granular 토큰**(계정 2FA 활성 상태에서 생성)으로 교체하거나, 패키지 설정에서 **Trusted Publisher(OIDC)**로 이 저장소 등록. 그 전까지 패치 릴리스는 `pnpm --filter @kodocagent/cli publish --otp=<앱코드>` 수동 | **사용자**(토큰/OIDC) |
+| 2 | 패치 배포 후 OTA 업데이트 배너 확인 (SPEC §12 M4 잔여) | 에이전트 (다음 패치 시) |
 
 ### E2E-2 — 실키 검증 잔여 (키 제공 시 진행)
 
