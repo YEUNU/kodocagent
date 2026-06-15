@@ -16,7 +16,7 @@
 - v1 쓰기 범위: **HWPX(kordoc) + DOCX(docx) + XLSX(exceljs)** — HWP 5.0 바이너리 쓰기는 제외, `.hwp` 편집 결과는 `.hwpx`로 저장
 - 미리보기: v1은 **텍스트/구조 diff만** — rhwp는 브라우저 전용(Node 부적합 검증됨)이라 M5 GUI에서 사용
 - 에이전트 접근: 읽기전용 탐색(cwd 이하) + 문서 툴. 셸 실행 없음
-- 기본 모델: 플래그십 (`claude-opus-4-8` / `gpt-5.5` / `gemini-3.5-flash`)
+- 기본 모델: `claude-sonnet-4-6`(Anthropic, 비용·속도 균형) / `gpt-5.5` / `gemini-3.5-flash`
 
 **활용 자산** (검증 결과: RESEARCH.md)
 

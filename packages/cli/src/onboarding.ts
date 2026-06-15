@@ -29,7 +29,7 @@ export async function runOnboarding(): Promise<void> {
   const providerResult = await select<Provider>({
     message: "사용할 AI 프로바이더를 선택하세요:",
     options: [
-      { value: "anthropic", label: "Anthropic (Claude)", hint: "claude-opus-4-8 기본" },
+      { value: "anthropic", label: "Anthropic (Claude)", hint: "claude-sonnet-4-6 기본" },
       { value: "openai", label: "OpenAI (GPT)", hint: "gpt-5.5 기본" },
       { value: "google", label: "Google (Gemini)", hint: "gemini-3.5-flash 기본" },
     ],

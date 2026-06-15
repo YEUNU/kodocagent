@@ -155,7 +155,7 @@ kodocagent config set law-key <발급받은_LAW_OC_키>
 | 키 | 설명 | 예시 |
 |----|------|------|
 | `provider` | 활성 프로바이더 | `anthropic` \| `openai` \| `google` |
-| `model` | 활성 모델 | `claude-opus-4-8` |
+| `model` | 활성 모델 | `claude-sonnet-4-6` |
 | `api-key.anthropic` | Anthropic API 키 | `sk-ant-...` |
 | `api-key.openai` | OpenAI API 키 | `sk-...` |
 | `api-key.google` | Google API 키 | `AI...` |
@@ -234,7 +234,7 @@ pnpm -r typecheck
 
 | 프로바이더 | 기본 모델 | 환경변수 |
 |-----------|-----------|---------|
-| Anthropic | `claude-opus-4-8` | `ANTHROPIC_API_KEY` |
+| Anthropic | `claude-sonnet-4-6` | `ANTHROPIC_API_KEY` |
 | OpenAI | `gpt-5.5` | `OPENAI_API_KEY` |
 | Google | `gemini-3.5-flash` | `GOOGLE_GENERATIVE_AI_API_KEY` |
 

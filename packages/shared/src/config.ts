@@ -3,9 +3,9 @@ import { z } from "zod";
 export const PROVIDERS = ["anthropic", "openai", "google"] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
-/** 프로바이더별 기본 모델 — 플래그십 정책 (docs/SPEC.md §3) */
+/** 프로바이더별 기본 모델 (Anthropic은 비용·속도 균형으로 Sonnet, docs/SPEC.md §3) */
 export const DEFAULT_MODELS: Record<Provider, string> = {
-  anthropic: "claude-opus-4-8",
+  anthropic: "claude-sonnet-4-6",
   openai: "gpt-5.5",
   google: "gemini-3.5-flash",
 };

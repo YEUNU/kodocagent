@@ -371,7 +371,7 @@ async function handleModelSwitch(_config: KodocConfig): Promise<{ config: KodocC
   const selected = String(result);
   if (selected === "__custom__") {
     const customInput = await text({
-      message: "모델 ID를 입력하세요 (예: anthropic/claude-opus-4-8 또는 프로바이더:모델ID):",
+      message: "모델 ID를 입력하세요 (예: anthropic/claude-sonnet-4-6 또는 프로바이더:모델ID):",
       placeholder: "provider:model-id",
       validate(value) {
         if (!value?.trim()) return "모델 ID를 입력해야 합니다.";

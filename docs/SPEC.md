@@ -77,11 +77,11 @@ markdownToHwpx(markdown: string, options?: { templateArrayBuffer?: ArrayBuffer, 
 
 ## 3. 모델 레지스트리 (`core/src/providers/registry.ts`)
 
-기본값은 플래그십. 미등록 모델 ID는 통과 허용(BYOK 특성). **샘플링 파라미터(`temperature`/`top_p`/`top_k`)는 어떤 요청에도 설정하지 않는다** — Claude Opus 4.7+/Fable 5는 400 에러를 반환한다.
+기본값: OpenAI·Google은 플래그십, **Anthropic은 `claude-sonnet-4-6`(비용·속도 균형)**. 미등록 모델 ID는 통과 허용(BYOK 특성). **샘플링 파라미터(`temperature`/`top_p`/`top_k`)는 어떤 요청에도 설정하지 않는다** — Claude Opus 4.7+/Fable 5는 400 에러를 반환한다.
 
 | 프로바이더 | 기본 모델 | 레지스트리 등재 모델 | 환경변수 |
 |---|---|---|---|
-| anthropic | `claude-opus-4-8` ($5/$25 per MTok) | `claude-fable-5`, `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5` | `ANTHROPIC_API_KEY` |
+| anthropic | `claude-sonnet-4-6` ($3/$15 per MTok) | `claude-fable-5`, `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5` | `ANTHROPIC_API_KEY` |
 | openai | `gpt-5.5` | `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5` | `OPENAI_API_KEY` |
 | google | `gemini-3.5-flash` (GA 안정판) | `gemini-3.5-flash`, `gemini-3.1-pro-preview`, `gemini-2.5-pro`, `gemini-2.5-flash` | `GOOGLE_GENERATIVE_AI_API_KEY` |
 
@@ -97,7 +97,7 @@ markdownToHwpx(markdown: string, options?: { templateArrayBuffer?: ArrayBuffer, 
 {
   "version": 1,
   "provider": "anthropic",            // 활성 프로바이더
-  "model": "claude-opus-4-8",         // 활성 모델 (미지정 시 프로바이더 기본값)
+  "model": "claude-sonnet-4-6",       // 활성 모델 (미지정 시 프로바이더 기본값)
   "apiKeys": {                         // 환경변수가 우선
     "anthropic": "sk-ant-...",
     "openai": null,
