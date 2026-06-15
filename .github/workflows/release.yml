@@ -8,7 +8,8 @@ on:
 concurrency: release-${{ github.ref }}
 
 permissions:
-  contents: write
+  contents: write # 태그 푸시
+  id-token: write # npm OIDC Trusted Publishing (장기 토큰 불필요)
 
 jobs:
   release:
@@ -18,16 +19,24 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 22 # 22.x 최신 = Node >=22.14 (Trusted Publishing 요건)
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test
-      # kodocagent 단일 패키지만 발행 (내부 패키지는 private — CLI 번들에 인라인).
-      # 토큰 인증을 .npmrc에 명시해 npm/pnpm 모두에서 동작하도록 보장.
-      - name: Publish @kodocagent/cli to npm
+      # @kodocagent/cli 단일 패키지만 발행 (내부 패키지는 private — dist에 인라인 번들).
+      #
+      # 인증: npm OIDC Trusted Publishing — 장기 NPM_TOKEN/2FA 불필요.
+      #   ⚠️ 최초 1회 사용자 설정 필요: npmjs.com → @kodocagent/cli → Settings →
+      #      Trusted Publisher 추가 (GitHub Actions / 저장소: YEUNU/kodocagent /
+      #      워크플로 파일: release.yml). 등록 전에는 발행 단계가 실패한다.
+      #
+      # pnpm 11은 OIDC 발행에 404 회귀(pnpm#11513)가 있어 npm CLI로 발행한다.
+      # workspace:* devDependencies는 npm이 해석하지 못하므로 발행 직전 제거
+      # (dist가 자급자족 번들이라 소비자에게 불필요).
+      - name: Publish @kodocagent/cli (OIDC Trusted Publishing)
         run: |
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+          npm install -g npm@latest   # Trusted Publishing 요건: npm >=11.5.1
           LOCAL=$(node -p "require('./packages/cli/package.json').version")
           PUBLISHED=$(npm view @kodocagent/cli version 2>/dev/null || echo none)
           echo "local=$LOCAL published=$PUBLISHED"
@@ -35,8 +44,9 @@ jobs:
             echo "@kodocagent/cli@$LOCAL 는 이미 발행됨 — 건너뜀"
             exit 0
           fi
-          pnpm --filter @kodocagent/cli publish --no-git-checks --access public
+          cd packages/cli
+          npm pkg delete devDependencies
+          npm publish --access public --provenance
+          cd - > /dev/null
           git tag "v$LOCAL"
           git push origin "v$LOCAL" || true
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

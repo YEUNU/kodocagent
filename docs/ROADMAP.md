@@ -39,7 +39,7 @@
 | 1 | 문서 매트릭스 커버리지 마감 | PDF/MD/TXT 읽기 + .hwp 정책 경로 회귀 테스트 추가, 전부 그린 | 없음 | 자율 |
 | 2 | OpenAI 실키 E2E 재검증 | `.env` 키로 읽기·요약·비대화형 쓰기 거절 재확인(코어 리팩터 후 무결성) | 없음(`.env`) | 자율 |
 | 3 | 한국어 에러·온보딩 카피 전수 점검 | core/cli 사용자 노출 메시지 일관성·맞춤법·행동유도 검수 | 없음 | 자율 |
-| 4 | **CI 자동 발행 — OIDC Trusted Publishing 전환** | main 푸시 시 토큰 없이 자동 발행(provenance 포함). 2FA 토큰 문제 제거 | 🔧 npmjs 패키지 설정에 이 저장소 Trusted Publisher 등록(사용자 1회) | 워크플로 자율 작성, 등록은 사용자 |
+| 4 | **CI 자동 발행 — OIDC Trusted Publishing 전환** | main 푸시 시 토큰 없이 자동 발행(provenance 포함). 2FA 토큰 문제 제거 | 🔧 npmjs 패키지 설정에 이 저장소 Trusted Publisher 등록(사용자 1회) | ✅ 워크플로 작성 완료(`release.yml`). 등록 + 실제 버전 범프 시 검증 |
 | 5 | Anthropic·Google 실키 채팅+툴콜 | 2사 각각 한국어 채팅 + read_document 툴콜 성공 | 🔑 `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` | 키 필요 |
 | 6 | 법령 MCP 실연동 | "근로기준법 제60조 확인해서 취업규칙 검토" → 법령 MCP 호출 → 조문 인용 제안 | 🔑 `LAW_OC` (open.law.go.kr 무료) | 키 필요 |
 | 7 | 대화형 승인 흐름 수동 확인 | diff→승인→백업→원자적 저장, 거절+사유→재제안 1회 | 터미널 직접 실행 | 사용자 |
@@ -91,4 +91,4 @@ GUI 참고: electron-vite는 vite 8 지원 위해 6.0.0-beta.1 사용 — stable
 - 진행 방식: [DEVELOPMENT.md](DEVELOPMENT.md) — Sonnet 4.6 서브에이전트 구현 / Fable 5 검증·커밋
 - 실험용 BYOK 키: 레포 루트 `.env`(gitignored)의 `GPT_API_KEY` → `OPENAI_API_KEY`로 주입해 사용
 - 의존성: Dependabot 주간 + 마일스톤 시작 시 최신화. TS6 전환 완료(`ignoreDeprecations: "6.0"` — tsup의 baseUrl 사용이 TS7에서 제거 예정이므로 tsup 업데이트 추적 필요)
-- 발행: 현재 수동(`pnpm --filter @kodocagent/cli publish --otp=<앱코드>`). v0.2.0에서 OIDC Trusted Publishing으로 자동화 예정
+- 발행: `release.yml`이 **npm OIDC Trusted Publishing**으로 자동 발행(장기 토큰·2FA 불필요, provenance 포함). pnpm 11 OIDC 404 회귀를 피해 발행 단계만 npm CLI 사용. **최초 1회 사용자 설정**: npmjs.com → `@kodocagent/cli` → Settings → Trusted Publisher 추가(GitHub Actions / 저장소 `YEUNU/kodocagent` / 워크플로 `release.yml`). 등록 전 패치 릴리스는 수동 `pnpm --filter @kodocagent/cli publish --otp=<앱코드>`
