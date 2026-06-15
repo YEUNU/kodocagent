@@ -235,7 +235,7 @@ pnpm -r typecheck
 | 프로바이더 | 기본 모델 | 환경변수 |
 |-----------|-----------|---------|
 | Anthropic | `claude-sonnet-4-6` | `ANTHROPIC_API_KEY` |
-| OpenAI | `gpt-5.5` | `OPENAI_API_KEY` |
+| OpenAI | `gpt-5.4` | `OPENAI_API_KEY` |
 | Google | `gemini-3.5-flash` | `GOOGLE_GENERATIVE_AI_API_KEY` |
 
 환경변수가 `config.json`보다 우선합니다. BYOK(Bring Your Own Key) 방식으로 API 키를 직접 관리합니다.

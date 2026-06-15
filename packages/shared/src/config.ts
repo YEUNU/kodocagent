@@ -6,7 +6,7 @@ export type Provider = (typeof PROVIDERS)[number];
 /** 프로바이더별 기본 모델 (Anthropic은 비용·속도 균형으로 Sonnet, docs/SPEC.md §3) */
 export const DEFAULT_MODELS: Record<Provider, string> = {
   anthropic: "claude-sonnet-4-6",
-  openai: "gpt-5.5",
+  openai: "gpt-5.4",
   google: "gemini-3.5-flash",
 };
 
