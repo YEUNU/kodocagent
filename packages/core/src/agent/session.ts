@@ -90,6 +90,10 @@ export class AgentSession {
         stopWhen: stepCountIs(config.maxSteps),
         abortSignal: signal,
         // 샘플링 파라미터 미설정 (SPEC §3, §5 불변 원칙)
+        onError: () => {
+          // 오류는 fullStream의 error 파트와 아래 catch에서 이미 깔끔히 처리됨.
+          // AI SDK 기본 onError(console.error 원시 덤프)를 비활성화한다.
+        },
       });
 
       // fullStream으로 모든 이벤트를 구독한다
