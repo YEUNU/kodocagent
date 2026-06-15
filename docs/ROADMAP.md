@@ -36,9 +36,9 @@
 
 | # | 작업 | 완료 기준 | 차단/필요 | 진행 |
 |---|---|---|---|---|
-| 1 | 문서 매트릭스 커버리지 마감 | PDF/MD/TXT 읽기 + .hwp 정책 경로 회귀 테스트 추가, 전부 그린 | 없음 | 자율 |
+| 1 | 문서 매트릭스 커버리지 마감 | MD/TXT 직접 처리 구현 + 회귀 테스트(127건 그린) | 없음 | ✅ `c363c1b` |
 | 2 | OpenAI 실키 E2E 재검증 | `.env` 키로 읽기·요약·비대화형 쓰기 거절 재확인(코어 리팩터 후 무결성) | 없음(`.env`) | 자율 |
-| 3 | 한국어 에러·온보딩 카피 전수 점검 | core/cli 사용자 노출 메시지 일관성·맞춤법·행동유도 검수 | 없음 | 자율 |
+| 3 | 한국어 에러·온보딩 카피 점검 + 에러 UX 픽스 | 카피 검수(명백한 이슈 없음) + 모델 API 오류 시 onError 원시 덤프 제거 | 없음 | ✅ `924b091` |
 | 4 | **CI 자동 발행 — OIDC Trusted Publishing 전환** | main 푸시 시 토큰 없이 자동 발행(provenance 포함). 2FA 토큰 문제 제거 | 🔧 npmjs 패키지 설정에 이 저장소 Trusted Publisher 등록(사용자 1회) | ✅ 워크플로 작성 완료(`release.yml`). 등록 + 실제 버전 범프 시 검증 |
 | 5 | Anthropic·Google 실키 채팅+툴콜 | 2사 각각 한국어 채팅 + read_document 툴콜 성공 | 🔑 `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` | 키 필요 |
 | 6 | 법령 MCP 실연동 | "근로기준법 제60조 확인해서 취업규칙 검토" → 법령 MCP 호출 → 조문 인용 제안 | 🔑 `LAW_OC` (open.law.go.kr 무료) | 키 필요 |
@@ -85,6 +85,10 @@
 GUI 참고: electron-vite는 vite 8 지원 위해 6.0.0-beta.1 사용 — stable 출시 시 갱신. CI는 `ELECTRON_SKIP_BINARY_DOWNLOAD=1`로 빌드/타입체크/테스트만 수행.
 
 ---
+
+## 알려진 제약 (의존성)
+
+- **PDF 읽기(kordoc/pdfjs-dist)**: ① pnpm 개발 환경에서 wasm 경로 해석 버그로 비결정적 행(hang)/오류 발생(설치형 번들에서는 정상 추정) → 단위 테스트 제외. ② PDF 파싱 시 `process.cwd()`에 `.kordoc_ocr_tmp/`(OCR용 PNG) 임시 산출물을 남김 → `.gitignore` 처리. 사용자 cwd 오염은 kordoc 동작이며, 추후 업스트림 이슈 제기 검토. (`v0.2.0` 검증 중 발견)
 
 ## 운영 원칙 (요약)
 
