@@ -7,7 +7,7 @@
  * - diff 렌더: + 초록, - 빨강, @@ 시안, 헤더 dim; 최대 400줄
  */
 
-import { isCancel, select, text } from "@clack/prompts";
+import { isCancel, select } from "@clack/prompts";
 import type { ApprovalHandler, ApprovalResult, Proposal } from "@kodocagent/shared";
 import chalk from "chalk";
 
@@ -95,43 +95,23 @@ export function createCliApprovalHandler(): ApprovalHandler {
     // Proposal 렌더
     renderProposal(proposal);
 
-    // clack select: 승인 / 거절 / 거절(사유 입력)
-    type SelectValue = "approve" | "reject" | "reject-reason";
+    // clack select: 승인 / 거절 — 단일 단계 (별도 사유 입력 없음)
+    // 변경을 원하면 거절 후 채팅으로 다시 지시하면 된다.
+    type SelectValue = "approve" | "reject";
 
     const choice = await select<SelectValue>({
-      message: "변경 사항을 승인하시겠습니까?",
+      message: "변경 사항을 저장할까요?",
       options: [
         { value: "approve", label: "✅ 승인 — 파일을 저장합니다" },
-        { value: "reject", label: "❌ 거절 — 변경을 취소합니다" },
-        { value: "reject-reason", label: "❌ 거절 (사유 입력)" },
+        { value: "reject", label: "❌ 거절 — 저장하지 않고 취소합니다" },
       ],
     });
 
-    if (isCancel(choice)) {
-      return { approved: false, reason: "취소됨" };
-    }
-
-    if (choice === "approve") {
-      return { approved: true };
-    }
-
-    if (choice === "reject") {
+    // 거절 또는 취소(Esc) → 저장하지 않음
+    if (isCancel(choice) || choice === "reject") {
       return { approved: false };
     }
 
-    // 사유 입력
-    const reason = await text({
-      message: "거절 사유를 입력하세요:",
-      placeholder: "예: 날짜가 잘못됨, 내용이 부정확함",
-    });
-
-    if (isCancel(reason)) {
-      return { approved: false, reason: "취소됨" };
-    }
-
-    return {
-      approved: false,
-      reason: typeof reason === "string" ? reason : "사용자가 거절했습니다",
-    };
+    return { approved: true };
   };
 }

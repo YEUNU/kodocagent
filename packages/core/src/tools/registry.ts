@@ -170,8 +170,11 @@ export class ToolRegistry {
             // 3단계: ApprovalHandler 호출
             const approvalResult = await approvalHandler(proposal);
             if (!approvalResult.approved) {
-              const reason = approvalResult.reason ?? "사용자가 거절했습니다";
-              return `사용자 거절: ${reason}`;
+              const reasonPart = approvalResult.reason ? ` (사유: ${approvalResult.reason})` : "";
+              return (
+                `사용자가 변경을 거절하여 저장하지 않았습니다${reasonPart}. ` +
+                "같은 수정안을 자동으로 다시 제안하지 말고, 사용자의 다음 지시를 기다리세요."
+              );
             }
 
             // 4단계: commit() — 백업 + 원자적 쓰기

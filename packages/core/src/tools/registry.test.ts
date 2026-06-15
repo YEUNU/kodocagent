@@ -5,7 +5,7 @@
  * 주요 검증:
  * - requiresApproval=false 툴: ApprovalHandler 없이 execute 직접 호출
  * - propose 툴 + 핸들러 승인: commit() 한 번 호출, 성공 메시지 반환
- * - propose 툴 + 핸들러 거절: commit() 미호출, 타겟 파일 무변경, "사용자 거절:" 접두사
+ * - propose 툴 + 핸들러 거절: commit() 미호출, 타겟 파일 무변경, 거절 메시지(+사유) 반환
  * - approval-required 이벤트: eventEmitter 콜백 호출됨
  * - propose가 string 반환: 툴-레벨 오류, handler/commit 미호출
  */
@@ -86,7 +86,7 @@ describe("ToolRegistry 승인 게이트 (두 단계)", () => {
     expect(result).toContain("저장 완료");
   });
 
-  it("propose 툴 + 핸들러 거절: commit() 미호출, '사용자 거절:' 접두사 반환", async () => {
+  it("propose 툴 + 핸들러 거절: commit() 미호출, 거절 메시지(+사유) 반환", async () => {
     const registry = new ToolRegistry();
 
     const commitFn = vi.fn().mockResolvedValue("저장 완료");
@@ -128,8 +128,8 @@ describe("ToolRegistry 승인 게이트 (두 단계)", () => {
 
     // commit이 호출되지 않아야 함
     expect(commitFn).not.toHaveBeenCalled();
-    // "사용자 거절:" 접두사 포함
-    expect(String(result)).toContain("사용자 거절");
+    // 거절 메시지 + 사유 포함
+    expect(String(result)).toContain("거절");
     expect(String(result)).toContain("내용이 잘못됨");
   });
 
@@ -170,7 +170,7 @@ describe("ToolRegistry 승인 게이트 (두 단계)", () => {
       { toolCallId: "tc-1", messages: [], abortSignal: undefined },
     );
 
-    expect(String(result)).toContain("사용자 거절");
+    expect(String(result)).toContain("거절");
     expect(commitFn).not.toHaveBeenCalled();
   });
 
