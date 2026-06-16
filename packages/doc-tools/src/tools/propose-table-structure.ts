@@ -30,7 +30,7 @@ import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { parse } from "@clazic/kordoc";
 import { z } from "zod";
-import { findTableByAnchor, loadRhwpDocument } from "../rhwp-engine.js";
+import { detectStructuralLoss, findTableByAnchor, loadRhwpDocument } from "../rhwp-engine.js";
 import { resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
@@ -296,13 +296,26 @@ export const proposeTableStructureTool: ToolDefinition<ProposeTableStructureInpu
       warnings.push("rhwp는 .hwp 직접 저장을 지원하지 않아 .hwpx로 저장됩니다.");
     }
 
+    // 원본 kordoc parse (구조 손실 게이트용)
+    let originalBlocks: import("@clazic/kordoc").IRBlock[] | null = null;
+    try {
+      const origResult = await parse(originalBuf.buffer as ArrayBuffer);
+      if (origResult.success) {
+        originalBlocks = origResult.blocks;
+      }
+    } catch {
+      // parse 실패 → originalBlocks는 null 유지 (게이트 스킵)
+    }
+
     // (1) kordoc parse로 재파싱 — 성공 + anchor 텍스트 존재 확인
     let exportedMd = "";
     let kordocOk = false;
+    let exportedBlocks: import("@clazic/kordoc").IRBlock[] | null = null;
     try {
       const exportedResult = await parse(newBytes.buffer as ArrayBuffer);
       if (exportedResult.success) {
         exportedMd = exportedResult.markdown;
+        exportedBlocks = exportedResult.blocks;
         kordocOk = true;
       }
     } catch {
@@ -315,6 +328,19 @@ export const proposeTableStructureTool: ToolDefinition<ProposeTableStructureInpu
         `문서가 손상되었을 수 있으므로 파일을 저장하지 않았습니다.`
       );
     }
+
+    // ── 구조 손실 게이트 (블록 히스토그램 비교) ───────────
+    if (originalBlocks !== null && exportedBlocks !== null) {
+      const lossResult = detectStructuralLoss(originalBlocks, exportedBlocks);
+      if (lossResult.lost) {
+        return (
+          `오류: rhwp 엔진이 이 문서를 안전하게 변환하지 못했습니다(구조 손실: ${lossResult.detail}). ` +
+          `중첩표·이미지 등이 포함된 복잡한 문서는 현재 rhwp 엔진으로 편집할 수 없습니다. ` +
+          `파일을 변경하지 않았습니다.`
+        );
+      }
+    }
+    // ── 구조 손실 게이트 종료 ─────────────────────────────
 
     // anchor 텍스트가 결과 문서에 없는 경우:
     //   - 삭제 연산(deleteRow/deleteColumn)이 포함된 경우 anchor 자체가 삭제될 수 있으므로 경고만 추가.
