@@ -140,7 +140,7 @@
 | # | 작업 | 완료 기준 | 상태 |
 |---|---|---|---|
 | 0 | 타당성 스파이크 | Node 구동·exportHwpx 라운드트립·한컴 렌더 | ✅ 검증(2026-06-16) |
-| 1 | **rhwp 통합 기반 + 찾기/바꾸기** | `@rhwp/core` 외부 의존 + lazy-init WASM 래퍼 + `propose_find_replace`(rhwp `replaceAll`). **항상 `exportHwpx` 출력**(.hwp 입력도 .hwpx로 수렴) + **자가검증 게이트**(export 후 kordoc 재읽기로 완전 교체 확인, 미완이면 중단). 승인·diff·한컴 검증 | 착수 |
+| 1 | **rhwp 통합 기반 + 찾기/바꾸기** | `@rhwp/core` 외부 의존 + lazy-init WASM 래퍼 + `propose_find_replace`(rhwp `replaceAll`). **항상 `exportHwpx` 출력**(.hwp 입력도 .hwpx로 수렴) + **자가검증 게이트**(export 후 kordoc 재읽기로 완전 교체 확인, 미완이면 중단). 승인·diff·한컴 검증 | ✅ `3ed4e30` — 테스트 257, CLI dist 520KB(WASM 외부), .hwpx·.hwp→.hwpx 실파일 게이트 통과·한컴 개봉 확인 |
 | 2 | 표 구조 편집 | `propose_table_structure`(행·열 삽입/삭제·셀 병합) + **주소 브리지**(kordoc tableIndex ↔ rhwp `(sec,para,control)` 매핑) + 자가검증 | 예정 |
 | 3 | 중첩표 셀 편집 | rhwp path API로 v0.4.0 #3 잔여(중첩표 셀) 해소 | 예정 |
 | ~~4~~ | ~~`.hwp` 직접 저장(`exportHwp`)~~ | **불가 — 보류**: rhwp `exportHwp`가 편집을 반영하지 못함(평문·제목 모두 미저장, 3회 실측 / rhwp #197 "HWPX→HWP 변환기 미완"). kordoc도 .hwp 쓰기 불가 → **현재 어떤 경로로도 .hwp 출력 불가**. .hwp 편집은 .hwpx로 수렴(현 정책). rhwp #197 완성 시 재검토 | 차단(상류 대기) |
