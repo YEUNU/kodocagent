@@ -22,6 +22,7 @@
 | M5a | Electron GUI 스캐폴딩 (채팅 + 승인 다이얼로그) — GUI 트랙 시작점 | `241ac65` |
 | R1 | **v0.1.0 npm 첫 발행** (`@kodocagent/cli`) | `b9540c9` |
 | R2 | **v0.2.0 발행 — OIDC 자동 발행**(토큰·2FA 없이) | `c4bd004` |
+| R3 | **v0.3.0 발행 — CLI 폴리시·UX 8항목**(컨텍스트 관리·사용량 표시·효율 읽기·세션 재개·진행 표시·승인 1단계) | OIDC 자동 |
 | 운영 | CI 그린(3 OS × Node 22/24), Actions v6, TS6 의존성 최신화 | `4b159d7` |
 | 검증 | 실키 E2E(2026-06-15): **OpenAI gpt-5.5 + Google gemini-3.5-flash + Anthropic claude-sonnet-4-6** 읽기·요약(툴콜)·쓰기 거절+원본 무변경; **법령 MCP(korean-law)** 연동으로 근로기준법 제60조 조회→취업규칙 위반 식별·인용 성공 | — |
 
@@ -95,7 +96,7 @@ GUI 참고: electron-vite는 vite 8 지원 위해 6.0.0-beta.1 사용 — stable
 ## 알려진 제약 (의존성)
 
 - **PDF 읽기(kordoc/pdfjs-dist)**: ① pnpm 개발 환경에서 wasm 경로 해석 버그로 비결정적 행(hang)/오류 발생(설치형 번들에서는 정상 추정) → 단위 테스트 제외. ② PDF 파싱 시 `process.cwd()`에 `.kordoc_ocr_tmp/`(OCR용 PNG) 임시 산출물을 남김 → `.gitignore` 처리. 사용자 cwd 오염은 kordoc 동작이며, 추후 업스트림 이슈 제기 검토. (`v0.2.0` 검증 중 발견)
-- **`ANTHROPIC_BASE_URL` 환경변수 footgun**: AI SDK는 `ANTHROPIC_BASE_URL`을 baseURL로 그대로 사용한다. Claude Code/Desktop은 이 값을 `https://api.anthropic.com`(끝에 `/v1` 없음)으로 주입하는데, 같은 셸에서 kodocagent를 실행하면 `…/messages`(/v1 누락)로 가서 **404 Not Found**가 난다. kodocagent 대상 사용자(개발자)가 이 환경을 가질 가능성이 높음. 대응안 검토 중: 공식 호스트인데 `/v1`이 빠진 경우만 정규화(커스텀 프록시는 보존). (`v0.2.0` 검증 중 발견)
+- ~~**`ANTHROPIC_BASE_URL` 환경변수 footgun**~~ **(해결됨, v0.2.0 발행분)**: AI SDK는 `ANTHROPIC_BASE_URL`을 baseURL로 그대로 사용한다. Claude Code/Desktop은 이 값을 `https://api.anthropic.com`(끝에 `/v1` 없음)으로 주입하는데, 같은 셸에서 kodocagent를 실행하면 `…/messages`(/v1 누락)로 가서 404가 났다. → `normalizeAnthropicBaseUrl`로 **공식 호스트(api.anthropic.com)이고 경로가 비었거나 `/`일 때만 `/v1` 보정**(커스텀 프록시 URL은 보존)하도록 수정·검증 완료. (`v0.2.0` 검증 중 발견·수정)
 
 ## 운영 원칙 (요약)
 
