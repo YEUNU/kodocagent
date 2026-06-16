@@ -1,29 +1,29 @@
 /**
- * propose_find_replace 툴 — rhwp 엔진을 사용한 HWP/HWPX 전체 문서 찾기·바꾸기
+ * propose_find_replace 툴 — HWPX ZIP XML 직접 패치 방식 텍스트 찾기·바꾸기
  *
- * @rhwp/core의 replaceAll()(전체 치환) / replaceOne()(단일 치환) API를 사용한다.
+ * rhwp 엔진을 사용하지 않습니다. .hwpx ZIP 안의 Contents/section*.xml 파일에서
+ * <hp:t>...</hp:t> 텍스트 노드 내용만 정확히 패치합니다.
  *
- * 참고: @rhwp/core replaceAll은 표 셀(editable=0 포함) + 본문 모두 치환한다.
- *       replaceOne은 커서 기반으로 표 셀을 건너뛸 수 있으므로
- *       all:true 시에는 replaceAll을 단일 호출로 사용한다.
- *       all:false 시에는 replaceOne을 한 번 호출(첫 번째 매치만 교체).
+ * 장점:
+ *   - 이미지·표·레이아웃 등 모든 구조를 완전히 보존 (재직렬화 없음)
+ *   - 복잡한 문서(중첩 표·이미지 포함)도 안전하게 처리
+ *   - rhwp WASM 로드 불필요 (속도 향상)
+ *
+ * 제약:
+ *   - 텍스트가 여러 <hp:t> 런에 나뉘어 있으면 그 경계를 가로지르는 패턴은
+ *     매칭되지 않습니다(서식 분리 텍스트). 이 경우 경고만 추가하고 진행합니다.
+ *   - .hwpx 전용입니다. .hwp(구형 OLE 바이너리)는 지원하지 않습니다.
  *
  * 내보내기 정책:
- *   - exportHwp()는 편집 내용을 저장하지 않는다 (rhwp #197).
- *   - 입력이 .hwp든 .hwpx든 항상 exportHwpx()로 내보낸다.
- *   - .hwp 입력 시 출력 경로는 staging.resolveOutputPath()가 .hwpx로 변환한다.
- *
- * 자기검증 게이트:
- *   - exportHwpx() 후 kordoc parse()로 원본/결과 마크다운을 비교한다.
- *   - 치환 대상 텍스트가 출력 마크다운에 남아 있으면 중단(오류 반환).
- *   - replace에 find가 포함되어 있으면 검증을 건너뛰고 경고만 추가한다.
+ *   - 입력이 .hwpx이면 .hwpx 그대로 저장 (포맷 변환 없음).
+ *   - .hwp는 오류 반환 (Hancom에서 .hwpx로 저장 후 재시도 안내).
  */
 
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { parse } from "@clazic/kordoc";
+import JSZip from "jszip";
 import { z } from "zod";
-import { detectStructuralLoss, loadRhwpDocument, parseReplaceAllResult } from "../rhwp-engine.js";
 import { resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
@@ -33,7 +33,7 @@ import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 // ─────────────────────────────────────────────────────────
 
 export const proposeFindReplaceSchema = z.object({
-  path: z.string().describe("수정할 .hwp 또는 .hwpx 파일 경로 (cwd 기준 상대 경로 또는 절대 경로)"),
+  path: z.string().describe("수정할 .hwpx 파일 경로 (cwd 기준 상대 경로 또는 절대 경로)"),
   find: z.string().min(1).describe("찾을 텍스트"),
   replace: z.string().describe("바꿀 텍스트"),
   caseSensitive: z.boolean().optional().default(false).describe("대소문자 구분 (기본값: false)"),
@@ -48,105 +48,145 @@ export const proposeFindReplaceSchema = z.object({
 export type ProposeFindReplaceInput = z.infer<typeof proposeFindReplaceSchema>;
 
 // ─────────────────────────────────────────────────────────
-// replaceOne 결과 파싱
+// 순수 XML 치환 함수 (단위 테스트 가능)
 // ─────────────────────────────────────────────────────────
 
-interface ReplaceOneOk {
-  ok: true;
-  sec: number;
-  para: number;
-  charOffset: number;
-  newLength: number;
-}
-interface ReplaceOneFail {
-  ok: false;
-}
-type ReplaceOneResult = ReplaceOneOk | ReplaceOneFail;
-
-function parseReplaceOneResult(json: string): ReplaceOneResult {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch {
-    throw new Error(`replaceOne 결과를 파싱할 수 없습니다: ${json}`);
-  }
-  if (typeof parsed !== "object" || parsed === null || !("ok" in parsed)) {
-    throw new Error(`replaceOne 예상하지 못한 결과: ${json}`);
-  }
-  const p = parsed as Record<string, unknown>;
-  if (p.ok === false) return { ok: false };
-  if (
-    p.ok === true &&
-    typeof p.sec === "number" &&
-    typeof p.para === "number" &&
-    typeof p.charOffset === "number" &&
-    typeof p.newLength === "number"
-  ) {
-    return {
-      ok: true,
-      sec: p.sec,
-      para: p.para,
-      charOffset: p.charOffset,
-      newLength: p.newLength,
-    };
-  }
-  throw new Error(`replaceOne 예상하지 못한 결과 형태: ${json}`);
-}
-
-// ─────────────────────────────────────────────────────────
-// 자기검증 게이트 (순수 함수, 단위 테스트 가능)
-// ─────────────────────────────────────────────────────────
-
-export interface VerifyReplacementResult {
-  /** 검증 성공 여부 (skipped=true이면 항상 true) */
-  ok: boolean;
-  /** afterMarkdown에 남아 있는 find 발생 횟수 */
-  remaining: number;
-  /**
-   * true이면 검증을 건너뜀 (replace가 find를 포함하므로 남은 횟수 기반 검증 불가).
-   * 이 경우 ok는 항상 true.
-   */
-  skipped: boolean;
+/**
+ * XML 특수문자를 이스케이프한다 (& < > 만 처리 — 속성 인용 제외).
+ */
+export function escapeXml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /**
- * 치환 결과가 완전히 반영되었는지 검증한다.
+ * 섹션 XML에서 <hp:t>...</hp:t> 텍스트 노드 안에서만 텍스트를 치환한다.
  *
- * 로직:
- *   1. afterMarkdown에서 find의 발생 횟수를 센다 (리터럴, 비정규식).
- *   2. caseSensitive=false이면 두 문자열 모두 소문자로 변환 후 비교.
- *   3. replace가 find를 포함하면 치환 자체가 find를 재도입하므로
- *      "남은 횟수 = 0" 조건이 의미 없다 → skipped:true, ok:true.
- *   4. 그 외: remaining === 0이면 ok:true, 아니면 ok:false.
+ * - self-closing <hp:t/> 는 건드리지 않는다 (콘텐츠 없음).
+ * - find/replace 는 XML-이스케이프한 형태로 매칭/삽입한다.
+ * - caseSensitive=false 일 때: 소문자 비교로 매칭 위치를 찾되,
+ *   실제 원본 텍스트(XML 내 이스케이프 그대로)를 교체한다.
+ * - all=false + alreadyReplaced>0 이면 이 섹션에서 치환을 수행하지 않는다.
  *
- * @param _beforeMarkdown 원본 문서 마크다운 (미사용, 확장용으로 시그니처에 포함)
- * @param afterMarkdown   exportHwpx 후 재파싱한 마크다운
- * @param find            찾을 텍스트
- * @param replace         바꿀 텍스트
- * @param caseSensitive   대소문자 구분 여부
+ * @param xml              원본 섹션 XML
+ * @param find             찾을 텍스트 (평문)
+ * @param replace          바꿀 텍스트 (평문)
+ * @param caseSensitive    대소문자 구분 여부
+ * @param replaceAll       true = 전체 치환, false = 최초 1회만
+ * @param alreadyReplaced  이전 섹션에서 치환된 누계
+ * @returns                { xml: 수정된 XML, count: 이 섹션에서 치환된 횟수 }
  */
-export function verifyReplacementComplete(
-  _beforeMarkdown: string,
-  afterMarkdown: string,
+export function replaceInSectionXml(
+  xml: string,
   find: string,
   replace: string,
   caseSensitive: boolean,
-): VerifyReplacementResult {
-  // 비교용 문자열 준비 (caseSensitive=false이면 소문자로)
-  const normAfter = caseSensitive ? afterMarkdown : afterMarkdown.toLowerCase();
-  const normFind = caseSensitive ? find : find.toLowerCase();
-  const normReplace = caseSensitive ? replace : replace.toLowerCase();
-
-  // replace가 find를 포함하면 검증 불가
-  if (normReplace.includes(normFind)) {
-    // remaining은 참고용으로 계산 (실제 판단에는 사용 안 함)
-    const remaining = countOccurrences(normAfter, normFind);
-    return { ok: true, remaining, skipped: true };
+  replaceAll: boolean,
+  alreadyReplaced: number,
+): { xml: string; count: number } {
+  // all=false이고 이미 치환이 됐으면 이 섹션은 스킵
+  if (!replaceAll && alreadyReplaced > 0) {
+    return { xml, count: 0 };
   }
 
-  // 발생 횟수 계산
-  const remaining = countOccurrences(normAfter, normFind);
-  return { ok: remaining === 0, remaining, skipped: false };
+  // find/replace를 XML-이스케이프하여 XML 내 텍스트와 비교/삽입
+  const escapedFind = escapeXml(find);
+  const escapedReplace = escapeXml(replace);
+
+  if (escapedFind.length === 0) {
+    return { xml, count: 0 };
+  }
+
+  // 비교용 정규화 문자열
+  const normFind = caseSensitive ? escapedFind : escapedFind.toLowerCase();
+  const normReplace = escapedReplace; // replace는 그대로 삽입
+
+  let totalCount = 0;
+  let result = xml;
+
+  // <hp:t>...</hp:t> 매칭 — self-closing <hp:t/> 는 제외
+  // 패턴: <hp:t> 여는 태그로 시작하되 '/' 뒤에 오는 self-closing 형태는 제외
+  const tNodeRe = /<hp:t>([\s\S]*?)<\/hp:t>/g;
+  let offset = 0; // 원본 → result 오프셋 누적 (패치 후 인덱스 보정)
+
+  // 원본 xml에서 매칭하고 result에 패치 적용
+  let m = tNodeRe.exec(xml);
+  while (m !== null) {
+    const content = m[1] as string; // <hp:t>와 </hp:t> 사이의 원본 내용
+
+    // 이 노드 내에서 치환 수행
+    const nodeResult = replaceInContent(
+      content,
+      normFind,
+      normReplace,
+      caseSensitive,
+      replaceAll,
+      alreadyReplaced + totalCount,
+    );
+
+    if (nodeResult.count > 0) {
+      // 원본 content의 result 내 실제 위치 = m.index + offset + '<hp:t>'.length
+      const openTagLen = "<hp:t>".length;
+      const contentStart = m.index + offset + openTagLen;
+      const contentEnd = contentStart + content.length;
+
+      result = result.substring(0, contentStart) + nodeResult.text + result.substring(contentEnd);
+      offset += nodeResult.text.length - content.length;
+      totalCount += nodeResult.count;
+
+      // all=false이고 이제 1회 치환됨 → 루프 종료
+      if (!replaceAll && alreadyReplaced + totalCount >= 1) {
+        break;
+      }
+    }
+
+    m = tNodeRe.exec(xml);
+  }
+
+  return { xml: result, count: totalCount };
+}
+
+/**
+ * <hp:t> 내용 문자열에서 find를 치환한다.
+ * find는 이미 XML-이스케이프된 형태(normFind).
+ * caseSensitive=false 시 content를 소문자로 변환해 매칭하되 실제 교체는 원본 기준.
+ */
+function replaceInContent(
+  content: string,
+  normFind: string, // escapedFind (caseSensitive=false이면 소문자)
+  escapedReplace: string,
+  caseSensitive: boolean,
+  replaceAll: boolean,
+  alreadyReplaced: number,
+): { text: string; count: number } {
+  const searchIn = caseSensitive ? content : content.toLowerCase();
+  const findLen = normFind.length;
+
+  if (findLen === 0) return { text: content, count: 0 };
+
+  let result = "";
+  let pos = 0;
+  let count = 0;
+
+  while (pos <= content.length) {
+    // all=false이고 (이미 이전 섹션 + 이 노드에서) 1회 교체됐으면 중단
+    if (!replaceAll && alreadyReplaced + count >= 1) {
+      result += content.substring(pos);
+      break;
+    }
+
+    const idx = searchIn.indexOf(normFind, pos);
+    if (idx === -1) {
+      result += content.substring(pos);
+      break;
+    }
+
+    // idx 이전 내용은 그대로 + 교체 텍스트 삽입
+    result += content.substring(pos, idx) + escapedReplace;
+    pos = idx + findLen;
+    count++;
+  }
+
+  return { text: result, count };
 }
 
 /**
@@ -167,19 +207,108 @@ function countOccurrences(str: string, sub: string): number {
 }
 
 // ─────────────────────────────────────────────────────────
+// ZIP 처리
+// ─────────────────────────────────────────────────────────
+
+/**
+ * .hwpx ZIP 버퍼에서 모든 section*.xml에 find/replace를 적용하고
+ * 수정된 ZIP 버퍼를 반환한다.
+ *
+ * @returns { buffer, count } — count는 전체 치환 횟수
+ */
+async function applyFindReplaceToHwpx(
+  hwpxBuffer: Uint8Array,
+  find: string,
+  replace: string,
+  caseSensitive: boolean,
+  replaceAll: boolean,
+): Promise<{ buffer: Uint8Array; count: number }> {
+  const zip = await JSZip.loadAsync(hwpxBuffer);
+
+  // 섹션 파일 목록 수집 (Contents/section0.xml, section1.xml, …)
+  const sectionFiles = Object.keys(zip.files)
+    .filter((name) => /^Contents\/section\d+\.xml$/.test(name))
+    .sort();
+
+  // 각 섹션 XML 읽기
+  const sectionXmls: string[] = [];
+  for (const sf of sectionFiles) {
+    const entry = zip.file(sf);
+    const xml = entry ? await entry.async("string") : "";
+    sectionXmls.push(xml);
+  }
+
+  // 섹션별 치환 적용
+  let totalCount = 0;
+  const newSectionXmls: string[] = [];
+
+  for (let si = 0; si < sectionFiles.length; si++) {
+    const srcXml = sectionXmls[si] ?? "";
+    const { xml: newXml, count } = replaceInSectionXml(
+      srcXml,
+      find,
+      replace,
+      caseSensitive,
+      replaceAll,
+      totalCount,
+    );
+    newSectionXmls.push(newXml);
+    totalCount += count;
+
+    // all=false이고 이미 1회 치환됐으면 남은 섹션은 원본 그대로
+    if (!replaceAll && totalCount >= 1) {
+      for (let j = si + 1; j < sectionFiles.length; j++) {
+        newSectionXmls.push(sectionXmls[j] ?? "");
+      }
+      break;
+    }
+  }
+
+  // 치환이 없으면 ZIP 재생성 불필요
+  if (totalCount === 0) {
+    return { buffer: hwpxBuffer, count: 0 };
+  }
+
+  // 새 ZIP 생성 (mimetype은 STORE로 첫 번째 — ZIP 스펙 요구사항)
+  const out = new JSZip();
+  const mimetypeEntry = zip.file("mimetype");
+  if (mimetypeEntry) {
+    out.file("mimetype", await mimetypeEntry.async("uint8array"), { compression: "STORE" });
+  }
+
+  for (const [name, entry] of Object.entries(zip.files)) {
+    if (name === "mimetype" || entry.dir) continue;
+    const sectionIdx = sectionFiles.indexOf(name);
+    if (sectionIdx >= 0) {
+      out.file(name, newSectionXmls[sectionIdx] ?? "");
+    } else {
+      out.file(name, await entry.async("uint8array"));
+    }
+  }
+
+  const buf = await out.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+
+  return {
+    buffer: new Uint8Array(buf as unknown as ArrayBuffer),
+    count: totalCount,
+  };
+}
+
+// ─────────────────────────────────────────────────────────
 // 툴 정의
 // ─────────────────────────────────────────────────────────
 
 export const proposeFindReplaceTool: ToolDefinition<ProposeFindReplaceInput> = {
   name: "propose_find_replace",
   description:
-    "HWP/HWPX 문서 전체에서 텍스트를 찾아 바꿉니다. " +
-    "rhwp 엔진을 사용하여 표 셀·본문·머리말·꼬리말 등 문서 전체를 대상으로 치환합니다. " +
-    ".hwpx와 .hwp를 모두 지원하며, .hwp 파일은 rhwp 엔진 제약으로 .hwpx로 저장됩니다 " +
-    "(exportHwp()는 편집 내용을 저장하지 않으므로 항상 .hwpx로 내보냅니다). " +
-    "all:true(기본값)이면 모든 항목을 한 번에 교체하고, all:false이면 첫 번째 매치만 교체합니다. " +
+    "HWPX 문서 전체에서 텍스트를 찾아 바꿉니다. " +
+    "본문·표·머리말·꼬리말 등 모든 섹션을 대상으로 문서 XML을 직접 패치합니다(rhwp 엔진 미사용). " +
+    "이미지·표·레이아웃 등 문서 구조를 완전히 보존합니다. " +
+    ".hwpx 전용입니다. .hwp(구형 OLE 바이너리)는 지원하지 않으며, " +
+    "한글 프로그램에서 '다른 이름으로 저장 → .hwpx'로 저장한 후 사용하세요. " +
+    "all:true(기본값)이면 모든 항목을 교체하고, all:false이면 첫 번째 매치만 교체합니다. " +
+    "텍스트가 여러 서식 런에 나뉘어 있으면 경계를 가로지르는 패턴은 교체되지 않을 수 있습니다(서식이 나뉜 텍스트). " +
     "찾을 텍스트가 없으면 파일을 수정하지 않고 오류를 반환합니다. " +
-    "치환 후 자기검증 게이트로 교체가 실제 반영되었는지 확인합니다. " +
     "변경 사항은 diff 미리보기와 함께 사용자 승인을 받은 후에만 저장됩니다.",
   inputSchema: proposeFindReplaceSchema,
   requiresApproval: true,
@@ -194,11 +323,18 @@ export const proposeFindReplaceTool: ToolDefinition<ProposeFindReplaceInput> = {
     const safePath = await resolveSafePath(ctx.cwd, input.path);
     const ext = extname(safePath).toLowerCase();
 
-    // 지원 확장자 검사 (.hwp, .hwpx만 허용)
-    if (ext !== ".hwp" && ext !== ".hwpx") {
+    // .hwpx 전용 — .hwp 및 기타 거부
+    if (ext === ".hwp") {
       return (
-        `오류: propose_find_replace는 .hwp 및 .hwpx 파일만 지원합니다. ` +
-        `현재 파일 확장자: ${ext}. .hwp 또는 .hwpx 파일을 지정하세요.`
+        "오류: propose_find_replace는 .hwpx 파일만 지원합니다. " +
+        ".hwp(구형 OLE 바이너리)는 XML 직접 편집이 불가합니다. " +
+        "한글 프로그램에서 '다른 이름으로 저장 → .hwpx'로 저장한 후 다시 시도하세요."
+      );
+    }
+    if (ext !== ".hwpx") {
+      return (
+        `오류: propose_find_replace는 .hwpx 파일만 지원합니다. 현재 파일 확장자: ${ext}. ` +
+        ".hwpx 파일을 지정하세요."
       );
     }
 
@@ -209,43 +345,37 @@ export const proposeFindReplaceTool: ToolDefinition<ProposeFindReplaceInput> = {
     } catch {
       return `오류: 파일을 읽을 수 없습니다: ${input.path}. 경로를 확인하세요.`;
     }
+
+    // ZIP 매직 바이트 검증 (PK = 0x504B)
+    if (originalBuf[0] !== 0x50 || originalBuf[1] !== 0x4b) {
+      return (
+        "오류: 파일이 유효한 .hwpx(ZIP) 포맷이 아닙니다. " +
+        "파일이 손상되었거나 구형 .hwp(OLE 바이너리) 포맷일 수 있습니다. " +
+        "한글 프로그램에서 .hwpx로 저장 후 다시 시도하세요."
+      );
+    }
+
     const originalBytes = new Uint8Array(
       originalBuf.buffer,
       originalBuf.byteOffset,
       originalBuf.byteLength,
     );
 
-    // rhwp 문서 로드
-    let doc: Awaited<ReturnType<typeof loadRhwpDocument>>;
+    // XML 직접 패치 치환 수행
+    let newBytes: Uint8Array;
+    let replacedCount: number;
     try {
-      doc = await loadRhwpDocument(originalBytes);
-    } catch (e) {
-      return `오류: 문서를 불러오지 못했습니다. ${String(e)}`;
-    }
-
-    // 치환 실행
-    let replacedCount = 0;
-
-    if (input.all) {
-      // replaceAll: 단일 호출로 모든 매치를 교체 (표 셀 포함)
-      let result: ReturnType<typeof parseReplaceAllResult>;
-      try {
-        const raw = doc.replaceAll(input.find, input.replace, input.caseSensitive ?? false);
-        result = parseReplaceAllResult(raw);
-      } catch (e) {
-        return `오류: 치환 중 오류가 발생했습니다. ${String(e)}`;
-      }
+      const result = await applyFindReplaceToHwpx(
+        originalBytes,
+        input.find,
+        input.replace,
+        input.caseSensitive ?? false,
+        input.all ?? true,
+      );
+      newBytes = result.buffer;
       replacedCount = result.count;
-    } else {
-      // replaceOne: 첫 번째 매치만 교체
-      let result: ReplaceOneResult;
-      try {
-        const raw = doc.replaceOne(input.find, input.replace, input.caseSensitive ?? false);
-        result = parseReplaceOneResult(raw);
-      } catch (e) {
-        return `오류: 치환 중 오류가 발생했습니다. ${String(e)}`;
-      }
-      replacedCount = result.ok ? 1 : 0;
+    } catch (e) {
+      return `오류: 치환 중 오류가 발생했습니다. ${String(e)}`;
     }
 
     // 찾을 텍스트가 없으면 오류 반환 (파일 무수정)
@@ -257,98 +387,43 @@ export const proposeFindReplaceTool: ToolDefinition<ProposeFindReplaceInput> = {
       );
     }
 
-    // 항상 .hwpx로 내보내기 (exportHwp는 편집 내용 미저장 — rhwp #197)
-    let newBytes: Uint8Array;
-    try {
-      newBytes = doc.exportHwpx();
-    } catch (e) {
-      return `오류: 문서 내보내기 실패. ${String(e)}`;
-    }
-
-    // ── 자기검증 게이트 ───────────────────────────────────
-    // 원본 및 결과를 kordoc parse()로 마크다운 추출 후 비교
-    let originalMd = "";
-    let exportedMd = "";
-    let originalBlocks: import("@clazic/kordoc").IRBlock[] | null = null;
-    let exportedBlocks: import("@clazic/kordoc").IRBlock[] | null = null;
-    try {
-      const origResult = await parse(originalBuf.buffer as ArrayBuffer);
-      if (origResult.success) {
-        originalMd = origResult.markdown;
-        originalBlocks = origResult.blocks;
-      }
-
-      const exportedResult = await parse(newBytes.buffer as ArrayBuffer);
-      if (exportedResult.success) {
-        exportedMd = exportedResult.markdown;
-        exportedBlocks = exportedResult.blocks;
-      }
-    } catch {
-      // parse 실패 시 검증 생략 (경고만 추가)
-    }
-
+    // ── 경량 검증 (경고만; 중단하지 않음) ───────────────────
+    // kordoc parse()로 치환 후 남은 find 발생 횟수를 확인.
+    // 서식 분리 텍스트로 인해 일부 누락됐으면 경고 추가.
     const warnings: string[] = [];
 
-    // .hwp 입력 시 경고 추가
-    if (ext === ".hwp") {
-      warnings.push("rhwp는 .hwp 직접 저장을 지원하지 않아 .hwpx로 저장됩니다.");
-    }
+    try {
+      const exportedResult = await parse(newBytes.buffer as ArrayBuffer);
+      if (exportedResult.success) {
+        const exportedMd = exportedResult.markdown;
+        const normAfter = (input.caseSensitive ?? false) ? exportedMd : exportedMd.toLowerCase();
+        const normFind = (input.caseSensitive ?? false) ? input.find : input.find.toLowerCase();
+        const normReplace =
+          (input.caseSensitive ?? false) ? input.replace : input.replace.toLowerCase();
 
-    // ── 구조 손실 게이트 (블록 히스토그램 비교) ───────────
-    // 양쪽 parse가 모두 성공한 경우에만 검사한다.
-    if (originalBlocks !== null && exportedBlocks !== null) {
-      const lossResult = detectStructuralLoss(originalBlocks, exportedBlocks);
-      if (lossResult.lost) {
-        return (
-          `오류: rhwp 엔진이 이 문서를 안전하게 변환하지 못했습니다(구조 손실: ${lossResult.detail}). ` +
-          `중첩표·이미지 등이 포함된 복잡한 문서는 현재 rhwp 엔진으로 편집할 수 없습니다. ` +
-          `파일을 변경하지 않았습니다.`
-        );
+        // replace가 find를 포함하지 않을 때만 잔존 여부 확인
+        if (!normReplace.includes(normFind)) {
+          const remaining = countOccurrences(normAfter, normFind);
+          if (remaining > 0) {
+            warnings.push(
+              `일부 "${input.find}"(${remaining}곳)이 교체되지 않았습니다. ` +
+                `텍스트가 여러 서식 런에 나뉘어 있어 경계를 가로지르는 패턴은 교체할 수 없습니다(서식이 나뉜 텍스트). ` +
+                `이미 교체된 ${replacedCount}곳은 정상 반영되었습니다.`,
+            );
+          }
+        }
       }
+    } catch {
+      // parse 실패 시 검증 생략 (경고 없음)
     }
-    // ── 구조 손실 게이트 종료 ─────────────────────────────
+    // ── 경량 검증 종료 ────────────────────────────────────────
 
-    if (exportedMd) {
-      const verifyResult = verifyReplacementComplete(
-        originalMd,
-        exportedMd,
-        input.find,
-        input.replace,
-        input.caseSensitive ?? false,
-      );
-
-      if (verifyResult.skipped) {
-        // replace가 find를 포함 → 자동 검증 불가
-        warnings.push(
-          `자동 검증 생략: 바꿀 텍스트("${input.replace}")가 찾을 텍스트("${input.find}")를 포함하므로 ` +
-            `교체 후 남은 횟수를 확인할 수 없습니다.`,
-        );
-      } else if (!verifyResult.ok) {
-        // 치환이 실제로 반영되지 않음 → 중단
-        return (
-          `오류: rhwp 엔진이 문서의 일부를 교체하지 못해 중단했습니다` +
-          `(남은 "${input.find}": ${verifyResult.remaining}곳). ` +
-          `제목 등 특수 객체는 엔진 제약으로 교체되지 않을 수 있습니다. ` +
-          `파일을 변경하지 않았습니다.`
-        );
-      }
-      // verifyResult.ok && !skipped → 정상 진행
-    } else {
-      // 결과 문서를 재파싱하지 못해 자동 검증을 수행하지 못함
-      warnings.push(
-        "자동 검증을 수행하지 못했습니다(결과 문서 재파싱 실패). 저장 전 diff와 결과를 직접 확인하세요.",
-      );
-    }
-    // ── 게이트 종료 ───────────────────────────────────────
-
-    // 출력 경로 결정 (.hwp → .hwpx 변환)
+    // 출력 경로 결정 (.hwpx → .hwpx, 포맷 변환 없음)
     const { outputPath, willConvertFormat } = resolveOutputPath(safePath);
 
     // diff 텍스트 생성
-    const allLabel = input.all ? `전체 ${replacedCount}곳` : "첫 번째 1곳";
-    const diff =
-      `찾기: "${input.find}" → 바꾸기: "${input.replace}" (${allLabel} 교체됨)\n` +
-      `파일: ${input.path} [${ext} → .hwpx]`;
+    const allLabel = (input.all ?? true) ? `${replacedCount}곳` : "첫 번째 1곳";
+    const diff = `찾기: "${input.find}" → 바꾸기: "${input.replace}" (${allLabel} 교체됨)`;
 
     // 스테이징
     const stagedPath = await stageFile(ctx.sessionId, outputPath, newBytes);
