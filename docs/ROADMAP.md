@@ -122,6 +122,29 @@
 
 > 1.0 GA는 v0.5.0에 **의존하지 않는다** — BYOK가 보장 경로로 남고, 구독 로그인은 벤더가 공식 지원하는 범위에서만 추가된다(미개방 시 슬립 가능).
 
+### v0.6.0 — rhwp 엔진 통합 (kordoc 갭 보완)
+
+> 테마: kordoc·자체 XML 패처로 **못 하는 것만** 성숙한 rhwp(Rust+WASM, MIT)로 보완. **통째 교체가 아니라 갭만 선택적·검증 통합.**
+
+**타당성 실측(2026-06-16, `@rhwp/core` 0.7.15):**
+- ✅ **Node 헤드리스 구동** — WASM이 브라우저 없이 `initSync`/`new HwpDocument(bytes)`. 렌더 메서드만 Canvas 전용(GUI용).
+- ✅ **저장 가능** — `exportHwpx()` + **`exportHwp()`(.hwp 바이너리 쓰기, kordoc 불가)**. table-text identity export → 병합 보존·kordoc 재파싱·**한컴 렌더 확인**.
+- ✅ 풍부한 편집 API — 표 행·열 삽입/삭제·`mergeTableCells`, `setFormValue`(셀 내 포함), `replaceOne`, `insertParagraph`, 중첩표 path API.
+
+**kordoc이 못 하는데 rhwp가 채우는 갭**: ① `.hwp` 직접 저장 ② 표 구조 편집(행·열·병합) ③ 중첩표 접근 ④ 찾기/바꾸기 ⑤ 시각 렌더(SVG/HTML/PNG, GUI).
+
+**리스크**: 5.6MB WASM 번들(콜드스타트·설치 크기); rhwp HWPX **저장 손상 이력**(트러블슈팅 다수·`exportHwpVerify`·과거 #196 저장 비활성화) → **기능별 한컴 검증 필수**; 순수 TS ↔ WASM 패러다임 혼재.
+
+**원칙**: 현재 검증된 도구(`propose_cell_edit`·양식 개체 XML 패처)는 유지. rhwp는 **외부 의존(@rhwp/core)으로 추가**(번들 인라인 X, 런타임 lazy-init), 각 쓰기 기능은 한컴 렌더 검증 후 합류. 1.0 GA 비의존(점진 도입).
+
+| # | 작업 | 완료 기준 | 상태 |
+|---|---|---|---|
+| 0 | 타당성 스파이크 | Node 구동·exportHwpx 라운드트립·한컴 렌더 | ✅ 검증(2026-06-16) |
+| 1 | **rhwp 통합 기반 + 찾기/바꾸기** | `@rhwp/core` 외부 의존 추가 + lazy-init WASM 래퍼(런타임 wasm 로드) + `propose_find_replace`(rhwp `replaceOne`). `.hwpx`→`exportHwpx`, `.hwp`→`exportHwp`(.hwp 직접 저장 첫 성과). 승인·diff·한컴 검증. 주소 불필요로 통합 파이프라인 최소 위험 증명 | 착수 |
+| 2 | 표 구조 편집 | `propose_table_structure`(행·열 삽입/삭제·셀 병합) + **주소 브리지**(kordoc tableIndex ↔ rhwp `(sec,para,control)` 매핑) | 예정 |
+| 3 | 중첩표 셀 편집 | rhwp path API로 v0.4.0 #3 잔여(중첩표 셀) 해소 | 예정 |
+| 4 | `.hwp` 편집 일반화 | 셀/양식 편집도 .hwp 입력 시 rhwp 경로로 .hwp 저장 | 예정 |
+
 ### v1.0.0 — 안정화·API 동결 (CLI GA)
 
 > 테마: 약속할 수 있는 버전.
