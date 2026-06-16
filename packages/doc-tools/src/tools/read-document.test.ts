@@ -27,10 +27,18 @@ import ExcelJS from "exceljs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { markdownToDocx } from "../md-to-docx.js";
 import type { ToolContext } from "../types.js";
-import { fileSizeGuardMessage, readDocumentTool } from "./read-document.js";
+import {
+  extractOutline,
+  fileSizeGuardMessage,
+  readDocumentTool,
+  searchExcerpts,
+} from "./read-document.js";
 
 /** readDocumentTool.execute는 항상 존재 — 타입 단순화 헬퍼 */
-async function runReadDocument(input: { path: string; pages?: string }, ctx: ToolContext) {
+async function runReadDocument(
+  input: { path: string; pages?: string; outline?: boolean; search?: string },
+  ctx: ToolContext,
+) {
   // readDocumentTool.execute는 requiresApproval=false 툴에서 반드시 존재함
   return (readDocumentTool.execute as NonNullable<typeof readDocumentTool.execute>)({ input, ctx });
 }
@@ -237,4 +245,218 @@ describe("fileSizeGuardMessage", () => {
       }
     });
   }
+});
+
+// ─────────────────────────────────────────────────────────
+// extractOutline — 단위 테스트
+// ─────────────────────────────────────────────────────────
+
+describe("extractOutline", () => {
+  it("헤딩 여러 개 → 헤딩 라인만 추출", () => {
+    const md = [
+      "# 최상위 제목",
+      "",
+      "본문 내용입니다.",
+      "",
+      "## 2단계 섹션",
+      "",
+      "섹션 내용.",
+      "",
+      "### 3단계 소제목",
+      "",
+      "소제목 내용.",
+    ].join("\n");
+
+    const result = extractOutline(md);
+
+    // 헤딩만 포함되어야 함
+    expect(result).toContain("# 최상위 제목");
+    expect(result).toContain("## 2단계 섹션");
+    expect(result).toContain("### 3단계 소제목");
+
+    // 본문 내용은 포함되지 않아야 함
+    expect(result).not.toContain("본문 내용입니다.");
+    expect(result).not.toContain("섹션 내용.");
+    expect(result).not.toContain("소제목 내용.");
+  });
+
+  it("헤딩이 없으면 안내 문자열 반환", () => {
+    const md = "헤딩 없는 본문입니다.\n\n두 번째 단락.";
+    const result = extractOutline(md);
+    expect(result).toContain("헤딩이 없습니다");
+  });
+
+  it("#~###### 모든 레벨 헤딩 추출", () => {
+    const md = ["# H1", "## H2", "### H3", "#### H4", "##### H5", "###### H6", "내용"].join("\n");
+
+    const result = extractOutline(md);
+
+    expect(result).toContain("# H1");
+    expect(result).toContain("## H2");
+    expect(result).toContain("### H3");
+    expect(result).toContain("#### H4");
+    expect(result).toContain("##### H5");
+    expect(result).toContain("###### H6");
+    expect(result).not.toContain("내용");
+  });
+
+  it("빈 문서 → 안내 문자열 반환", () => {
+    const result = extractOutline("");
+    expect(result).toContain("헤딩이 없습니다");
+  });
+});
+
+// ─────────────────────────────────────────────────────────
+// searchExcerpts — 단위 테스트
+// ─────────────────────────────────────────────────────────
+
+describe("searchExcerpts", () => {
+  const sampleMd = [
+    "줄 1: 도입부",
+    "줄 2: 배경 설명",
+    "줄 3: 핵심 키워드 포함 라인",
+    "줄 4: 키워드 다음 줄",
+    "줄 5: 추가 내용",
+    "줄 6: 이어지는 내용",
+    "줄 7: 마지막 단락",
+  ].join("\n");
+
+  it("매치 라인 + 앞뒤 2줄 맥락 포함", () => {
+    const result = searchExcerpts(sampleMd, "핵심 키워드");
+
+    // 매치 라인 포함
+    expect(result).toContain("줄 3: 핵심 키워드 포함 라인");
+
+    // 앞 2줄 컨텍스트
+    expect(result).toContain("줄 1: 도입부");
+    expect(result).toContain("줄 2: 배경 설명");
+
+    // 뒤 2줄 컨텍스트
+    expect(result).toContain("줄 4: 키워드 다음 줄");
+    expect(result).toContain("줄 5: 추가 내용");
+  });
+
+  it("줄 번호가 접두어로 붙어 있음", () => {
+    const result = searchExcerpts(sampleMd, "핵심 키워드");
+    // 1-based 줄 번호 형식
+    expect(result).toMatch(/3:/);
+  });
+
+  it("미매치 → 안내 문자열 반환", () => {
+    const result = searchExcerpts(sampleMd, "존재하지않는키워드abc");
+    expect(result).toContain("찾지 못했습니다");
+  });
+
+  it("대소문자 무시 검색", () => {
+    const md = "첫째 줄\nHello World 키워드\n셋째 줄";
+    const result = searchExcerpts(md, "hello world");
+    expect(result).toContain("Hello World 키워드");
+  });
+
+  it("여러 매치 블록 사이에 구분선 포함", () => {
+    const md = [
+      "줄1",
+      "줄2",
+      "줄3",
+      "검색어 포함 A",
+      "줄5",
+      "줄6",
+      "줄7",
+      "줄8",
+      "줄9",
+      "줄10",
+      "검색어 포함 B",
+      "줄12",
+    ].join("\n");
+
+    const result = searchExcerpts(md, "검색어");
+    // 두 블록이 충분히 멀리 떨어져 있을 때 구분선 포함
+    expect(result).toContain("…");
+  });
+
+  it("빈 검색어 → 안내 문자열 반환", () => {
+    const result = searchExcerpts(sampleMd, "   ");
+    expect(result).toContain("비어 있습니다");
+  });
+});
+
+// ─────────────────────────────────────────────────────────
+// read_document outline/search 통합 테스트 (.md 픽스처)
+// ─────────────────────────────────────────────────────────
+
+describe("read_document outline/search 통합", () => {
+  it("outline=true → .md 파일 헤딩 구조만 반환", async () => {
+    const ctx = makeCtx();
+
+    const content = [
+      "# 제1장 개요",
+      "",
+      "도입 본문 내용입니다.",
+      "",
+      "## 1.1 배경",
+      "",
+      "배경 설명 내용.",
+      "",
+      "### 1.1.1 세부 사항",
+      "",
+      "세부 내용.",
+    ].join("\n");
+
+    const fixturePath = join(testDir, `outline-test-${Date.now()}.md`);
+    await writeFile(fixturePath, content, "utf-8");
+
+    const result = await runReadDocument({ path: fixturePath, outline: true }, ctx);
+
+    expect(typeof result).toBe("string");
+    const text = result as string;
+
+    // 헤딩 포함
+    expect(text).toContain("# 제1장 개요");
+    expect(text).toContain("## 1.1 배경");
+    expect(text).toContain("### 1.1.1 세부 사항");
+
+    // 본문 내용 미포함
+    expect(text).not.toContain("도입 본문 내용입니다.");
+    expect(text).not.toContain("배경 설명 내용.");
+  }, 10000);
+
+  it("search → .md 파일 키워드 맥락만 반환", async () => {
+    const ctx = makeCtx();
+
+    // 매치 라인이 6번째(0-based: 5)에 있고 앞뒤 2줄 컨텍스트(3~7번째)만 포함
+    // 따라서 1~2번째 줄과 9~10번째 줄은 결과에서 제외되어야 함
+    const content = [
+      "라인01: 시작 내용",
+      "라인02: 시작 내용",
+      "라인03: 시작 내용",
+      "라인04: 컨텍스트 앞앞",
+      "라인05: 컨텍스트 앞",
+      "라인06: 여기에 특정키워드 포함됨",
+      "라인07: 컨텍스트 뒤",
+      "라인08: 컨텍스트 뒤뒤",
+      "라인09: 끝 내용",
+      "라인10: 끝 내용",
+    ].join("\n");
+
+    const fixturePath = join(testDir, `search-test-${Date.now()}.md`);
+    await writeFile(fixturePath, content, "utf-8");
+
+    const result = await runReadDocument({ path: fixturePath, search: "특정키워드" }, ctx);
+
+    expect(typeof result).toBe("string");
+    const text = result as string;
+
+    // 매치 라인 포함
+    expect(text).toContain("특정키워드");
+
+    // 앞뒤 2줄 컨텍스트 포함
+    expect(text).toContain("라인04: 컨텍스트 앞앞");
+    expect(text).toContain("라인05: 컨텍스트 앞");
+    expect(text).toContain("라인07: 컨텍스트 뒤");
+    expect(text).toContain("라인08: 컨텍스트 뒤뒤");
+
+    // 컨텍스트 밖은 미포함
+    expect(text).not.toContain("라인01: 시작 내용");
+    expect(text).not.toContain("라인09: 끝 내용");
+  }, 10000);
 });
