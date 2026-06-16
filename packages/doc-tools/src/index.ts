@@ -37,6 +37,7 @@ export { listFormObjectsTool, proposeFormObjectTool } from "./tools/form-objects
 export { listFilesTool } from "./tools/list-files.js";
 export { proposeCellEditTool } from "./tools/propose-cell-edit.js";
 export { proposeEditTool } from "./tools/propose-edit.js";
+export { proposeFindReplaceTool } from "./tools/propose-find-replace.js";
 export { proposeFormFillTool } from "./tools/propose-form-fill.js";
 export { proposeSheetEditTool } from "./tools/propose-sheet-edit.js";
 export { readDocumentTool } from "./tools/read-document.js";
@@ -50,6 +51,7 @@ import { listFormObjectsTool, proposeFormObjectTool } from "./tools/form-objects
 import { listFilesTool } from "./tools/list-files.js";
 import { proposeCellEditTool } from "./tools/propose-cell-edit.js";
 import { proposeEditTool } from "./tools/propose-edit.js";
+import { proposeFindReplaceTool } from "./tools/propose-find-replace.js";
 import { proposeFormFillTool } from "./tools/propose-form-fill.js";
 import { proposeSheetEditTool } from "./tools/propose-sheet-edit.js";
 import { readDocumentTool } from "./tools/read-document.js";
@@ -71,6 +73,7 @@ export function createDocTools(_ctx: { cwd: string }) {
     proposeEditTool,
     proposeFormFillTool,
     proposeCellEditTool,
+    proposeFindReplaceTool,
     proposeSheetEditTool,
     listFormObjectsTool,
     proposeFormObjectTool,

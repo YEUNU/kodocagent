@@ -5,7 +5,8 @@ export type ProposalKind =
   | "new-document"
   | "new-spreadsheet"
   | "cell-edit"
-  | "form-object";
+  | "form-object"
+  | "find-replace";
 
 /** propose_* 툴이 스테이징 후 승인 요청에 담는 페이로드 (docs/SPEC.md §7) */
 export interface Proposal {

@@ -31,6 +31,7 @@
   "dependencies": {
     "@clazic/kordoc": "^2.7.6",
     "@kodocagent/shared": "workspace:*",
+    "@rhwp/core": "0.7.15",
     "diff": "^9.0.0",
     "docx": "^9.7.1",
     "exceljs": "^4.4.0",
