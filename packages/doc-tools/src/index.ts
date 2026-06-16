@@ -33,6 +33,7 @@ export {
   cleanSessionStaging,
 } from "./staging.js";
 export { compareDocumentsTool } from "./tools/compare-documents.js";
+export { listFormObjectsTool, proposeFormObjectTool } from "./tools/form-objects.js";
 export { listFilesTool } from "./tools/list-files.js";
 export { proposeCellEditTool } from "./tools/propose-cell-edit.js";
 export { proposeEditTool } from "./tools/propose-edit.js";
@@ -45,6 +46,7 @@ export { writeNewSpreadsheetTool } from "./tools/write-new-spreadsheet.js";
 export type { ProposeOutcome, ToolContext, ToolDefinition } from "./types.js";
 
 import { compareDocumentsTool } from "./tools/compare-documents.js";
+import { listFormObjectsTool, proposeFormObjectTool } from "./tools/form-objects.js";
 import { listFilesTool } from "./tools/list-files.js";
 import { proposeCellEditTool } from "./tools/propose-cell-edit.js";
 import { proposeEditTool } from "./tools/propose-edit.js";
@@ -70,6 +72,8 @@ export function createDocTools(_ctx: { cwd: string }) {
     proposeFormFillTool,
     proposeCellEditTool,
     proposeSheetEditTool,
+    listFormObjectsTool,
+    proposeFormObjectTool,
     writeNewDocumentTool,
     writeNewSpreadsheetTool,
   ] as const;
