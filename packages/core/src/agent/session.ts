@@ -40,6 +40,14 @@ export class AgentSession {
   private messages: ModelMessage[] = [];
   private readonly openDocuments: string[] = [];
 
+  /** 열람한 문서 경로를 중복 없이 기록한다 (방어적: 비문자열/오류는 무시). */
+  private recordOpenDocument(p: unknown): void {
+    if (typeof p !== "string" || p.trim() === "") return;
+    if (!this.openDocuments.includes(p)) {
+      this.openDocuments.push(p);
+    }
+  }
+
   /** approval-required 이벤트를 run() 스트림에 전달하기 위한 큐 */
   private pendingApprovalEvents: import("@kodocagent/shared").Proposal[] = [];
 
@@ -123,6 +131,20 @@ export class AgentSession {
               args: part.input,
               callId: part.toolCallId,
             };
+            // 열람한 문서 경로를 기록한다 (openDocuments → 시스템 프롬프트)
+            try {
+              const inp = part.input as Record<string, unknown>;
+              if (part.toolName === "read_document") {
+                this.recordOpenDocument(inp.path);
+              } else if (part.toolName === "compare_documents") {
+                this.recordOpenDocument(inp.pathA);
+                this.recordOpenDocument(inp.pathB);
+              } else if (part.toolName === "write_new_document") {
+                this.recordOpenDocument(inp.path);
+              }
+            } catch {
+              // 방어적: 입력 접근 오류는 무시
+            }
             break;
           }
           case "tool-result": {

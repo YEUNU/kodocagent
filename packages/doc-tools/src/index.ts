@@ -32,6 +32,7 @@ export {
   cleanOldBackups,
   cleanSessionStaging,
 } from "./staging.js";
+export { listBackupsTool, restoreBackupTool } from "./tools/backups.js";
 export { compareDocumentsTool } from "./tools/compare-documents.js";
 export { listFormObjectsTool, proposeFormObjectTool } from "./tools/form-objects.js";
 export { listFilesTool } from "./tools/list-files.js";
@@ -47,6 +48,7 @@ export { writeNewDocumentTool } from "./tools/write-new-document.js";
 export { writeNewSpreadsheetTool } from "./tools/write-new-spreadsheet.js";
 export type { ProposeOutcome, ToolContext, ToolDefinition } from "./types.js";
 
+import { listBackupsTool, restoreBackupTool } from "./tools/backups.js";
 import { compareDocumentsTool } from "./tools/compare-documents.js";
 import { listFormObjectsTool, proposeFormObjectTool } from "./tools/form-objects.js";
 import { listFilesTool } from "./tools/list-files.js";
@@ -71,6 +73,7 @@ export function createDocTools(_ctx: { cwd: string }) {
     readDocumentTool,
     compareDocumentsTool,
     listFilesTool,
+    listBackupsTool,
     readFileTool,
     proposeEditTool,
     proposeFormFillTool,
@@ -82,5 +85,6 @@ export function createDocTools(_ctx: { cwd: string }) {
     proposeFormObjectTool,
     writeNewDocumentTool,
     writeNewSpreadsheetTool,
+    restoreBackupTool,
   ] as const;
 }
