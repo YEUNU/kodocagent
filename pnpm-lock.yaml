@@ -44,9 +44,6 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
-      '@rhwp/core':
-        specifier: 0.7.15
-        version: 0.7.15
       ai:
         specifier: ^6.0.199
         version: 6.0.199(zod@4.4.3)
@@ -127,9 +124,6 @@ importers:
       '@kodocagent/shared':
         specifier: workspace:*
         version: link:../shared
-      '@rhwp/core':
-        specifier: 0.7.15
-        version: 0.7.15
       diff:
         specifier: ^9.0.0
         version: 9.0.0
@@ -929,9 +923,6 @@ packages:
 
   '@oxc-project/types@0.133.0':
     resolution: {integrity: sha512-KzkdCd6Uxqnf6l3HOw1xfatAlUURA0g14cvBYFyJ5SaNOQbOUvBr9PKArcPcrNIeRsBdgcUzOGrhKveVpvOIGA==}
-
-  '@rhwp/core@0.7.15':
-    resolution: {integrity: sha512-ErbsoNlQfkMhywXWGSlQCxAVa0/lPwyAFtbLryq7rN1dczxwq83AhpltwBAkYAEHg/DznMw8HJpRMs0WcDAZPg==}
 
   '@rolldown/binding-android-arm64@1.0.3':
     resolution: {integrity: sha512-454rs7jHngixp/NMxd5srYD57OnzSlZ/eFTETjORQHLwJG1lRtmNOJcBerZlfu4GjKqeq8aCCIQrMdHyhI51Hw==}
@@ -3423,8 +3414,6 @@ snapshots:
   '@opentelemetry/api@1.9.1': {}
 
   '@oxc-project/types@0.133.0': {}
-
-  '@rhwp/core@0.7.15': {}
 
   '@rolldown/binding-android-arm64@1.0.3':
     optional: true
