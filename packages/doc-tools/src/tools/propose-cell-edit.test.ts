@@ -9,6 +9,9 @@
  * 2. 통합 테스트 (proposeCellEditTool.propose + commit)
  *    - 픽스처 HWPX 생성 → 편집 → 커밋 → kordoc 재파싱 확인
  *    - 병합 셀(colSpan) 보존 확인
+ * 3. Capability A: 빈 셀(<hp:t/>) 채우기 단위 테스트
+ * 4. Capability B: 레이블 기반 셀 탐색 단위 테스트 (resolveLabelTarget)
+ * 5. 레이블 모드 통합 테스트 (실제 HWPX + markdownToHwpx)
  *
  * 샌드박스: os.tmpdir() 하위 임시 디렉터리
  */
@@ -22,8 +25,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   applyCellEditsToSectionXml,
   type CellEditRequest,
+  cellEditItemSchema,
   proposeCellEditTool,
   readCellTextFromXml,
+  resolveLabelTarget,
 } from "./propose-cell-edit.js";
 
 // ─────────────────────────────────────────────────────────
@@ -45,6 +50,21 @@ function makeSimpleTcXml(
   return (
     `<hp:tc name="">` +
     `<hp:subList><hp:p>${runs}</hp:p></hp:subList>` +
+    `<hp:cellAddr colAddr="${colAddr}" rowAddr="${rowAddr}"/>` +
+    `<hp:cellSpan colSpan="${colSpan}" rowSpan="${rowSpan}"/>` +
+    `<hp:cellSz width="1000" height="500"/>` +
+    `</hp:tc>`
+  );
+}
+
+/**
+ * 빈 셀(<hp:t/>) XML 생성 — Capability A 테스트 전용
+ * charPrIDRef 포함한 실제 Hancom 구조를 모사
+ */
+function makeEmptyTcXml(colAddr: number, rowAddr: number, colSpan = 1, rowSpan = 1): string {
+  return (
+    `<hp:tc name="">` +
+    `<hp:subList><hp:p><hp:run charPrIDRef="11"><hp:t/></hp:run><hp:linesegarray/></hp:p></hp:subList>` +
     `<hp:cellAddr colAddr="${colAddr}" rowAddr="${rowAddr}"/>` +
     `<hp:cellSpan colSpan="${colSpan}" rowSpan="${rowSpan}"/>` +
     `<hp:cellSz width="1000" height="500"/>` +
@@ -312,7 +332,9 @@ describe("proposeCellEditTool 통합 테스트", () => {
     );
     const firstSection = sectionFiles[0];
     if (!firstSection) throw new Error("섹션 파일 없음");
-    let sectionXml = await zip.file(firstSection)!.async("string");
+    const sectionEntry = zip.file(firstSection);
+    if (!sectionEntry) throw new Error("섹션 항목 없음");
+    let sectionXml = await sectionEntry.async("string");
 
     // cellSpan을 colSpan="2"로 수동 패치 (첫 번째 cellSpan 태그)
     sectionXml = sectionXml.replace('colSpan="1" rowSpan="1"', 'colSpan="2" rowSpan="1"');
@@ -351,7 +373,7 @@ describe("proposeCellEditTool 통합 테스트", () => {
 
     // 5. propose_cell_edit 호출
     const ctx = makeCtx(fixtureDir);
-    const result = await proposeCellEditTool.propose!({
+    const result = await proposeCellEditTool.propose?.({
       input: {
         path: "fixture.hwpx",
         edits: [
@@ -402,14 +424,14 @@ describe("proposeCellEditTool 통합 테스트", () => {
     const savedZip = await JSZip.loadAsync(savedBuf);
     const savedSection = savedZip.file(firstSection);
     expect(savedSection).toBeDefined();
-    const savedXml = await savedSection!.async("string");
+    const savedXml = await savedSection?.async("string");
     // 첫 번째 cellSpan 확인 (병합 패치가 유지됨)
     expect(savedXml).toContain('colSpan="2"');
   }, 30000);
 
   it("존재하지 않는 파일이면 오류 문자열 반환", async () => {
     const ctx = makeCtx();
-    const result = await proposeCellEditTool.propose!({
+    const result = await proposeCellEditTool.propose?.({
       input: {
         path: "nonexistent.hwpx",
         edits: [{ tableIndex: 0, row: 0, col: 0, newText: "값" }],
@@ -426,7 +448,7 @@ describe("proposeCellEditTool 통합 테스트", () => {
     const hwpPath = join(testDir, "test.hwp");
     await writeFile(hwpPath, Buffer.from("dummy"));
 
-    const result = await proposeCellEditTool.propose!({
+    const result = await proposeCellEditTool.propose?.({
       input: {
         path: "test.hwp",
         edits: [{ tableIndex: 0, row: 0, col: 0, newText: "값" }],
@@ -448,7 +470,7 @@ describe("proposeCellEditTool 통합 테스트", () => {
     await writeFile(fixturePath, Buffer.from(hwpxBuf));
 
     const ctx = makeCtx(fixtureDir);
-    const result = await proposeCellEditTool.propose!({
+    const result = await proposeCellEditTool.propose?.({
       input: {
         path: "bad.hwpx",
         edits: [{ tableIndex: 999, row: 0, col: 0, newText: "값" }],
@@ -471,7 +493,7 @@ describe("proposeCellEditTool 통합 테스트", () => {
     const originalSize = hwpxBuf.byteLength;
 
     const ctx = makeCtx(fixtureDir);
-    const result = await proposeCellEditTool.propose!({
+    const result = await proposeCellEditTool.propose?.({
       input: {
         path: "mismatch.hwpx",
         edits: [{ tableIndex: 0, row: 0, col: 0, newText: "김철수", expectedText: "다른이름" }],
@@ -486,4 +508,360 @@ describe("proposeCellEditTool 통합 테스트", () => {
     const afterBuf = await readFile(fixturePath);
     expect(afterBuf.length).toBe(originalSize);
   }, 15000);
+});
+
+// ─────────────────────────────────────────────────────────
+// 3. Capability A: 빈 셀 (<hp:t/>) 채우기
+// ─────────────────────────────────────────────────────────
+
+describe("Capability A — 빈 셀(<hp:t/>) 채우기", () => {
+  it("빈 셀을 읽으면 빈 문자열을 반환한다", () => {
+    const emptyTc = makeEmptyTcXml(0, 0);
+    const tbl = makeSimpleTblXml(1, [emptyTc]);
+    const xml = makeSectionXml([tbl]);
+
+    expect(readCellTextFromXml(xml, 0, 0, 0)).toBe("");
+  });
+
+  it("<hp:t/>를 값으로 채우면 <hp:t>value</hp:t>가 되고 cellSpan이 보존된다", () => {
+    const emptyTc = makeEmptyTcXml(0, 0, 2, 1); // colSpan=2
+    const tbl = makeSimpleTblXml(1, [emptyTc]);
+    const xml = makeSectionXml([tbl]);
+
+    const edits: CellEditRequest[] = [{ tableIndex: 0, row: 0, col: 0, newText: "홍길동" }];
+    const { newXml, results } = applyCellEditsToSectionXml(xml, edits);
+
+    expect(results[0]?.success).toBe(true);
+    expect(results[0]?.oldText).toBe("");
+    // self-closing이 완전한 태그로 교체됨
+    expect(newXml).toContain("<hp:t>홍길동</hp:t>");
+    // 기존 self-closing 태그가 사라짐
+    expect(newXml).not.toContain("<hp:t/>");
+    // cellSpan 보존
+    expect(newXml).toContain('colSpan="2"');
+  });
+
+  it('expectedText: ""는 빈 셀에 매칭된다', () => {
+    const emptyTc = makeEmptyTcXml(0, 0);
+    const tbl = makeSimpleTblXml(1, [emptyTc]);
+    const xml = makeSectionXml([tbl]);
+
+    const edits: CellEditRequest[] = [
+      { tableIndex: 0, row: 0, col: 0, newText: "채운값", expectedText: "" },
+    ];
+    const { results } = applyCellEditsToSectionXml(xml, edits);
+    expect(results[0]?.success).toBe(true);
+  });
+
+  it("non-empty expectedText는 빈 셀과 불일치 → 오류", () => {
+    const emptyTc = makeEmptyTcXml(0, 0);
+    const tbl = makeSimpleTblXml(1, [emptyTc]);
+    const xml = makeSectionXml([tbl]);
+
+    const edits: CellEditRequest[] = [
+      { tableIndex: 0, row: 0, col: 0, newText: "채운값", expectedText: "기존값" },
+    ];
+    const { newXml, results } = applyCellEditsToSectionXml(xml, edits);
+    expect(results[0]?.success).toBe(false);
+    expect(results[0]?.error).toContain("예상값과 다릅니다");
+    // XML 무변경
+    expect(newXml).toBe(xml);
+  });
+
+  it("빈 셀과 일반 셀이 혼재할 때 양쪽 모두 정상 편집", () => {
+    const emptyTc = makeEmptyTcXml(0, 0);
+    const normalTc = makeSimpleTcXml(1, 0, ["기존값"]);
+    const tbl = makeSimpleTblXml(1, [emptyTc, normalTc]);
+    const xml = makeSectionXml([tbl]);
+
+    const edits: CellEditRequest[] = [
+      { tableIndex: 0, row: 0, col: 0, newText: "빈셀채움" },
+      { tableIndex: 0, row: 0, col: 1, newText: "일반셀수정" },
+    ];
+    const { newXml, results } = applyCellEditsToSectionXml(xml, edits);
+    expect(results[0]?.success).toBe(true);
+    expect(results[1]?.success).toBe(true);
+    expect(newXml).toContain("<hp:t>빈셀채움</hp:t>");
+    expect(newXml).toContain("<hp:t>일반셀수정</hp:t>");
+  });
+
+  it("셀에 텍스트 런이 전혀 없으면 명확한 한국어 오류를 반환한다", () => {
+    // 텍스트 런이 없는 극단적인 셀 구조
+    const noRunTc =
+      `<hp:tc name="">` +
+      `<hp:subList><hp:p></hp:p></hp:subList>` +
+      `<hp:cellAddr colAddr="0" rowAddr="0"/>` +
+      `<hp:cellSpan colSpan="1" rowSpan="1"/>` +
+      `</hp:tc>`;
+    const tbl = makeSimpleTblXml(1, [noRunTc]);
+    const xml = makeSectionXml([tbl]);
+
+    const edits: CellEditRequest[] = [{ tableIndex: 0, row: 0, col: 0, newText: "값" }];
+    const { newXml, results } = applyCellEditsToSectionXml(xml, edits);
+    expect(results[0]?.success).toBe(false);
+    expect(results[0]?.error).toContain("텍스트 런이 없습니다");
+    expect(newXml).toBe(xml);
+  });
+
+  it("XML 특수문자 포함 텍스트를 빈 셀에 채울 때 올바르게 이스케이프한다", () => {
+    const emptyTc = makeEmptyTcXml(0, 0);
+    const tbl = makeSimpleTblXml(1, [emptyTc]);
+    const xml = makeSectionXml([tbl]);
+
+    const edits: CellEditRequest[] = [{ tableIndex: 0, row: 0, col: 0, newText: "A & B < C > D" }];
+    const { newXml, results } = applyCellEditsToSectionXml(xml, edits);
+    expect(results[0]?.success).toBe(true);
+    expect(newXml).toContain("<hp:t>A &amp; B &lt; C &gt; D</hp:t>");
+  });
+});
+
+// ─────────────────────────────────────────────────────────
+// 4. Capability B: 레이블 기반 셀 탐색 (resolveLabelTarget)
+// ─────────────────────────────────────────────────────────
+
+describe("Capability B — resolveLabelTarget 단위 테스트", () => {
+  it("label로 오른쪽 이웃 셀을 찾는다 (direction: right)", () => {
+    // 표0: [성명 | (빈칸)]
+    const labelTc = makeSimpleTcXml(0, 0, ["성명"]);
+    const valueTc = makeSimpleTcXml(1, 0, [""]);
+    const tbl = makeSimpleTblXml(1, [labelTc, valueTc]);
+    const xml = makeSectionXml([tbl]);
+
+    const result = resolveLabelTarget(xml, "성명", "right");
+    expect("error" in result).toBe(false);
+    if (!("error" in result)) {
+      expect(result.tableIndex).toBe(0);
+      expect(result.row).toBe(0);
+      expect(result.col).toBe(1);
+    }
+  });
+
+  it("label로 아래 셀을 찾는다 (direction: below)", () => {
+    // 표0: row0=[헤더], row1=[값]
+    const headerTc = makeSimpleTcXml(0, 0, ["이름"]);
+    const valueTc = makeSimpleTcXml(0, 1, [""]);
+    const tbl =
+      `<hp:tbl id="1" rowCnt="2" colCnt="1">` +
+      `<hp:tr>${headerTc}</hp:tr>` +
+      `<hp:tr>${valueTc}</hp:tr>` +
+      `</hp:tbl>`;
+    const xml = makeSectionXml([tbl]);
+
+    const result = resolveLabelTarget(xml, "이름", "below");
+    expect("error" in result).toBe(false);
+    if (!("error" in result)) {
+      expect(result.tableIndex).toBe(0);
+      expect(result.row).toBe(1);
+      expect(result.col).toBe(0);
+    }
+  });
+
+  it("colSpan>1인 병합 레이블 셀의 오른쪽 대상 = col + colSpan", () => {
+    // 표0: [성명 (colSpan=2) | | 값칸]
+    // cellAddr: 성명=col0, 빈칸=col1(병합), 값칸=col2
+    const labelTc = makeSimpleTcXml(0, 0, ["성명"], 2, 1); // colSpan=2
+    // col=2에 값칸
+    const valueTc = makeSimpleTcXml(2, 0, [""]);
+    const tbl = makeSimpleTblXml(1, [labelTc, valueTc]);
+    const xml = makeSectionXml([tbl]);
+
+    const result = resolveLabelTarget(xml, "성명", "right");
+    expect("error" in result).toBe(false);
+    if (!("error" in result)) {
+      expect(result.col).toBe(2); // 0 + 2 = 2
+    }
+  });
+
+  it("레이블을 찾을 수 없으면 한국어 오류를 반환한다", () => {
+    const tbl = makeSimpleTblXml(1, [makeSimpleTcXml(0, 0, ["다른레이블"])]);
+    const xml = makeSectionXml([tbl]);
+
+    const result = resolveLabelTarget(xml, "존재안함", "right");
+    expect("error" in result).toBe(true);
+    if ("error" in result) {
+      expect(result.error).toContain("찾을 수 없습니다");
+    }
+  });
+
+  it("레이블이 중복이면 한국어 오류를 반환한다 (ambiguity)", () => {
+    // 두 표에 같은 레이블
+    const tbl0 = makeSimpleTblXml(1, [
+      makeSimpleTcXml(0, 0, ["성명"]),
+      makeSimpleTcXml(1, 0, [""]),
+    ]);
+    const tbl1 = makeSimpleTblXml(2, [
+      makeSimpleTcXml(0, 0, ["성명"]),
+      makeSimpleTcXml(1, 0, [""]),
+    ]);
+    const xml = makeSectionXml([tbl0, tbl1]);
+
+    const result = resolveLabelTarget(xml, "성명", "right");
+    expect("error" in result).toBe(true);
+    if ("error" in result) {
+      expect(result.error).toContain("여러 셀에서 발견");
+    }
+  });
+
+  it("tableIndex로 범위를 좁히면 중복 레이블도 정상 해석", () => {
+    const tbl0 = makeSimpleTblXml(1, [
+      makeSimpleTcXml(0, 0, ["성명"]),
+      makeSimpleTcXml(1, 0, [""]),
+    ]);
+    const tbl1 = makeSimpleTblXml(2, [
+      makeSimpleTcXml(0, 0, ["성명"]),
+      makeSimpleTcXml(1, 0, [""]),
+    ]);
+    const xml = makeSectionXml([tbl0, tbl1]);
+
+    // tableIndex=1로 두 번째 표만 탐색
+    const result = resolveLabelTarget(xml, "성명", "right", 1);
+    expect("error" in result).toBe(false);
+    if (!("error" in result)) {
+      expect(result.tableIndex).toBe(1);
+    }
+  });
+
+  it("대상 셀이 존재하지 않으면 한국어 오류를 반환한다", () => {
+    // 1열짜리 표 — right 방향으로 가면 col=1이 없음
+    const tbl = makeSimpleTblXml(1, [makeSimpleTcXml(0, 0, ["레이블"])]);
+    const xml = makeSectionXml([tbl]);
+
+    const result = resolveLabelTarget(xml, "레이블", "right");
+    expect("error" in result).toBe(true);
+    if ("error" in result) {
+      expect(result.error).toContain("존재하지 않습니다");
+    }
+  });
+});
+
+describe("Capability B — zod 스키마 유효성 검사", () => {
+  it("label과 row/col을 동시에 지정하면 union 파싱 오류 (label 모드에서 row/col은 undefined 전용)", () => {
+    // labelCellEditItemSchema에서 row/col은 z.undefined().optional()
+    // 따라서 row를 숫자로 주면 coordinateCellEditItemSchema는 label 없어서 실패,
+    // labelCellEditItemSchema는 row가 undefined여야 해서 실패 → 둘 다 실패 → union error
+    const result = cellEditItemSchema.safeParse({
+      label: "성명",
+      row: 0,
+      col: 1,
+      newText: "값",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("label도 없고 row/col도 없으면 union 파싱 오류", () => {
+    const result = cellEditItemSchema.safeParse({ newText: "값" });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────
+// 5. 레이블 모드 통합 테스트 (실제 HWPX)
+// ─────────────────────────────────────────────────────────
+
+describe("Capability A+B 통합 테스트 — 레이블 모드로 빈 셀 채우기", () => {
+  it("markdownToHwpx로 생성한 양식 표에서 레이블 모드로 빈 셀을 채우고 kordoc 재파싱 확인", async () => {
+    // 1. 양식형 표 HWPX 생성 (성명 | 빈칸 구조)
+    const md = "| 성명 |  |\n| --- | --- |\n| 주소 |  |";
+    const hwpxBuf = await markdownToHwpx(md);
+
+    // 2. 임시 파일 저장
+    const fixtureDir = join(testDir, `label-integration-${Date.now()}`);
+    await mkdir(fixtureDir, { recursive: true });
+    const fixturePath = join(fixtureDir, "form.hwpx");
+    await writeFile(fixturePath, Buffer.from(hwpxBuf));
+
+    // 3. 레이블 모드로 '성명' 오른쪽 셀 채우기
+    const ctx = makeCtx(fixtureDir);
+    const result = await proposeCellEditTool.propose?.({
+      input: {
+        path: "form.hwpx",
+        edits: [
+          {
+            label: "성명",
+            direction: "right",
+            newText: "홍길동",
+            expectedText: "", // 빈 셀 예상
+          },
+        ],
+        summary: "성명 옆 칸에 홍길동 입력",
+      },
+      ctx,
+    });
+
+    // 오류 문자열이 아닌 proposal 객체여야 함
+    expect(typeof result).not.toBe("string");
+
+    const outcome = result as {
+      proposal: import("@kodocagent/shared").Proposal;
+      commit: () => Promise<string>;
+    };
+
+    // diff에 레이블 정보 및 새 텍스트 포함
+    expect(outcome.proposal.diff).toContain("홍길동");
+
+    // 4. commit
+    const commitMsg = await outcome.commit();
+    expect(commitMsg).toContain("저장 완료");
+
+    // 5. kordoc으로 재파싱하여 값 확인
+    const savedBuf = await readFile(fixturePath);
+    const afterResult = await parse(savedBuf.buffer as ArrayBuffer);
+    expect(afterResult.success).toBe(true);
+
+    if (afterResult.success) {
+      const tableBlock = afterResult.blocks.find((b) => b.type === "table");
+      expect(tableBlock).toBeDefined();
+      if (tableBlock?.type === "table" && tableBlock.table) {
+        // 첫 번째 행 두 번째 셀에 홍길동이 있어야 함
+        const firstRow = tableBlock.table.cells[0];
+        const valueCell = firstRow?.[1];
+        expect(valueCell?.text).toBe("홍길동");
+      }
+    }
+  }, 30000);
+
+  it("좌표 모드로도 빈 셀(markdownToHwpx 생성)을 채울 수 있다", async () => {
+    const md = "| 직함 |  |\n| --- | --- |";
+    const hwpxBuf = await markdownToHwpx(md);
+
+    const fixtureDir = join(testDir, `coord-empty-${Date.now()}`);
+    await mkdir(fixtureDir, { recursive: true });
+    const fixturePath = join(fixtureDir, "empty.hwpx");
+    await writeFile(fixturePath, Buffer.from(hwpxBuf));
+
+    // kordoc parse로 표 구조 파악 (col=1이 빈 셀)
+    const parsedBuf = await readFile(fixturePath);
+    const parsed = await parse(parsedBuf.buffer as ArrayBuffer);
+    expect(parsed.success).toBe(true);
+
+    const ctx = makeCtx(fixtureDir);
+    // col=1 (두 번째 셀) — markdownToHwpx에서 빈 문자열 셀은 <hp:t/> 또는 <hp:t></hp:t>로 표현됨
+    const result = await proposeCellEditTool.propose?.({
+      input: {
+        path: "empty.hwpx",
+        edits: [{ tableIndex: 0, row: 0, col: 1, newText: "부장", expectedText: "" }],
+        summary: "직함 칸에 부장 입력",
+      },
+      ctx,
+    });
+
+    expect(typeof result).not.toBe("string");
+    const outcome = result as {
+      proposal: import("@kodocagent/shared").Proposal;
+      commit: () => Promise<string>;
+    };
+
+    await outcome.commit();
+
+    const savedBuf = await readFile(fixturePath);
+    const afterResult = await parse(savedBuf.buffer as ArrayBuffer);
+    expect(afterResult.success).toBe(true);
+    if (afterResult.success) {
+      const tableBlock = afterResult.blocks.find((b) => b.type === "table");
+      if (tableBlock?.type === "table" && tableBlock.table) {
+        const valueCell = tableBlock.table.cells[0]?.[1];
+        expect(valueCell?.text).toBe("부장");
+      }
+    }
+  }, 30000);
 });

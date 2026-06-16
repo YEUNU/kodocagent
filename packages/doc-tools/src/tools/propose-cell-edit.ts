@@ -13,6 +13,10 @@
  *     에이전트가 read_document로 확인한 tableIndex를 그대로 사용할 수 있다
  *   - 실증: table-vpos-01.hwpx — XML에 <hp:tbl> 11개, 그 중 1개가 중첩.
  *     kordoc은 10개를 반환하며, 순서는 XML 소스 순서에서 중첩을 제외한 것과 동일.
+ *
+ * v2 추가 기능:
+ *   A. 빈 셀 채우기: <hp:t/> (self-closing empty run)도 인식하여 값 주입 가능
+ *   B. 레이블 기반 셀 타겟팅: label + direction으로 인접 셀을 찾아 편집
  */
 
 import { readFile } from "node:fs/promises";
@@ -27,7 +31,10 @@ import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 // 스키마
 // ─────────────────────────────────────────────────────────
 
-export const cellEditItemSchema = z.object({
+/**
+ * 좌표 기반 편집 항목: tableIndex + row + col 으로 셀을 지정
+ */
+const coordinateCellEditItemSchema = z.object({
   tableIndex: z
     .number()
     .int()
@@ -53,14 +60,71 @@ export const cellEditItemSchema = z.object({
       "현재 셀 텍스트 (안전 검증용). 제공 시 현재 셀 텍스트와 일치하지 않으면 수정하지 않음. " +
         "잘못된 셀 수정을 방지하려면 반드시 사용하세요.",
     ),
+  // label 필드 없음 — 좌표 모드 전용
+  label: z.undefined().optional(),
 });
+
+/**
+ * 레이블 기반 편집 항목: label + direction 으로 인접 셀을 찾아 지정.
+ * tableIndex를 지정하면 해당 표 안에서만 탐색, 생략하면 전체 문서에서 탐색.
+ */
+const labelCellEditItemSchema = z.object({
+  label: z
+    .string()
+    .describe(
+      "레이블 셀의 텍스트 (트림 비교). 이 셀의 인접 방향(direction)에 있는 셀에 newText를 기록함.",
+    ),
+  direction: z
+    .enum(["right", "below"])
+    .optional()
+    .default("right")
+    .describe(
+      "레이블 기준 대상 셀 방향. right(기본): 오른쪽 셀, below: 아래 셀. " +
+        "병합 셀은 span을 고려하여 대상 셀 주소를 계산합니다.",
+    ),
+  tableIndex: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      "탐색을 제한할 표 인덱스 (0-based). 생략하면 문서 내 모든 최상위 표에서 탐색. " +
+        "레이블이 중복될 경우 tableIndex로 범위를 좁히세요.",
+    ),
+  newText: z.string().describe("셀에 쓸 새 텍스트"),
+  expectedText: z
+    .string()
+    .optional()
+    .describe(
+      "현재 셀 텍스트 (안전 검증용). 제공 시 현재 셀 텍스트와 일치하지 않으면 수정하지 않음. " +
+        "잘못된 셀 수정을 방지하려면 반드시 사용하세요.",
+    ),
+  // row/col 필드 없음 — 레이블 모드 전용
+  row: z.undefined().optional(),
+  col: z.undefined().optional(),
+});
+
+/**
+ * 편집 항목: 좌표 모드 또는 레이블 모드 중 정확히 하나를 사용.
+ *
+ * 좌표 모드: tableIndex + row + col 필수
+ * 레이블 모드: label 필수 (direction 옵션, tableIndex 옵션)
+ */
+export const cellEditItemSchema = z
+  .union([coordinateCellEditItemSchema, labelCellEditItemSchema])
+  .describe(
+    "편집 항목: 좌표 모드(tableIndex+row+col) 또는 레이블 모드(label+direction) 중 하나 사용. " +
+      "두 모드를 동시에 지정하거나 둘 다 생략하면 유효성 오류가 발생합니다.",
+  );
 
 export const proposeCellEditSchema = z.object({
   path: z.string().describe("수정할 .hwpx 파일 경로 (cwd 기준 상대 경로 또는 절대 경로)"),
   edits: z
     .array(cellEditItemSchema)
     .min(1)
-    .describe("편집 목록. 각 항목은 표 인덱스·행·열·새 텍스트로 구성"),
+    .describe(
+      "편집 목록. 각 항목은 좌표 모드(tableIndex+row+col) 또는 레이블 모드(label+direction) 중 하나",
+    ),
   summary: z.string().describe("변경 요약 (한국어 1-2문장)"),
 });
 
@@ -72,26 +136,45 @@ export type ProposeCellEditInput = z.infer<typeof proposeCellEditSchema>;
 // ─────────────────────────────────────────────────────────
 
 /**
- * XML 토크나이저 — <hp:tbl>, </hp:tbl>, <hp:tc>, </hp:tc>, <hp:t>, </hp:t>
+ * XML 토크나이저 — <hp:tbl>, </hp:tbl>, <hp:tc>, </hp:tc>, <hp:t>, <hp:t/>, </hp:t>
  * 등의 태그 위치를 선형으로 스캔한다.
+ *
+ * t_open: <hp:t> (내용 있는 텍스트 런 시작)
+ * t_empty: <hp:t/> (self-closing 빈 텍스트 런 — 빈 셀에 사용)
  */
-type TokenKind = "tbl_open" | "tbl_close" | "tc_open" | "tc_close" | "t_open" | "cell_addr";
+type TokenKind =
+  | "tbl_open"
+  | "tbl_close"
+  | "tc_open"
+  | "tc_close"
+  | "t_open"
+  | "t_empty"
+  | "cell_addr"
+  | "cell_span";
 
 interface XmlToken {
   kind: TokenKind;
   pos: number; // 태그 시작 위치
   end: number; // 태그 끝 위치 (exclusive)
-  colAddr?: number; // cellAddr 전용
+  colAddr?: number; // cell_addr 전용
   rowAddr?: number;
+  colSpan?: number; // cell_span 전용
+  rowSpan?: number;
 }
 
 /**
  * XML 문자열에서 관련 토큰을 순서대로 추출한다.
  * 정규식은 단순 태그 감지용 — 중첩 구조는 스택으로 처리한다.
+ *
+ * <hp:t/> (self-closing 빈 런)는 t_empty 토큰으로 처리한다.
+ * <hp:t> (여는 태그)는 t_open 토큰으로 처리한다.
+ * 두 패턴을 구분하기 위해 <hp:t/>를 <hp:t> 보다 먼저 매칭한다.
  */
 function tokenizeHwpxXml(xml: string): XmlToken[] {
   const tokens: XmlToken[] = [];
-  const re = /<hp:tbl[\s>]|<\/hp:tbl>|<hp:tc[\s>]|<\/hp:tc>|<hp:t>|<hp:cellAddr[^/]*/g;
+  // 순서 중요: <hp:t/> 를 <hp:t> 보다 먼저 감지해야 함
+  const re =
+    /<hp:tbl[\s>]|<\/hp:tbl>|<hp:tc[\s>]|<\/hp:tc>|<hp:t\/>|<hp:t>|<hp:cellAddr[^/>]*|<hp:cellSpan[^/>]*/g;
   let startPos = 0;
   let m = re.exec(xml);
   while (m !== null) {
@@ -105,6 +188,9 @@ function tokenizeHwpxXml(xml: string): XmlToken[] {
       tokens.push({ kind: "tc_open", pos, end: pos + raw.length });
     } else if (raw === "</hp:tc>") {
       tokens.push({ kind: "tc_close", pos, end: pos + raw.length });
+    } else if (raw === "<hp:t/>") {
+      // self-closing 빈 텍스트 런
+      tokens.push({ kind: "t_empty", pos, end: pos + raw.length });
     } else if (raw === "<hp:t>") {
       tokens.push({ kind: "t_open", pos, end: pos + raw.length });
     } else if (raw.startsWith("<hp:cellAddr")) {
@@ -123,6 +209,19 @@ function tokenizeHwpxXml(xml: string): XmlToken[] {
           rowAddr: Number(rowM[1]),
         });
       }
+    } else if (raw.startsWith("<hp:cellSpan")) {
+      // <hp:cellSpan colSpan="2" rowSpan="1"/>
+      const colM = raw.match(/colSpan="(\d+)"/);
+      const rowM = raw.match(/rowSpan="(\d+)"/);
+      const selfClose = xml.indexOf("/>", pos);
+      const end = selfClose >= 0 ? selfClose + 2 : pos + raw.length;
+      tokens.push({
+        kind: "cell_span",
+        pos,
+        end,
+        colSpan: colM ? Number(colM[1]) : 1,
+        rowSpan: rowM ? Number(rowM[1]) : 1,
+      });
     }
     startPos = re.lastIndex;
     m = re.exec(xml);
@@ -181,7 +280,8 @@ function collectDirectTcRanges(tokens: XmlToken[], tblStart: number, tblEnd: num
 }
 
 /**
- * 특정 tc 안에서 직접 <hp:t> 런의 텍스트를 읽는다 (중첩 표의 t는 제외).
+ * 특정 tc 안에서 직접 <hp:t> / <hp:t/> 런의 텍스트를 읽는다 (중첩 표의 t는 제외).
+ * <hp:t/> (self-closing 빈 런)는 빈 문자열을 기여한다.
  * 반환값은 XML 엔티티 디코딩 완료.
  */
 function readOwnTextFromTc(
@@ -196,7 +296,9 @@ function readOwnTextFromTc(
   for (const t of tcTokens) {
     if (t.kind === "tbl_open") innerDepth++;
     else if (t.kind === "tbl_close") innerDepth--;
-    else if (t.kind === "t_open" && innerDepth === 0) {
+    else if (t.kind === "t_empty" && innerDepth === 0) {
+      // <hp:t/> — 빈 런, 텍스트 기여 없음
+    } else if (t.kind === "t_open" && innerDepth === 0) {
       const closePos = xml.indexOf("</hp:t>", t.end);
       if (closePos >= 0) {
         text += xml.substring(t.end, closePos);
@@ -265,6 +367,178 @@ export function readCellTextFromXml(
     return readOwnTextFromTc(xml, tokens, tc.start, tc.end);
   }
   return null;
+}
+
+// ─────────────────────────────────────────────────────────
+// 레이블 기반 셀 탐색 (Capability B)
+// ─────────────────────────────────────────────────────────
+
+/**
+ * 레이블 셀의 cellAddr 및 cellSpan 정보.
+ */
+interface CellAddrSpan {
+  colAddr: number;
+  rowAddr: number;
+  colSpan: number;
+  rowSpan: number;
+}
+
+/**
+ * 특정 tc 범위 내 cellAddr와 cellSpan 정보를 읽는다.
+ */
+function readCellAddrSpan(tokens: XmlToken[], tcStart: number, tcEnd: number): CellAddrSpan | null {
+  const tcTokens = tokens.filter((t) => t.pos >= tcStart && t.pos < tcEnd);
+  let addr: { colAddr: number; rowAddr: number } | null = null;
+  let span: { colSpan: number; rowSpan: number } = { colSpan: 1, rowSpan: 1 };
+
+  for (const t of tcTokens) {
+    if (t.kind === "cell_addr" && t.colAddr !== undefined && t.rowAddr !== undefined) {
+      addr = { colAddr: t.colAddr, rowAddr: t.rowAddr };
+    } else if (t.kind === "cell_span" && t.colSpan !== undefined && t.rowSpan !== undefined) {
+      span = { colSpan: t.colSpan, rowSpan: t.rowSpan };
+    }
+  }
+
+  if (!addr) return null;
+  return { ...addr, ...span };
+}
+
+/**
+ * 레이블 기반 셀 탐색 결과.
+ */
+export type LabelTargetResult =
+  | { tableIndex: number; row: number; col: number }
+  | { error: string };
+
+/**
+ * XML 문자열에서 레이블로 인접 셀의 좌표를 찾는다.
+ *
+ * 탐색 방식:
+ *   1. searchTableIndex가 주어지면 해당 표에서만 탐색, 없으면 모든 최상위 표에서 탐색.
+ *   2. 각 tc의 자체(depth-0) 텍스트를 트림하여 label과 비교.
+ *   3. 일치하는 셀이 여럿이면 ambiguity 오류.
+ *   4. direction "right": target = (rowAddr, colAddr + colSpan)
+ *      direction "below": target = (rowAddr + rowSpan, colAddr)
+ *   5. 대상 cellAddr를 가진 tc가 없으면 오류.
+ *
+ * @param xml               섹션 XML (전체 문서에서 탐색 가능, 최상위 표 단위)
+ * @param label             레이블 텍스트 (트림 비교)
+ * @param direction         "right" (기본) 또는 "below"
+ * @param searchTableIndex  탐색 범위를 제한할 표 인덱스 (undefined = 전체)
+ */
+export function resolveLabelTarget(
+  xml: string,
+  label: string,
+  direction: "right" | "below",
+  searchTableIndex?: number,
+): LabelTargetResult {
+  const tokens = tokenizeHwpxXml(xml);
+  const trimmedLabel = label.trim();
+
+  // 최상위 표 인덱스 범위 결정
+  let totalTopLevel = 0;
+  {
+    let d = 0;
+    for (const tok of tokens) {
+      if (tok.kind === "tbl_open") {
+        if (d === 0) totalTopLevel++;
+        d++;
+      } else if (tok.kind === "tbl_close") {
+        d--;
+      }
+    }
+  }
+
+  const startIdx = searchTableIndex ?? 0;
+  const endIdx = searchTableIndex !== undefined ? searchTableIndex : totalTopLevel - 1;
+
+  // 레이블과 일치하는 셀 목록
+  interface LabelMatch {
+    tableIndex: number;
+    addrSpan: CellAddrSpan;
+  }
+  const matches: LabelMatch[] = [];
+
+  for (let ti = startIdx; ti <= endIdx; ti++) {
+    const tblRange = findTopLevelTableRange(tokens, ti);
+    if (!tblRange) continue;
+
+    const directTcs = collectDirectTcRanges(tokens, tblRange.start, tblRange.end);
+    for (const tc of directTcs) {
+      const cellText = readOwnTextFromTc(xml, tokens, tc.start, tc.end).trim();
+      if (cellText === trimmedLabel) {
+        const addrSpan = readCellAddrSpan(tokens, tc.start, tc.end);
+        if (addrSpan) {
+          matches.push({ tableIndex: ti, addrSpan });
+        }
+      }
+    }
+  }
+
+  if (matches.length === 0) {
+    const scope = searchTableIndex !== undefined ? `표 ${searchTableIndex}` : "문서 내 모든 표";
+    return {
+      error: `레이블 "${label}"을(를) ${scope}에서 찾을 수 없습니다. read_document로 표 내용을 확인하세요.`,
+    };
+  }
+
+  if (matches.length > 1) {
+    const locs = matches
+      .map((m) => `표 ${m.tableIndex} (행 ${m.addrSpan.rowAddr}, 열 ${m.addrSpan.colAddr})`)
+      .join(", ");
+    return {
+      error:
+        `레이블 "${label}"이(가) 여러 셀에서 발견되었습니다: ${locs}. ` +
+        `tableIndex로 탐색 범위를 좁히거나 좌표(row/col)를 직접 지정하세요.`,
+    };
+  }
+
+  const match = matches[0] as LabelMatch;
+  const { addrSpan, tableIndex } = match;
+
+  // 대상 셀 주소 계산
+  let targetRow: number;
+  let targetCol: number;
+  if (direction === "right") {
+    targetRow = addrSpan.rowAddr;
+    targetCol = addrSpan.colAddr + addrSpan.colSpan;
+  } else {
+    targetRow = addrSpan.rowAddr + addrSpan.rowSpan;
+    targetCol = addrSpan.colAddr;
+  }
+
+  // 대상 셀이 존재하는지 확인
+  const tblRange = findTopLevelTableRange(tokens, tableIndex);
+  if (!tblRange) {
+    return { error: `표 ${tableIndex}를 찾을 수 없습니다 (내부 오류).` };
+  }
+  const directTcs = collectDirectTcRanges(tokens, tblRange.start, tblRange.end);
+  const tblTokens = tokens.filter((t) => t.pos >= tblRange.start && t.pos < tblRange.end);
+
+  let targetExists = false;
+  for (const tc of directTcs) {
+    const tcTokens = tblTokens.filter((t) => t.pos >= tc.start && t.pos < tc.end);
+    if (
+      tcTokens.some(
+        (t) => t.kind === "cell_addr" && t.colAddr === targetCol && t.rowAddr === targetRow,
+      )
+    ) {
+      targetExists = true;
+      break;
+    }
+  }
+
+  if (!targetExists) {
+    const dirLabel = direction === "right" ? "오른쪽" : "아래";
+    return {
+      error:
+        `레이블 "${label}" (표 ${tableIndex}, 행 ${addrSpan.rowAddr}, 열 ${addrSpan.colAddr})의 ` +
+        `${dirLabel} 셀 (행 ${targetRow}, 열 ${targetCol})이 존재하지 않습니다. ` +
+        `direction 또는 좌표를 확인하세요.`,
+    };
+  }
+
+  return { tableIndex, row: targetRow, col: targetCol };
 }
 
 export interface CellEditRequest {
@@ -340,23 +614,32 @@ export function applyCellEditsToSectionXml(
       );
       if (!hasAddr) continue;
 
-      // 직접 <hp:t> 런 수집 (중첩 표 안의 t는 제외)
+      // 직접 <hp:t> / <hp:t/> 런 수집 (중첩 표 안의 t는 제외)
+      // 판별 유니온: isEmpty=true이면 tagPos/tagEnd(self-closing 전체 범위),
+      //             isEmpty=false이면 openEnd/closePos(내용 범위)
+      type OwnRun =
+        | { isEmpty: true; tagPos: number; tagEnd: number }
+        | { isEmpty: false; openEnd: number; closePos: number };
+
       let innerDepth = 0;
-      const ownTRuns: Array<{ openEnd: number; closePos: number }> = [];
+      const ownTRuns: OwnRun[] = [];
       for (const t of tokens.filter((x) => x.pos >= tc.start && x.pos < tc.end)) {
         if (t.kind === "tbl_open") innerDepth++;
         else if (t.kind === "tbl_close") innerDepth--;
-        else if (t.kind === "t_open" && innerDepth === 0) {
+        else if (t.kind === "t_empty" && innerDepth === 0) {
+          // <hp:t/> — 빈 self-closing 런
+          ownTRuns.push({ isEmpty: true, tagPos: t.pos, tagEnd: t.end });
+        } else if (t.kind === "t_open" && innerDepth === 0) {
           const closePos = xml.indexOf("</hp:t>", t.end);
           if (closePos >= 0) {
-            ownTRuns.push({ openEnd: t.end, closePos });
+            ownTRuns.push({ isEmpty: false, openEnd: t.end, closePos });
           }
         }
       }
 
-      // 현재 텍스트
+      // 현재 텍스트 (빈 런은 빈 문자열 기여)
       const currentText = ownTRuns
-        .map((r) => xml.substring(r.openEnd, r.closePos))
+        .map((r) => (r.isEmpty ? "" : xml.substring(r.openEnd, r.closePos)))
         .join("")
         .replace(/&amp;/g, "&")
         .replace(/&lt;/g, "<")
@@ -379,7 +662,9 @@ export function applyCellEditsToSectionXml(
         results[ei] = {
           success: false,
           oldText: currentText,
-          error: `셀 (표 ${edit.tableIndex}, 행 ${edit.row}, 열 ${edit.col})에 <hp:t> 런이 없습니다.`,
+          error:
+            `셀 (표 ${edit.tableIndex}, 행 ${edit.row}, 열 ${edit.col})에 텍스트 런이 없습니다. ` +
+            `<hp:t> 또는 <hp:t/> 런이 발견되지 않았습니다. 셀 구조를 확인하세요.`,
         };
         found = true;
         break;
@@ -389,14 +674,27 @@ export function applyCellEditsToSectionXml(
       const escapedNew = escapeXml(edit.newText);
       const patches: Array<{ from: number; to: number; text: string }> = [];
 
-      // 첫 번째 <hp:t>에 새 텍스트 삽입
-      const firstRun = ownTRuns[0] as { openEnd: number; closePos: number };
-      patches.push({ from: firstRun.openEnd, to: firstRun.closePos, text: escapedNew });
+      // 첫 번째 런 처리
+      const firstRun = ownTRuns[0] as OwnRun;
+      if (firstRun.isEmpty) {
+        // <hp:t/> → <hp:t>newText</hp:t> 로 교체 (self-closing 전체를 교체)
+        patches.push({
+          from: firstRun.tagPos,
+          to: firstRun.tagEnd,
+          text: `<hp:t>${escapedNew}</hp:t>`,
+        });
+      } else {
+        // <hp:t>oldText</hp:t> → <hp:t>newText</hp:t> (내용만 교체)
+        patches.push({ from: firstRun.openEnd, to: firstRun.closePos, text: escapedNew });
+      }
 
-      // 나머지 <hp:t>는 빈 문자열로 (combined text == newText)
+      // 나머지 런: 내용 있는 런만 빈 문자열로, <hp:t/>는 이미 비어있으므로 패치 불필요
       for (let ri = 1; ri < ownTRuns.length; ri++) {
-        const run = ownTRuns[ri] as { openEnd: number; closePos: number };
-        patches.push({ from: run.openEnd, to: run.closePos, text: "" });
+        const run = ownTRuns[ri] as OwnRun;
+        if (!run.isEmpty) {
+          patches.push({ from: run.openEnd, to: run.closePos, text: "" });
+        }
+        // run.isEmpty === true: <hp:t/> 이미 비어있음, 패치 없음
       }
 
       replacements.push({ editIdx: ei, patches });
@@ -563,6 +861,11 @@ export const proposeCellEditTool: ToolDefinition<ProposeCellEditInput> = {
   description:
     "HWPX 문서의 표 셀 내용을 XML 직접 패치 방식으로 수정합니다. " +
     "병합 셀(cellSpan/rowSpan)이 있는 표에서도 병합 구조를 완전히 보존합니다. " +
+    "빈 셀(<hp:t/> self-closing 런)도 채울 수 있어 양식(form) 편집에 적합합니다. " +
+    "셀 주소 지정 방법: " +
+    "(1) 좌표 모드 — tableIndex + row + col 직접 지정. " +
+    "(2) 레이블 모드 — label(인접 레이블 셀 텍스트) + direction(right/below, 기본 right) + 선택적 tableIndex로 " +
+    "레이블 옆/아래 셀을 자동으로 찾아 편집. 병합 레이블 셀도 colSpan/rowSpan을 반영하여 대상 셀을 계산합니다. " +
     "propose_edit/propose_form_fill은 마크다운 라운드트립으로 병합 셀을 소실시키므로, " +
     "병합 셀이 있는 표를 수정할 때는 이 툴을 사용하세요. " +
     ".hwpx 파일 전용입니다. .hwp는 지원하지 않으며 Hancom에서 .hwpx로 저장 후 사용하세요. " +
@@ -614,8 +917,223 @@ export const proposeCellEditTool: ToolDefinition<ProposeCellEditInput> = {
       );
     }
 
+    // 레이블 기반 편집을 좌표로 해석하기 위해 섹션 XML을 먼저 읽는다
+    const zipForLabel = await JSZip.loadAsync(new Uint8Array(originalBuffer.buffer as ArrayBuffer));
+    const sectionFilesForLabel = Object.keys(zipForLabel.files)
+      .filter((name) => /^Contents\/section\d+\.xml$/.test(name))
+      .sort();
+
+    // 섹션별 XML 및 최상위 표 카운트 수집
+    interface SectionInfo {
+      xml: string;
+      tblCount: number;
+      globalOffset: number; // 이 섹션의 첫 번째 표의 전역 tableIndex
+    }
+    const sectionInfos: SectionInfo[] = [];
+    let globalTblOffset = 0;
+    for (const sf of sectionFilesForLabel) {
+      const entry = zipForLabel.file(sf);
+      const xml = entry ? await entry.async("string") : "";
+      const tokens = tokenizeHwpxXml(xml);
+      let count = 0;
+      let d = 0;
+      for (const tok of tokens) {
+        if (tok.kind === "tbl_open") {
+          if (d === 0) count++;
+          d++;
+        } else if (tok.kind === "tbl_close") {
+          d--;
+        }
+      }
+      sectionInfos.push({ xml, tblCount: count, globalOffset: globalTblOffset });
+      globalTblOffset += count;
+    }
+
+    // 레이블 기반 편집 항목을 좌표로 해석
+    // 레이블 탐색은 "전체 문서" 관점에서 섹션 경계를 넘어 수행한다.
+    // 구현: 각 섹션에서 순서대로 탐색하여 tableIndex를 전역 인덱스로 변환.
+
+    /**
+     * 전체 섹션에 걸쳐 레이블로 셀을 탐색한다.
+     * label에 매칭되는 셀을 모든 섹션에서 모은 후 중복 검사를 수행.
+     */
+    function resolveLabelAcrossSections(
+      label: string,
+      direction: "right" | "below",
+      scopedTableIndex?: number,
+    ): { tableIndex: number; row: number; col: number } | { error: string } {
+      const trimmedLabel = label.trim();
+      interface GlobalMatch {
+        globalTableIndex: number;
+        addrSpan: CellAddrSpan;
+        sectionXml: string;
+        sectionOffset: number;
+      }
+      const allMatches: GlobalMatch[] = [];
+
+      for (const si of sectionInfos) {
+        const tokens = tokenizeHwpxXml(si.xml);
+        // 이 섹션 안에서 탐색할 tableIndex 범위 (섹션 내 상대 인덱스)
+        let localStart = 0;
+        let localEnd = si.tblCount - 1;
+
+        if (scopedTableIndex !== undefined) {
+          // 전역 tableIndex → 섹션 내 상대 인덱스
+          const localIdx = scopedTableIndex - si.globalOffset;
+          if (localIdx < 0 || localIdx >= si.tblCount) continue; // 이 섹션에 없음
+          localStart = localIdx;
+          localEnd = localIdx;
+        }
+
+        for (let li = localStart; li <= localEnd; li++) {
+          const tblRange = findTopLevelTableRange(tokens, li);
+          if (!tblRange) continue;
+
+          const directTcs = collectDirectTcRanges(tokens, tblRange.start, tblRange.end);
+          for (const tc of directTcs) {
+            const cellText = readOwnTextFromTc(si.xml, tokens, tc.start, tc.end).trim();
+            if (cellText === trimmedLabel) {
+              const addrSpan = readCellAddrSpan(tokens, tc.start, tc.end);
+              if (addrSpan) {
+                allMatches.push({
+                  globalTableIndex: si.globalOffset + li,
+                  addrSpan,
+                  sectionXml: si.xml,
+                  sectionOffset: si.globalOffset,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      if (allMatches.length === 0) {
+        const scope = scopedTableIndex !== undefined ? `표 ${scopedTableIndex}` : "문서 내 모든 표";
+        return {
+          error: `레이블 "${label}"을(를) ${scope}에서 찾을 수 없습니다. read_document로 표 내용을 확인하세요.`,
+        };
+      }
+
+      if (allMatches.length > 1) {
+        const locs = allMatches
+          .map(
+            (m) => `표 ${m.globalTableIndex} (행 ${m.addrSpan.rowAddr}, 열 ${m.addrSpan.colAddr})`,
+          )
+          .join(", ");
+        return {
+          error:
+            `레이블 "${label}"이(가) 여러 셀에서 발견되었습니다: ${locs}. ` +
+            `tableIndex로 탐색 범위를 좁히거나 좌표(row/col)를 직접 지정하세요.`,
+        };
+      }
+
+      const match = allMatches[0] as GlobalMatch;
+      const { addrSpan, globalTableIndex, sectionXml, sectionOffset } = match;
+
+      // 대상 셀 주소 계산
+      let targetRow: number;
+      let targetCol: number;
+      if (direction === "right") {
+        targetRow = addrSpan.rowAddr;
+        targetCol = addrSpan.colAddr + addrSpan.colSpan;
+      } else {
+        targetRow = addrSpan.rowAddr + addrSpan.rowSpan;
+        targetCol = addrSpan.colAddr;
+      }
+
+      // 대상 셀 존재 확인 (같은 섹션 내 같은 표)
+      const localIdx = globalTableIndex - sectionOffset;
+      const tokens2 = tokenizeHwpxXml(sectionXml);
+      const tblRange2 = findTopLevelTableRange(tokens2, localIdx);
+      if (!tblRange2) {
+        return { error: `표 ${globalTableIndex}를 찾을 수 없습니다 (내부 오류).` };
+      }
+      const directTcs2 = collectDirectTcRanges(tokens2, tblRange2.start, tblRange2.end);
+      const tblTokens2 = tokens2.filter((t) => t.pos >= tblRange2.start && t.pos < tblRange2.end);
+
+      let targetExists = false;
+      for (const tc of directTcs2) {
+        const tcTokens = tblTokens2.filter((t) => t.pos >= tc.start && t.pos < tc.end);
+        if (
+          tcTokens.some(
+            (t) => t.kind === "cell_addr" && t.colAddr === targetCol && t.rowAddr === targetRow,
+          )
+        ) {
+          targetExists = true;
+          break;
+        }
+      }
+
+      if (!targetExists) {
+        const dirLabel = direction === "right" ? "오른쪽" : "아래";
+        return {
+          error:
+            `레이블 "${label}" (표 ${globalTableIndex}, 행 ${addrSpan.rowAddr}, 열 ${addrSpan.colAddr})의 ` +
+            `${dirLabel} 셀 (행 ${targetRow}, 열 ${targetCol})이 존재하지 않습니다. ` +
+            `direction 또는 좌표를 확인하세요.`,
+        };
+      }
+
+      return { tableIndex: globalTableIndex, row: targetRow, col: targetCol };
+    }
+
+    // 편집 항목을 좌표 기반으로 정규화
+    const resolvedEdits: Array<{
+      tableIndex: number;
+      row: number;
+      col: number;
+      newText: string;
+      expectedText?: string;
+      /** diff 표시용 원본 표현 */
+      label?: string;
+    }> = [];
+    const resolveErrors: string[] = [];
+
+    for (let i = 0; i < input.edits.length; i++) {
+      const e = input.edits[i];
+      if (!e) continue;
+
+      if ("label" in e && e.label !== undefined) {
+        // 레이블 모드
+        const direction = (e.direction ?? "right") as "right" | "below";
+        const resolved = resolveLabelAcrossSections(e.label, direction, e.tableIndex);
+        if ("error" in resolved) {
+          resolveErrors.push(`편집 #${i + 1} (레이블 "${e.label}"): ${resolved.error}`);
+        } else {
+          resolvedEdits.push({
+            tableIndex: resolved.tableIndex,
+            row: resolved.row,
+            col: resolved.col,
+            newText: e.newText,
+            expectedText: e.expectedText,
+            label: e.label,
+          });
+        }
+      } else {
+        // 좌표 모드 — e.tableIndex / e.row / e.col 은 항상 존재 (zod 스키마 보장)
+        const coord = e as {
+          tableIndex: number;
+          row: number;
+          col: number;
+          newText: string;
+          expectedText?: string;
+        };
+        resolvedEdits.push({
+          tableIndex: coord.tableIndex,
+          row: coord.row,
+          col: coord.col,
+          newText: coord.newText,
+          expectedText: coord.expectedText,
+        });
+      }
+    }
+
+    if (resolveErrors.length > 0) {
+      return `오류: 다음 레이블을 해석할 수 없어 파일을 수정하지 않았습니다.\n${resolveErrors.join("\n")}`;
+    }
+
     // 편집 적용
-    const editRequests: CellEditRequest[] = input.edits.map((e) => ({
+    const editRequests: CellEditRequest[] = resolvedEdits.map((e) => ({
       tableIndex: e.tableIndex,
       row: e.row,
       col: e.col,
@@ -633,10 +1151,11 @@ export const proposeCellEditTool: ToolDefinition<ProposeCellEditInput> = {
 
     if (failedResults.length > 0) {
       const messages = failedResults.map(({ r, i }) => {
-        const edit = input.edits[i];
+        const e = resolvedEdits[i];
+        const label = e?.label ? `레이블 "${e.label}" → ` : "";
         return (
-          `편집 #${i + 1} (표 ${edit?.tableIndex ?? "?"}, ` +
-          `행 ${edit?.row ?? "?"}, 열 ${edit?.col ?? "?"}): ${r.error}`
+          `편집 #${i + 1} (${label}표 ${e?.tableIndex ?? "?"}, ` +
+          `행 ${e?.row ?? "?"}, 열 ${e?.col ?? "?"}): ${r.error}`
         );
       });
       return `오류: 다음 편집을 적용할 수 없어 파일을 수정하지 않았습니다.\n${messages.join("\n")}`;
@@ -644,11 +1163,14 @@ export const proposeCellEditTool: ToolDefinition<ProposeCellEditInput> = {
 
     // diff 생성 (표·셀 변경 표)
     const diffLines = ["| 표·셀 | 이전 | 이후 |", "| --- | --- | --- |"];
-    for (let i = 0; i < input.edits.length; i++) {
-      const e = input.edits[i];
+    for (let i = 0; i < resolvedEdits.length; i++) {
+      const e = resolvedEdits[i];
       if (!e) continue;
       const oldText = results[i]?.oldText ?? "";
-      diffLines.push(`| #${e.tableIndex} (${e.row},${e.col}) | ${oldText} | ${e.newText} |`);
+      const addr = e.label
+        ? `레이블 "${e.label}" → #${e.tableIndex} (${e.row},${e.col})`
+        : `#${e.tableIndex} (${e.row},${e.col})`;
+      diffLines.push(`| ${addr} | ${oldText} | ${e.newText} |`);
     }
     const diff = diffLines.join("\n");
 
