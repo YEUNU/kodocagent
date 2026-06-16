@@ -71,6 +71,18 @@ Assistant: propose_edit(취업규칙.hwpx) — diff 미리보기 표시
 
 두 문서의 변경점을 블록 단위로 비교합니다. 채팅에서 "이 두 계약서 뭐가 바뀌었는지 비교해줘"처럼 요청하면 `compare_documents`가 추가·삭제·수정 블록과 통계를 표로 정리해줍니다. HWP↔HWPX 등 서로 다른 포맷 간 비교도 가능합니다.
 
+### 큰 문서 효율적으로 읽기
+
+큰 문서를 통째로 읽는 대신 필요한 부분만 가져옵니다.
+
+- **구조 먼저(outline)**: 헤딩만 추출해 문서 개요를 파악 — "이 보고서 목차만 보여줘"
+- **검색(search)**: 키워드가 포함된 부분과 앞뒤 맥락만 반환 — "이 계약서에서 '위약금' 부분만 찾아줘"
+- **페이지 범위(pages)**: 특정 페이지/섹션만 읽기
+
+### 컨텍스트 관리
+
+긴 대화에서 컨텍스트가 무한정 커지지 않도록, 토큰 예산(`max-context-tokens`, 기본 120k)을 넘으면 **오래된 문서 읽기 결과를 자동으로 축약**합니다(최근 대화·승인 짝은 보존). 매 응답 끝과 `/context` 명령으로 **현재 사용량**(사용 토큰 / 예산 / %)을 확인할 수 있습니다.
+
 ### 미리보기 + 승인 흐름
 
 에이전트는 **절대 바로 저장하지 않습니다**. 모든 쓰기 작업은 다음 순서로 진행됩니다:
@@ -131,8 +143,8 @@ kodocagent config set law-key <발급받은_LAW_OC_키>
 | `kodocagent` | 채팅 시작 (최초 실행 시 온보딩) |
 | `kodocagent -p "<질문>"` | 단발 질의 (쓰기 툴 비활성, 비대화형) |
 | `kodocagent --continue` | 가장 최근 세션 재개 |
-| `kodocagent --resume <id>` | 지정한 세션 ID 재개 |
-| `kodocagent sessions` | 세션 목록 표시 |
+| `kodocagent --resume [id]` | 세션 재개 (ID 생략 시 목록에서 선택) |
+| `kodocagent sessions` | 세션 목록 표시 (첫 메시지 미리보기 포함) |
 | `kodocagent config set <key> <value>` | 설정값 저장 |
 | `kodocagent config show` | 현재 설정 표시 (API 키 마스킹) |
 | `kodocagent mcp list` | MCP 서버 상태 목록 |
@@ -146,6 +158,7 @@ kodocagent config set law-key <발급받은_LAW_OC_키>
 | 명령 | 설명 |
 |------|------|
 | `/model` | 프로바이더/모델 전환 (키 있는 프로바이더만 표시, 직접 입력도 가능) |
+| `/context` | 현재 컨텍스트 사용량 표시 (사용 토큰 / 예산 / %) |
 | `/clear` | 새 세션 시작 |
 | `/help` | 도움말 |
 | `/exit` | 종료 |
@@ -161,6 +174,7 @@ kodocagent config set law-key <발급받은_LAW_OC_키>
 | `api-key.google` | Google API 키 | `AI...` |
 | `law-key` | LAW_OC 법령 API 키 | |
 | `max-steps` | 턴당 최대 툴콜 수 (기본 24) | `24` |
+| `max-context-tokens` | 컨텍스트 토큰 예산 (초과 시 오래된 도구 결과 자동 압축, 기본 120000) | `120000` |
 
 ---
 

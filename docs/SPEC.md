@@ -105,7 +105,8 @@ markdownToHwpx(markdown: string, options?: { templateArrayBuffer?: ArrayBuffer, 
   },
   "lawApiKey": null,                   // LAW_OC 값. MCP korean-law 서버 env로 주입
   "locale": "ko",                      // CLI 메시지 언어 (v1은 ko 고정)
-  "maxSteps": 24                       // 턴당 최대 툴콜 스텝
+  "maxSteps": 24,                      // 턴당 최대 툴콜 스텝
+  "maxContextTokens": 120000           // 컨텍스트 토큰 예산 (초과 시 오래된 도구 결과 자동 압축)
 }
 ```
 
@@ -162,6 +163,7 @@ class AgentSession {
 ```
 
 - 내부적으로 `streamText({ model, system, messages, tools, stopWhen: <v6 멀티스텝 정지 조건>(config.maxSteps), abortSignal })`
+- **컨텍스트 관리**: 매 턴 `streamText` 직전 `compactMessages(messages, config.maxContextTokens)`로 예산 초과 시 오래된 대형 tool-result를 플레이스홀더로 축약(system·최근 6개 보호, 메시지 삭제 없이 tool_call↔result 짝 보존). 세션 JSONL엔 전체 기록 유지. CLI는 매 턴/`/context`로 사용량 표시
 - `ApprovalHandler`는 CLI(clack confirm)/GUI(다이얼로그)가 주입. **core는 터미널 import·console 출력 금지**
 - Ctrl+C → AbortSignal → 턴 중단, 세션 파일은 유효 상태 유지
 
@@ -194,7 +196,7 @@ class AgentSession {
 
 | 툴 | 시그니처 | 구현 |
 |---|---|---|
-| `read_document` | `(path, pages?)` → 마크다운+메타 | kordoc `parse()`. 실패 시 error code를 메시지로 |
+| `read_document` | `(path, pages?, outline?, search?)` → 마크다운+메타 | kordoc `parse()`(평문 .md/.txt는 직접 읽기). 100MB 초과 차단. `outline`=헤딩 구조만, `search`=키워드 주변만, 80k자 캡 |
 | `compare_documents` | `(pathA, pathB)` → 구조 diff 통계+상세 | 파일 읽어 ArrayBuffer로 kordoc `compare()` |
 | `list_files` | `(dir?, glob?)` → 파일 목록 | cwd 이하로 제한(realpath 검증), 문서 확장자 우선 표시 |
 | `read_file` | `(path)` → 텍스트 | cwd 이하 텍스트 파일만, 256KB 제한 |
