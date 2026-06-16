@@ -32,89 +32,46 @@ import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 // ─────────────────────────────────────────────────────────
 
 /**
- * 좌표 기반 편집 항목: tableIndex + row + col 으로 셀을 지정
- */
-const coordinateCellEditItemSchema = z.object({
-  tableIndex: z
-    .number()
-    .int()
-    .nonnegative()
-    .describe(
-      "0-based 표 인덱스. read_document로 읽은 kordoc 블록 순서와 동일 (중첩 표는 별도 카운팅 안 함)",
-    ),
-  row: z
-    .number()
-    .int()
-    .nonnegative()
-    .describe("셀의 rowAddr (0-based, <hp:cellAddr rowAddr=..> 값)"),
-  col: z
-    .number()
-    .int()
-    .nonnegative()
-    .describe("셀의 colAddr (0-based, <hp:cellAddr colAddr=..> 값)"),
-  newText: z.string().describe("셀에 쓸 새 텍스트"),
-  expectedText: z
-    .string()
-    .optional()
-    .describe(
-      "현재 셀 텍스트 (안전 검증용). 제공 시 현재 셀 텍스트와 일치하지 않으면 수정하지 않음. " +
-        "잘못된 셀 수정을 방지하려면 반드시 사용하세요.",
-    ),
-  // label 필드 없음 — 좌표 모드 전용
-  label: z.undefined().optional(),
-});
-
-/**
- * 레이블 기반 편집 항목: label + direction 으로 인접 셀을 찾아 지정.
- * tableIndex를 지정하면 해당 표 안에서만 탐색, 생략하면 전체 문서에서 탐색.
- */
-const labelCellEditItemSchema = z.object({
-  label: z
-    .string()
-    .describe(
-      "레이블 셀의 텍스트 (트림 비교). 이 셀의 인접 방향(direction)에 있는 셀에 newText를 기록함.",
-    ),
-  direction: z
-    .enum(["right", "below"])
-    .optional()
-    .default("right")
-    .describe(
-      "레이블 기준 대상 셀 방향. right(기본): 오른쪽 셀, below: 아래 셀. " +
-        "병합 셀은 span을 고려하여 대상 셀 주소를 계산합니다.",
-    ),
-  tableIndex: z
-    .number()
-    .int()
-    .nonnegative()
-    .optional()
-    .describe(
-      "탐색을 제한할 표 인덱스 (0-based). 생략하면 문서 내 모든 최상위 표에서 탐색. " +
-        "레이블이 중복될 경우 tableIndex로 범위를 좁히세요.",
-    ),
-  newText: z.string().describe("셀에 쓸 새 텍스트"),
-  expectedText: z
-    .string()
-    .optional()
-    .describe(
-      "현재 셀 텍스트 (안전 검증용). 제공 시 현재 셀 텍스트와 일치하지 않으면 수정하지 않음. " +
-        "잘못된 셀 수정을 방지하려면 반드시 사용하세요.",
-    ),
-  // row/col 필드 없음 — 레이블 모드 전용
-  row: z.undefined().optional(),
-  col: z.undefined().optional(),
-});
-
-/**
- * 편집 항목: 좌표 모드 또는 레이블 모드 중 정확히 하나를 사용.
+ * 편집 항목: 좌표 모드(tableIndex+row+col) 또는 레이블 모드(label[+direction]) 중 하나.
  *
- * 좌표 모드: tableIndex + row + col 필수
- * 레이블 모드: label 필수 (direction 옵션, tableIndex 옵션)
+ * 모든 주소 필드를 optional로 두고(좌표 XOR 라벨 검증은 propose 핸들러에서 수행),
+ * JSON Schema 변환이 가능하도록 z.undefined()·union을 쓰지 않는다.
  */
 export const cellEditItemSchema = z
-  .union([coordinateCellEditItemSchema, labelCellEditItemSchema])
+  .object({
+    tableIndex: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe(
+        "좌표 모드: 0-based 표 인덱스(read_document의 kordoc 블록 순서, 중첩표 제외). " +
+          "레이블 모드에선 탐색 범위 제한용(선택).",
+      ),
+    row: z.number().int().nonnegative().optional().describe("좌표 모드: 셀의 rowAddr (0-based)"),
+    col: z.number().int().nonnegative().optional().describe("좌표 모드: 셀의 colAddr (0-based)"),
+    label: z
+      .string()
+      .optional()
+      .describe(
+        "레이블 모드: 기준 셀 텍스트(트림 비교). 이 셀의 direction 방향 인접 셀에 newText를 기록. " +
+          "좌표 모드면 생략.",
+      ),
+    direction: z
+      .enum(["right", "below"])
+      .optional()
+      .describe("레이블 모드 방향. 기본 right(오른쪽 셀), below(아래 셀). 병합 span 고려."),
+    newText: z.string().describe("셀에 쓸 새 텍스트"),
+    expectedText: z
+      .string()
+      .optional()
+      .describe(
+        "현재 셀 텍스트(안전 검증용). 불일치 시 수정하지 않음. 잘못된 셀 수정 방지를 위해 권장.",
+      ),
+  })
   .describe(
-    "편집 항목: 좌표 모드(tableIndex+row+col) 또는 레이블 모드(label+direction) 중 하나 사용. " +
-      "두 모드를 동시에 지정하거나 둘 다 생략하면 유효성 오류가 발생합니다.",
+    "편집 항목. 좌표 모드(tableIndex+row+col) 또는 레이블 모드(label[+direction]) 중 하나를 사용하세요. " +
+      "둘 다 지정하거나 둘 다 생략하면 오류입니다.",
   );
 
 export const proposeCellEditSchema = z.object({
@@ -1093,7 +1050,13 @@ export const proposeCellEditTool: ToolDefinition<ProposeCellEditInput> = {
       const e = input.edits[i];
       if (!e) continue;
 
-      if ("label" in e && e.label !== undefined) {
+      if (e.label !== undefined && (e.row !== undefined || e.col !== undefined)) {
+        // 좌표·레이블 동시 지정 — 모호하므로 거부
+        resolveErrors.push(
+          `편집 #${i + 1}: label과 row/col을 동시에 지정할 수 없습니다. ` +
+            `좌표 모드(tableIndex+row+col) 또는 레이블 모드(label) 중 하나만 사용하세요.`,
+        );
+      } else if (e.label !== undefined) {
         // 레이블 모드
         const direction = (e.direction ?? "right") as "right" | "below";
         const resolved = resolveLabelAcrossSections(e.label, direction, e.tableIndex);
@@ -1109,22 +1072,21 @@ export const proposeCellEditTool: ToolDefinition<ProposeCellEditInput> = {
             label: e.label,
           });
         }
-      } else {
-        // 좌표 모드 — e.tableIndex / e.row / e.col 은 항상 존재 (zod 스키마 보장)
-        const coord = e as {
-          tableIndex: number;
-          row: number;
-          col: number;
-          newText: string;
-          expectedText?: string;
-        };
+      } else if (e.tableIndex !== undefined && e.row !== undefined && e.col !== undefined) {
+        // 좌표 모드
         resolvedEdits.push({
-          tableIndex: coord.tableIndex,
-          row: coord.row,
-          col: coord.col,
-          newText: coord.newText,
-          expectedText: coord.expectedText,
+          tableIndex: e.tableIndex,
+          row: e.row,
+          col: e.col,
+          newText: e.newText,
+          expectedText: e.expectedText,
         });
+      } else {
+        // 좌표·레이블 둘 다 불완전
+        resolveErrors.push(
+          `편집 #${i + 1}: 좌표 모드(tableIndex+row+col) 또는 레이블 모드(label) 중 하나를 ` +
+            `완전히 지정하세요. read_document로 표 내용을 먼저 확인하세요.`,
+        );
       }
     }
 

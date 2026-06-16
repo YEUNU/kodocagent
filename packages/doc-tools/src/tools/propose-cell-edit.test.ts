@@ -734,23 +734,44 @@ describe("Capability B — resolveLabelTarget 단위 테스트", () => {
   });
 });
 
-describe("Capability B — zod 스키마 유효성 검사", () => {
-  it("label과 row/col을 동시에 지정하면 union 파싱 오류 (label 모드에서 row/col은 undefined 전용)", () => {
-    // labelCellEditItemSchema에서 row/col은 z.undefined().optional()
-    // 따라서 row를 숫자로 주면 coordinateCellEditItemSchema는 label 없어서 실패,
-    // labelCellEditItemSchema는 row가 undefined여야 해서 실패 → 둘 다 실패 → union error
-    const result = cellEditItemSchema.safeParse({
-      label: "성명",
-      row: 0,
-      col: 1,
-      newText: "값",
-    });
-    expect(result.success).toBe(false);
+describe("Capability B — 입력 모드 검증(핸들러)", () => {
+  // 스키마는 JSON Schema 변환을 위해 전 필드 optional(z.undefined·union 미사용),
+  // 좌표 XOR 라벨 검증은 propose 핸들러에서 수행 → 오류 문자열 반환 + 파일 무수정.
+  it("스키마는 두 모드 입력을 모두 파싱한다(검증은 핸들러)", () => {
+    expect(
+      cellEditItemSchema.safeParse({ label: "성명", row: 0, col: 1, newText: "값" }).success,
+    ).toBe(true);
+    expect(cellEditItemSchema.safeParse({ newText: "값" }).success).toBe(true);
   });
 
-  it("label도 없고 row/col도 없으면 union 파싱 오류", () => {
-    const result = cellEditItemSchema.safeParse({ newText: "값" });
-    expect(result.success).toBe(false);
+  it("label과 row/col을 동시에 지정하면 핸들러가 오류 반환(수정 안 함)", async () => {
+    const hwpxBuf = await markdownToHwpx("| 성명 |  |\n| --- | --- |");
+    const dir = join(testDir, `validate-both-${Date.now()}`);
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "f.hwpx"), Buffer.from(hwpxBuf));
+    const result = await proposeCellEditTool.propose?.({
+      input: {
+        path: "f.hwpx",
+        edits: [{ label: "성명", row: 0, col: 1, newText: "값" }],
+        summary: "x",
+      },
+      ctx: makeCtx(dir),
+    });
+    expect(typeof result).toBe("string");
+    expect(result as string).toContain("동시에 지정할 수 없");
+  });
+
+  it("label도 없고 row/col도 없으면 핸들러가 오류 반환", async () => {
+    const hwpxBuf = await markdownToHwpx("| 성명 |  |\n| --- | --- |");
+    const dir = join(testDir, `validate-neither-${Date.now()}`);
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "f.hwpx"), Buffer.from(hwpxBuf));
+    const result = await proposeCellEditTool.propose?.({
+      input: { path: "f.hwpx", edits: [{ newText: "값" }], summary: "x" },
+      ctx: makeCtx(dir),
+    });
+    expect(typeof result).toBe("string");
+    expect(result as string).toContain("하나");
   });
 });
 
