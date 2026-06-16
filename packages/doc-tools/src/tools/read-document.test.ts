@@ -27,7 +27,7 @@ import ExcelJS from "exceljs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { markdownToDocx } from "../md-to-docx.js";
 import type { ToolContext } from "../types.js";
-import { readDocumentTool } from "./read-document.js";
+import { fileSizeGuardMessage, readDocumentTool } from "./read-document.js";
 
 /** readDocumentTool.execute는 항상 존재 — 타입 단순화 헬퍼 */
 async function runReadDocument(input: { path: string; pages?: string }, ctx: ToolContext) {
@@ -206,4 +206,35 @@ describe("read_document 오류 경로", () => {
     // 오류 메시지는 반드시 "오류:" 접두어로 시작해야 함
     expect(text).toMatch(/^오류:/);
   }, 10000);
+});
+
+// ─────────────────────────────────────────────────────────
+// fileSizeGuardMessage — 단위 테스트 (표 기반)
+// ─────────────────────────────────────────────────────────
+
+describe("fileSizeGuardMessage", () => {
+  const LIMIT = 100 * 1024 * 1024; // 100MB
+
+  const cases: Array<{ label: string; sizeBytes: number; expectNull: boolean }> = [
+    { label: "0 bytes → null", sizeBytes: 0, expectNull: true },
+    { label: "1 byte → null", sizeBytes: 1, expectNull: true },
+    { label: "100MB 정확히 → null (한계 이하)", sizeBytes: LIMIT, expectNull: true },
+    { label: "100MB + 1 byte → 오류 문자열 (초과)", sizeBytes: LIMIT + 1, expectNull: false },
+    { label: "150MB → 오류 문자열", sizeBytes: 150 * 1024 * 1024, expectNull: false },
+    { label: "1GB → 오류 문자열", sizeBytes: 1024 * 1024 * 1024, expectNull: false },
+  ];
+
+  for (const { label, sizeBytes, expectNull } of cases) {
+    it(label, () => {
+      const result = fileSizeGuardMessage(sizeBytes, LIMIT);
+      if (expectNull) {
+        expect(result).toBeNull();
+      } else {
+        expect(result).not.toBeNull();
+        expect(result).toMatch(/^오류:/);
+        expect(result).toContain("너무 큽니다");
+        expect(result).toContain("100MB");
+      }
+    });
+  }
 });

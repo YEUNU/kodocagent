@@ -283,6 +283,10 @@ async function runSingleTurn(prompt: string): Promise<void> {
     if (servers.length > 0) {
       await mcpManager.connect(servers);
     }
+    // MCP 툴 수 폭증 경고
+    for (const w of mcpManager.warnings) {
+      process.stdout.write(chalk.yellow(`⚠ ${w}\n`));
+    }
   }
 
   const store = await SessionStore.create({

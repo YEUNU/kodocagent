@@ -94,6 +94,10 @@ export async function runChat(opts: {
         process.stdout.write(chalk.dim(`MCP [${s.name}] 스킵: ${s.reason ?? ""}\n`));
       }
     }
+    // MCP 툴 수 폭증 경고 (isTTY 분기와 무관하게 연결 완료 후 1회 출력)
+    for (const w of mcpManager.warnings) {
+      process.stdout.write(chalk.yellow(`⚠ ${w}\n`));
+    }
   }
 
   // 세션 로드 또는 신규 생성
