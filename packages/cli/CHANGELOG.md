@@ -1,5 +1,21 @@
 # kodocagent
 
+## 0.4.1
+
+### Patch Changes (긴급 수정)
+
+- **에이전트 구동 불능 버그 수정(critical)** — 0.4.0의 `propose_cell_edit` 스키마가 `z.undefined()`를 사용해 AI SDK의 JSON Schema 변환이 실패, 채팅 첫 메시지부터 "Undefined cannot be represented in JSON Schema" 오류로 에이전트가 동작하지 않던 문제를 해결(전 주소 필드 optional 단일 스키마 + 핸들러 검증).
+
+### Minor Changes
+
+- 문서 전체 찾기/바꾸기(`propose_find_replace`) — 본문·표·머리말 등 모든 텍스트를 문서 XML 직접 수정으로 치환. 이미지·표·서식 보존, 복잡 문서에서도 안전(`.hwpx` 전용). 서식이 나뉜 텍스트는 일부 누락 시 안내.
+- 표 행·열 편집(`propose_table_structure`) — 행·열 추가/삭제·셀 병합을 XML 직접 수정으로. anchor 텍스트로 표 지정, 기존 병합 가로지름은 안전 거부, 이미지·다른 표 보존.
+
+### 내부 변경
+
+- rhwp(`@rhwp/core`) 의존 제거 — 찾기/바꾸기·표 구조를 자체 XML 패치로 구현(rhwp가 복잡 문서를 손상시키는 문제 회피). 사용자 설치 시 WASM(5.6MB) 미포함.
+- 실제 공문서(보도자료·지자체 양식)로 AI end-to-end 수정 검증 완료.
+
 ## 0.4.0
 
 ### Minor Changes
