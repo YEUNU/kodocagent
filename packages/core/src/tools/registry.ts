@@ -179,7 +179,13 @@ export class ToolRegistry {
 
             // 4단계: commit() — 백업 + 원자적 쓰기
             try {
-              return await commit();
+              const commitMsg = await commit();
+              // 제안 경고를 결과에 덧붙여 모델이 정직하게 보고하도록 한다
+              // (예: find/replace에서 서식 분리로 일부 미치환 시 — "모두 변경" 과장 방지)
+              if (proposal.warnings && proposal.warnings.length > 0) {
+                return `${commitMsg}\n[경고] ${proposal.warnings.join("\n[경고] ")}`;
+              }
+              return commitMsg;
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : String(err);
               return `저장 오류: ${msg}`;
