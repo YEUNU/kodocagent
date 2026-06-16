@@ -34,6 +34,7 @@ export {
 } from "./staging.js";
 export { compareDocumentsTool } from "./tools/compare-documents.js";
 export { listFilesTool } from "./tools/list-files.js";
+export { proposeCellEditTool } from "./tools/propose-cell-edit.js";
 export { proposeEditTool } from "./tools/propose-edit.js";
 export { proposeFormFillTool } from "./tools/propose-form-fill.js";
 export { proposeSheetEditTool } from "./tools/propose-sheet-edit.js";
@@ -45,6 +46,7 @@ export type { ProposeOutcome, ToolContext, ToolDefinition } from "./types.js";
 
 import { compareDocumentsTool } from "./tools/compare-documents.js";
 import { listFilesTool } from "./tools/list-files.js";
+import { proposeCellEditTool } from "./tools/propose-cell-edit.js";
 import { proposeEditTool } from "./tools/propose-edit.js";
 import { proposeFormFillTool } from "./tools/propose-form-fill.js";
 import { proposeSheetEditTool } from "./tools/propose-sheet-edit.js";
@@ -66,6 +68,7 @@ export function createDocTools(_ctx: { cwd: string }) {
     readFileTool,
     proposeEditTool,
     proposeFormFillTool,
+    proposeCellEditTool,
     proposeSheetEditTool,
     writeNewDocumentTool,
     writeNewSpreadsheetTool,
