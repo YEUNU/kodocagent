@@ -1,5 +1,18 @@
 # kodocagent
 
+## 0.4.0
+
+### Minor Changes
+
+- `propose_cell_edit` 추가 — HWPX 표 셀을 내부 XML에서 직접 수정. 병합셀(cellSpan/rowSpan)·서식·다른 셀·양식 개체를 완전히 보존(기존 `propose_edit`의 마크다운 왕복은 병합 구조를 평면화·소실). 셀은 표 좌표 또는 라벨(인접 방향)로 지정, `expectedText` 안전 검증, 여러 셀 원자적 수정
+- 양식 빈 칸 채우기 — 비어 있는 표 셀(`<hp:t/>`)에 값 입력 지원
+- 라벨 기반 셀 지정 — "성명" 옆/아래 칸처럼 라벨+방향(right/below)으로 값 셀 지정(병합 span 고려)
+
+### 참고
+
+- `propose_cell_edit`은 `.hwpx` 전용. `.hwp`는 한글에서 `.hwpx`로 저장 후 사용. 병합셀이 있는 표 수정 시 `propose_edit` 대신 이 툴을 사용.
+- 검증: rhwp 실문서(병합 표·양식)로 편집 후 한컴오피스 한글 Viewer에서 정상 렌더·병합 보존 확인.
+
 ## 0.3.0
 
 ### Minor Changes
