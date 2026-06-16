@@ -40,6 +40,7 @@ export { proposeEditTool } from "./tools/propose-edit.js";
 export { proposeFindReplaceTool } from "./tools/propose-find-replace.js";
 export { proposeFormFillTool } from "./tools/propose-form-fill.js";
 export { proposeSheetEditTool } from "./tools/propose-sheet-edit.js";
+export { proposeTableStructureTool } from "./tools/propose-table-structure.js";
 export { readDocumentTool } from "./tools/read-document.js";
 export { readFileTool } from "./tools/read-file.js";
 export { writeNewDocumentTool } from "./tools/write-new-document.js";
@@ -54,6 +55,7 @@ import { proposeEditTool } from "./tools/propose-edit.js";
 import { proposeFindReplaceTool } from "./tools/propose-find-replace.js";
 import { proposeFormFillTool } from "./tools/propose-form-fill.js";
 import { proposeSheetEditTool } from "./tools/propose-sheet-edit.js";
+import { proposeTableStructureTool } from "./tools/propose-table-structure.js";
 import { readDocumentTool } from "./tools/read-document.js";
 import { readFileTool } from "./tools/read-file.js";
 import { writeNewDocumentTool } from "./tools/write-new-document.js";
@@ -75,6 +77,7 @@ export function createDocTools(_ctx: { cwd: string }) {
     proposeCellEditTool,
     proposeFindReplaceTool,
     proposeSheetEditTool,
+    proposeTableStructureTool,
     listFormObjectsTool,
     proposeFormObjectTool,
     writeNewDocumentTool,
