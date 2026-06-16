@@ -32,6 +32,7 @@ describe("config save→load roundtrip", () => {
       lawApiKey: null,
       locale: "ko" as const,
       maxSteps: 10,
+      maxContextTokens: 120000,
     };
 
     await save(config);
@@ -67,6 +68,7 @@ describe("config save→load roundtrip", () => {
       lawApiKey: null,
       locale: "ko",
       maxSteps: 24,
+      maxContextTokens: 120000,
     });
     const info = await stat(testConfigPath);
     // mode & 0o777 should be 0o600

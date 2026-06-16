@@ -14,6 +14,7 @@ const SETTABLE_KEYS = [
   "api-key.google",
   "law-key",
   "max-steps",
+  "max-context-tokens",
 ] as const;
 
 type SettableKey = (typeof SETTABLE_KEYS)[number];
@@ -73,6 +74,17 @@ export async function configSet(key: string, value: string): Promise<void> {
       config.maxSteps = steps;
       break;
     }
+    case "max-context-tokens": {
+      const tokens = parseInt(value, 10);
+      if (isNaN(tokens) || tokens < 10000 || tokens > 2000000) {
+        throw new KodocError(
+          `max-context-tokens는 10000~2000000 사이의 정수여야 합니다: '${value}'`,
+          "예: kodocagent config set max-context-tokens 120000",
+        );
+      }
+      config.maxContextTokens = tokens;
+      break;
+    }
   }
 
   await saveConfig(config);
@@ -99,6 +111,7 @@ export async function configShow(): Promise<void> {
     `api-key.google:     ${maskKey(config.apiKeys.google)}`,
     `law-key:            ${maskKey(config.lawApiKey)}`,
     `max-steps:          ${config.maxSteps}`,
+    `max-context-tokens: ${config.maxContextTokens}`,
   ];
 
   process.stdout.write(lines.join("\n") + "\n");

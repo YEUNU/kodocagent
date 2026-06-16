@@ -35,6 +35,7 @@ const testConfig: KodocConfig = {
   lawApiKey: null,
   locale: "ko",
   maxSteps: 5,
+  maxContextTokens: 120000,
 };
 
 // Loosely-typed stream part — avoids needing @ai-sdk/provider types directly

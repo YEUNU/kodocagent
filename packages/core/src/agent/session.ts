@@ -12,6 +12,7 @@ import type { LanguageModel, ModelMessage } from "ai";
 import { stepCountIs, streamText } from "ai";
 import type { SessionStore } from "../session/store.js";
 import type { ToolRegistry } from "../tools/registry.js";
+import { compactMessages } from "./context.js";
 import type { AgentEvent } from "./events.js";
 import { buildSystemPrompt } from "./prompts.js";
 
@@ -36,7 +37,7 @@ export interface AgentSessionOptions {
  * - error: 에러 (recoverable 여부 포함)
  */
 export class AgentSession {
-  private readonly messages: ModelMessage[] = [];
+  private messages: ModelMessage[] = [];
   private readonly openDocuments: string[] = [];
 
   /** approval-required 이벤트를 run() 스트림에 전달하기 위한 큐 */
@@ -79,6 +80,9 @@ export class AgentSession {
     });
 
     const aiSdkTools = tools.toAiSdkTools();
+
+    // streamText 호출 전 토큰 예산 내로 컨텍스트 압축 (in-memory만 적용, 영속화 무관)
+    this.messages = compactMessages(this.messages, config.maxContextTokens);
 
     try {
       const result = streamText({

@@ -28,6 +28,7 @@ function makeConfig(overrides: Partial<KodocConfig> = {}): KodocConfig {
     lawApiKey: null,
     locale: "ko",
     maxSteps: 24,
+    maxContextTokens: 120000,
     ...overrides,
   };
 }

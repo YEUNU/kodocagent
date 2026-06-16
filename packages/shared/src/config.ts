@@ -42,6 +42,8 @@ export const KodocConfigSchema = z.object({
   lawApiKey: z.string().nullable().default(null),
   locale: z.literal("ko").default("ko"),
   maxSteps: z.number().int().min(1).max(100).default(24),
+  /** 모델에 보낼 최대 컨텍스트 토큰 수 (초과 시 오래된 tool-result부터 압축) */
+  maxContextTokens: z.number().int().min(10000).max(2000000).default(120000),
 });
 
 export type KodocConfig = z.infer<typeof KodocConfigSchema>;
