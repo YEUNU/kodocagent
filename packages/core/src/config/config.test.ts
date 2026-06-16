@@ -2,7 +2,6 @@ import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadConfig, saveConfig } from "./config.js";
 
 // 테스트용 임시 홈 디렉터리 패치
 const testHome = join(tmpdir(), `kodocagent-test-config-${Date.now()}`);

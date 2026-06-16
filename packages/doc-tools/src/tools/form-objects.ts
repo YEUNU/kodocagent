@@ -268,7 +268,7 @@ export function applyFormObjectEdits(
       };
       continue;
     }
-    const openTag = xml.slice(pos, openTagEnd + 1);
+    const _openTag = xml.slice(pos, openTagEnd + 1);
 
     const closeTag = `</${xmlTag}>`;
     const closeIdx = xml.indexOf(closeTag, openTagEnd);
@@ -551,7 +551,7 @@ function replaceAttrInOpenTag(
  * elementContent는 xml.slice(pos, elementEnd).
  */
 function replaceEditText(
-  xml: string,
+  _xml: string,
   pos: number,
   elementContent: string,
   newText: string,

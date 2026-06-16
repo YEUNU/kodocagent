@@ -8,7 +8,7 @@
 import { mkdir, readFile, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   backupFile,
   cleanAllStaging,
@@ -215,7 +215,7 @@ describe("cleanAllStaging", () => {
 describe("cleanOldBackups", () => {
   it("mtime 기준 경과 파일만 삭제하고 { deleted, kept }를 반환한다", async () => {
     const baseDir = await makeTmpDir("clean-backups");
-    const srcDir = await makeTmpDir("src-backups");
+    const _srcDir = await makeTmpDir("src-backups");
 
     // 오래된 파일 (30일 초과)
     const oldFile = join(baseDir, "2024-01-01T00-00-00-000Z-old.hwpx");

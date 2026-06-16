@@ -13,7 +13,6 @@
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { compare, markdownToHwpx, parse } from "@clazic/kordoc";
-import { kordocErrorMessage } from "@kodocagent/shared";
 import { z } from "zod";
 import { markdownToDocx } from "../md-to-docx.js";
 import { resolveSafePath } from "../security.js";

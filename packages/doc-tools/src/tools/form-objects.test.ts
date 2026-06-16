@@ -386,7 +386,7 @@ describe("applyFormObjectEdits — 동일 name 중복 처리", () => {
 
     expect(results[0]?.success).toBe(true);
     // 첫 번째(tabOrder="1")는 변경 없음
-    const first = objs[0]!;
+    const _first = objs[0]!;
     const firstTagStart = newXml.indexOf("<hp:checkBtn");
     const firstTagEnd = newXml.indexOf(">", firstTagStart);
     expect(newXml.slice(firstTagStart, firstTagEnd)).toContain('value="UNCHECKED"');

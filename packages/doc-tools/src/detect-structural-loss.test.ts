@@ -12,7 +12,7 @@
 
 import type { IRBlock } from "@clazic/kordoc";
 import { describe, expect, it } from "vitest";
-import { detectStructuralLoss } from "./rhwp-engine.js";
+import { detectStructuralLoss } from "./structural-loss.js";
 
 // ─────────────────────────────────────────────────────────
 // 헬퍼

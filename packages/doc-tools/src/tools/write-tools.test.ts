@@ -11,12 +11,12 @@
  * 샌드박스: os.tmpdir() — 실제 ~/.kodocagent에 쓰지 않음
  */
 
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { markdownToHwpx, parse } from "@clazic/kordoc";
 import ExcelJS from "exceljs";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { markdownToDocx } from "../md-to-docx.js";
 import { proposeEditTool } from "./propose-edit.js";
 import { proposeSheetEditTool } from "./propose-sheet-edit.js";
@@ -161,7 +161,7 @@ describe("propose_edit .hwpx 라운드트립", () => {
 
 describe(".hwp 경로 정책", () => {
   it(".hwp 입력 시 targetPath가 .hwpx로 변경되고 willConvertFormat이 설정됨", async () => {
-    const ctx = await makeCtx();
+    const _ctx = await makeCtx();
 
     // 실제 .hwp 파일을 생성하기 어려우므로, hwpx 내용으로 .hwp 확장자 파일 생성
     // propose_edit는 .hwp 경로를 받으면 .hwpx로 출력 경로를 바꿈

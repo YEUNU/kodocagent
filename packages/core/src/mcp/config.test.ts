@@ -11,7 +11,7 @@
  * - allowedTools 필터링 로직
  */
 
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { KodocConfig } from "@kodocagent/shared";
