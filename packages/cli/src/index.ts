@@ -3,6 +3,7 @@
  * docs/SPEC.md §8
  */
 
+import { isCancel, select } from "@clack/prompts";
 import {
   AgentSession,
   createModel,
@@ -49,8 +50,8 @@ program
 program
   .option("-p, --print <prompt>", "단발 질의 (비대화형, 쓰기 툴 비활성)")
   .option("--continue", "가장 최근 세션 재개")
-  .option("--resume <id>", "지정한 세션 ID 재개")
-  .action(async (options: { print?: string; continue?: boolean; resume?: string }) => {
+  .option("--resume [id]", "세션 재개 (ID 생략 시 목록에서 선택)")
+  .action(async (options: { print?: string; continue?: boolean; resume?: string | true }) => {
     try {
       // 온보딩 체크
       if (needsOnboarding()) {
@@ -68,9 +69,14 @@ program
       if (options.print) {
         // 단발 질의
         await runSingleTurn(options.print);
+      } else if (options.resume === true) {
+        // --resume 만 주어진 경우 — 세션 선택 UI
+        const resumeId = await pickSession();
+        if (!resumeId) return; // 취소 또는 세션 없음
+        await runChat({ resumeId });
       } else {
         await runChat({
-          resumeId: options.resume,
+          resumeId: typeof options.resume === "string" ? options.resume : undefined,
           continueLatest: options.continue,
         });
       }
@@ -96,8 +102,14 @@ program
       for (const s of sessions) {
         const dateStr = s.mtime.toLocaleString("ko-KR");
         process.stdout.write(
-          `${chalk.bold(s.id)}  ${chalk.dim(dateStr)}  ${chalk.cyan(s.meta.provider)}/${s.meta.model ?? "(기본)"}  ${s.meta.cwd}\n`,
+          `${chalk.bold(s.id)}  ${chalk.dim(dateStr)}  ${chalk.cyan(s.meta.provider)}/${s.meta.model ?? "(기본)"}\n`,
         );
+        if (s.preview) {
+          process.stdout.write(`  ${chalk.italic(`"${s.preview}"`)}`);
+          process.stdout.write(`   ${chalk.dim(s.meta.cwd)}\n`);
+        } else {
+          process.stdout.write(`  ${chalk.dim(s.meta.cwd)}\n`);
+        }
       }
     } catch (err: unknown) {
       handleError(err);
@@ -192,6 +204,47 @@ program
       handleError(err);
     }
   });
+
+// ──────────────────────────────────────────────
+// --resume 선택 UI (TTY 전용)
+// ──────────────────────────────────────────────
+
+/**
+ * TTY 환경에서 세션 목록을 보여주고 재개할 세션 ID를 반환한다.
+ * - 비 TTY: 안내 메시지 후 undefined 반환
+ * - 세션 없음: 안내 메시지 후 undefined 반환
+ * - 선택 취소(Esc): 조용히 undefined 반환
+ */
+async function pickSession(): Promise<string | undefined> {
+  if (process.stdout.isTTY !== true) {
+    process.stdout.write("세션 ID를 지정하세요: kodocagent --resume <id>\n");
+    return undefined;
+  }
+
+  const sessions = await listSessions();
+  if (sessions.length === 0) {
+    process.stdout.write(chalk.dim("재개할 세션이 없습니다.\n"));
+    return undefined;
+  }
+
+  const options = sessions.map((s) => {
+    const dateStr = s.mtime.toLocaleString("ko-KR");
+    const previewPart = s.preview ? `"${s.preview}"` : "(미리보기 없음)";
+    return {
+      value: s.id,
+      label: `${s.id}  ${dateStr}`,
+      hint: previewPart,
+    };
+  });
+
+  const result = await select({
+    message: "재개할 세션을 선택하세요:",
+    options,
+  });
+
+  if (isCancel(result)) return undefined;
+  return String(result);
+}
 
 // ──────────────────────────────────────────────
 // 에러 핸들러

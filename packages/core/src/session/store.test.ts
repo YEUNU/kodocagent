@@ -138,4 +138,52 @@ describe("SessionStore", () => {
     expect(id1).toMatch(/^\d{8}-\d{6}-[a-z0-9]{6}$/);
     expect(id1).not.toBe(id2);
   });
+
+  it("listSessions()는 첫 user 메시지를 preview로 반환한다", async () => {
+    const store = await SessionStore.create({
+      cwd: "/preview-test",
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      createdAt: new Date().toISOString(),
+    });
+    await store.appendUser("첫 사용자 메시지입니다");
+    await store.appendAssistant({ role: "assistant", content: "응답입니다" });
+
+    const sessions = await listSessions();
+    const found = sessions.find((s) => s.id === store.id);
+    expect(found).toBeDefined();
+    expect(found?.preview).toBe("첫 사용자 메시지입니다");
+  });
+
+  it("listSessions()는 60자 초과 user 메시지를 말줄임 처리한다", async () => {
+    const store = await SessionStore.create({
+      cwd: "/preview-long",
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      createdAt: new Date().toISOString(),
+    });
+    const longMsg = "가".repeat(80);
+    await store.appendUser(longMsg);
+
+    const sessions = await listSessions();
+    const found = sessions.find((s) => s.id === store.id);
+    expect(found).toBeDefined();
+    expect(found?.preview).toBe(`${"가".repeat(60)}…`);
+  });
+
+  it("listSessions()는 user 메시지 없는 세션의 preview를 undefined로 반환한다", async () => {
+    const store = await SessionStore.create({
+      cwd: "/preview-none",
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      createdAt: new Date().toISOString(),
+    });
+    // user 메시지 없이 assistant만 추가
+    await store.appendAssistant({ role: "assistant", content: "먼저 말하는 어시스턴트" });
+
+    const sessions = await listSessions();
+    const found = sessions.find((s) => s.id === store.id);
+    expect(found).toBeDefined();
+    expect(found?.preview).toBeUndefined();
+  });
 });

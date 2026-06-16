@@ -34,6 +34,8 @@ export interface SessionSummary {
   meta: SessionMeta;
   mtime: Date;
   path: string;
+  /** 첫 user 메시지 미리보기 (최대 60자, 개행→공백) */
+  preview?: string;
 }
 
 /**
@@ -156,6 +158,44 @@ export class SessionStore {
 }
 
 /**
+ * JSONL 내용에서 첫 user 메시지 텍스트를 추출해 미리보기 문자열(최대 60자)로 반환한다.
+ * 레코드가 없거나 파싱 실패 시 undefined를 반환한다.
+ */
+function extractPreview(content: string): string | undefined {
+  const lines = content.split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const record = JSON.parse(trimmed) as JournalRecord;
+      if (record.type === "user") {
+        const data = record.data as { role?: string; content?: unknown };
+        let text: string | undefined;
+        if (typeof data.content === "string") {
+          text = data.content;
+        } else if (Array.isArray(data.content)) {
+          // content가 배열이면 text 타입 파트에서 첫 번째 텍스트 추출
+          for (const part of data.content as Array<{ type?: string; text?: string }>) {
+            if (part.type === "text" && typeof part.text === "string") {
+              text = part.text;
+              break;
+            }
+          }
+        }
+        if (text) {
+          const normalized = text.replace(/\n/g, " ").trim();
+          return normalized.length > 60 ? `${normalized.slice(0, 60)}…` : normalized;
+        }
+        return undefined;
+      }
+    } catch {
+      // 파싱 실패 줄 무시
+    }
+  }
+  return undefined;
+}
+
+/**
  * 세션 목록을 mtime 역순으로 반환한다.
  */
 export async function listSessions(): Promise<SessionSummary[]> {
@@ -174,8 +214,21 @@ export async function listSessions(): Promise<SessionSummary[]> {
     const path = sessionPath(id);
     try {
       const info = await stat(path);
-      const store = await SessionStore.load(id);
-      summaries.push({ id, meta: store.meta, mtime: info.mtime, path });
+      // 파일을 1회만 읽어 meta와 preview 모두 추출
+      const content = await readFile(path, "utf-8");
+      const lines = content.split("\n").filter((l) => l.trim());
+      if (lines.length === 0) continue;
+      const firstLine = JSON.parse(lines[0]!) as JournalRecord;
+      if (firstLine.type !== "meta") continue;
+      const meta = firstLine.data as SessionMeta;
+      const preview = extractPreview(content);
+      summaries.push({
+        id,
+        meta,
+        mtime: info.mtime,
+        path,
+        ...(preview !== undefined ? { preview } : {}),
+      });
     } catch {
       // 손상된 세션 파일은 무시
     }
