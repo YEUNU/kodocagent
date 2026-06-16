@@ -142,8 +142,8 @@
 | # | 작업 | 완료 기준 | 상태 |
 |---|---|---|---|
 | 0 | 타당성 스파이크 | Node 구동·exportHwpx 라운드트립·한컴 렌더 | ✅ 검증(2026-06-16) |
-| 1 | **rhwp 통합 기반 + 찾기/바꾸기** | `@rhwp/core` 외부 의존 + lazy-init WASM 래퍼 + `propose_find_replace`(rhwp `replaceAll`). **항상 `exportHwpx` 출력**(.hwp 입력도 .hwpx로 수렴) + **자가검증 게이트**(export 후 kordoc 재읽기로 완전 교체 확인, 미완이면 중단). 승인·diff·한컴 검증 | ✅ `3ed4e30` — 테스트 257, CLI dist 520KB(WASM 외부), .hwpx·.hwp→.hwpx 실파일 게이트 통과·한컴 개봉 확인 |
-| 2 | 표 구조 편집 | `propose_table_structure`(행·열 삽입/삭제·셀 병합) + **내용-anchor 지정**(인덱스 불일치 회피) + 자가검증 | ✅ `f17a600` — 테스트 279, 실파일 insertRow(3→4·병합보존)·mergeCells·anchor 오류 + 한컴 렌더 확인 |
+| 1 | **찾기/바꾸기** | `propose_find_replace` — 처음엔 rhwp `replaceAll`(`3ed4e30`)이었으나 rhwp 복잡문서 손상으로 **자체 XML 패치로 재구현**(`c6791f9`): section XML `<hp:t>` 텍스트 노드만 치환, 재직렬화 없음 → **모든 문서 무손실**, rhwp 미사용 | ✅ `c6791f9` — 테스트 295, 복잡문서(table-vpos-01) 11곳 치환·구조 완전 동일·한컴 정상 개봉(rhwp판은 손상시켰음) |
+| 2 | 표 구조 편집 | `propose_table_structure`(행·열 삽입/삭제·셀 병합). 현재 rhwp 기반(`f17a600`)+구조손실 게이트라 **복잡 문서는 거부**. → find/replace처럼 **자체 XML 패치로 재구현 예정**(복잡 문서에서도 동작, rhwp 제거 목표) | ◐ rhwp판 동작(단순 문서)·게이트 안전. XML 재구현 진행 중 |
 | 3 | 중첩표 셀 편집 | rhwp path API로 v0.4.0 #3 잔여(중첩표 셀) 해소 | 🚫 **차단(상류 대기)** — 중첩표는 복잡 문서에 존재하는데 rhwp `exportHwpx`가 그런 문서를 손상시킴(위 ⚠️). #2의 구조손실 게이트가 실문서에서 중단시키므로 안전하게 편집 불가. rhwp 상류가 복잡 문서 직렬화를 고쳐야 가능. (discovery는 kordoc이 중첩 텍스트를 노출해 가능했으나, 저장 손상이 더 근본 장애) |
 | ~~4~~ | ~~`.hwp` 직접 저장(`exportHwp`)~~ | **불가 — 보류**: rhwp `exportHwp`가 편집을 반영하지 못함(평문·제목 모두 미저장, 3회 실측 / rhwp #197 "HWPX→HWP 변환기 미완"). kordoc도 .hwp 쓰기 불가 → **현재 어떤 경로로도 .hwp 출력 불가**. .hwp 편집은 .hwpx로 수렴(현 정책). rhwp #197 완성 시 재검토 | 차단(상류 대기) |
 
