@@ -32,6 +32,7 @@ import { createCliApprovalHandler } from "./approve.js";
 const HELP_TEXT = `
 슬래시 명령:
   /model   — 프로바이더/모델 전환
+  /context — 현재 컨텍스트 사용량 표시
   /clear   — 새 세션 시작
   /help    — 이 도움말 표시
   /exit    — 종료
@@ -127,6 +128,8 @@ export async function runChat(opts: {
 
   let ctrlCCount = 0;
   let currentController: AbortController | null = null;
+  // 마지막 턴의 실제 입력(컨텍스트) 토큰 — 푸터 및 /context 표시용
+  let lastContextTokens = 0;
   // 턴 루프 바깥에서도 스피너 정리가 가능하도록 레퍼런스 유지
   let sharedActiveInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -183,6 +186,10 @@ export async function runChat(opts: {
 
     // 슬래시 명령 처리
     if (trimmed.startsWith("/")) {
+      if (trimmed.toLowerCase() === "/context") {
+        printContextUsage(lastContextTokens, config.maxContextTokens);
+        continue;
+      }
       const handled = await handleSlashCommand(trimmed, config, store, cwd, rl);
       if (handled === "exit") break;
       if (handled === "new-session") {
@@ -297,10 +304,12 @@ export async function runChat(opts: {
           // 렌더링은 createCliApprovalHandler가 이미 처리함 (이벤트 수신 로그용)
         } else if (event.type === "turn-complete") {
           if (event.usage) {
+            // 실제 입력 토큰 = 그 턴에 모델로 간 전체 컨텍스트 (가장 정확한 사용량)
+            lastContextTokens = event.usage.inputTokens;
             process.stdout.write(
-              chalk.dim(
-                `\n[입력 ${event.usage.inputTokens} 토큰 / 출력 ${event.usage.outputTokens} 토큰]\n`,
-              ),
+              `\n${formatContextUsage(event.usage.inputTokens, config.maxContextTokens)}  ${chalk.dim(
+                `출력 ${event.usage.outputTokens} 토큰`,
+              )}\n`,
             );
           }
         } else if (event.type === "error") {
@@ -372,6 +381,28 @@ function formatToolCall(toolName: string, args: unknown): string {
   const argPart = keyArg ? `(${keyArg})` : "";
   const full = `${toolName}${argPart}`;
   return full.length > MAX_LEN ? `${full.slice(0, MAX_LEN)}…` : full;
+}
+
+/** 컨텍스트 사용량을 "컨텍스트: 45.2k / 120k 토큰 (38%)" 형태로 색상 포함 렌더한다. */
+function formatContextUsage(used: number, budget: number): string {
+  const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+  const pct = budget > 0 ? Math.round((used / budget) * 100) : 0;
+  const text = `컨텍스트: ${fmt(used)} / ${fmt(budget)} 토큰 (${pct}%)`;
+  // 예산 근접 시 색으로 경고 (90%+ 빨강, 70%+ 노랑, 그 외 dim)
+  if (pct >= 90) return chalk.red(text);
+  if (pct >= 70) return chalk.yellow(text);
+  return chalk.dim(text);
+}
+
+/** /context 명령 — 현재 컨텍스트 사용량을 출력한다. */
+function printContextUsage(used: number, budget: number): void {
+  if (used <= 0) {
+    process.stdout.write(
+      chalk.dim("아직 측정된 컨텍스트가 없습니다 — 대화를 시작하면 표시됩니다.\n"),
+    );
+    return;
+  }
+  process.stdout.write(`${formatContextUsage(used, budget)}\n`);
 }
 
 /** 새 세션 스토어 생성 */
