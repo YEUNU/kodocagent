@@ -51,3 +51,14 @@ export function detectPii(text: string): PiiFinding[] {
 export function summarizePii(findings: PiiFinding[]): string {
   return findings.map((f) => `${f.type} ${f.count}건`).join(", ");
 }
+
+/** 텍스트의 모든 PII를 마스킹된 형태로 치환한다. {치환된 텍스트, 탐지 결과} 반환. */
+export function redactText(text: string): { text: string; findings: PiiFinding[] } {
+  if (!text) return { text: text ?? "", findings: [] };
+  let result = text;
+  const findings = detectPii(text); // reuse existing detection for the report
+  for (const { re, mask } of PATTERNS) {
+    result = result.replace(new RegExp(re.source, re.flags), (m) => mask(m));
+  }
+  return { text: result, findings };
+}

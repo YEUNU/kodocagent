@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectPii, summarizePii } from "./pii.js";
+import { detectPii, redactText, summarizePii } from "./pii.js";
 
 describe("detectPii", () => {
   it("주민등록번호를 탐지한다", () => {
@@ -98,6 +98,62 @@ describe("detectPii", () => {
     expect(phone?.count).toBe(3);
     // 유니크 2개
     expect(phone?.masked).toHaveLength(2);
+  });
+});
+
+describe("redactText", () => {
+  it("주민등록번호를 마스킹하고 원문이 사라진다", () => {
+    const { text, findings } = redactText("주민번호: 901215-1234567");
+    expect(text).not.toContain("901215-1234567");
+    expect(text).toContain("901215-1");
+    expect(findings.some((f) => f.type === "주민등록번호")).toBe(true);
+  });
+
+  it("전화번호를 마스킹하고 원문이 사라진다", () => {
+    const { text, findings } = redactText("연락처: 010-1234-5678");
+    expect(text).not.toContain("1234");
+    expect(text).toContain("****");
+    expect(findings.some((f) => f.type === "전화번호")).toBe(true);
+  });
+
+  it("이메일을 마스킹하고 원문이 사라진다", () => {
+    const { text, findings } = redactText("이메일: user@example.com");
+    expect(text).not.toContain("user@");
+    expect(text).toContain("***@example.com");
+    expect(findings.some((f) => f.type === "이메일")).toBe(true);
+  });
+
+  it("신용카드번호를 마스킹하고 원문이 사라진다", () => {
+    const { text, findings } = redactText("카드: 1234-5678-9012-3456");
+    expect(text).not.toContain("5678");
+    expect(text).toContain("1234-****-****-3456");
+    expect(findings.some((f) => f.type === "신용카드번호")).toBe(true);
+  });
+
+  it("PII가 없는 순수 텍스트는 변경 없이 반환되고 findings는 빈 배열", () => {
+    const { text, findings } = redactText("회의 3시, 예산 1,000,000원");
+    expect(text).toBe("회의 3시, 예산 1,000,000원");
+    expect(findings).toHaveLength(0);
+  });
+
+  it("빈 문자열은 빈 문자열과 빈 findings 반환", () => {
+    const { text, findings } = redactText("");
+    expect(text).toBe("");
+    expect(findings).toHaveLength(0);
+  });
+
+  it("두 번 실행해도 오류가 없다 (idempotent-ish)", () => {
+    const first = redactText("010-1234-5678 user@example.com");
+    expect(() => redactText(first.text)).not.toThrow();
+  });
+
+  it("여러 타입이 한 텍스트에 있으면 모두 마스킹된다", () => {
+    const raw = "010-1234-5678 user@example.com 901215-1234567";
+    const { text, findings } = redactText(raw);
+    expect(text).not.toContain("1234-5678");
+    expect(text).not.toContain("user@");
+    expect(text).not.toContain("901215-1234567");
+    expect(findings.length).toBeGreaterThanOrEqual(3);
   });
 });
 
