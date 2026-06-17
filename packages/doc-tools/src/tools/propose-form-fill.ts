@@ -12,8 +12,9 @@
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { kordocErrorMessage } from "@kodocagent/shared";
-import { extractFormFields, parse, patchHwpx } from "kordoc";
+import { extractFormFields, patchHwpx } from "kordoc";
 import { z } from "zod";
+import { parse } from "../kordoc-parse.js";
 import { hwpStructuralGuard, resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";

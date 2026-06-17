@@ -8,8 +8,8 @@
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { detectPii } from "@kodocagent/shared";
-import { parse } from "kordoc";
 import { z } from "zod";
+import { parse } from "../kordoc-parse.js";
 import { resolveSafePath } from "../security.js";
 import type { ToolContext, ToolDefinition } from "../types.js";
 

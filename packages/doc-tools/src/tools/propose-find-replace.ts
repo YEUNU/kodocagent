@@ -22,8 +22,8 @@
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import JSZip from "jszip";
-import { parse } from "kordoc";
 import { z } from "zod";
+import { parse } from "../kordoc-parse.js";
 import { hwpStructuralGuard, resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";

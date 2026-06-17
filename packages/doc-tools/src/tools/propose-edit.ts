@@ -13,8 +13,9 @@
 
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { compare, parse, patchHwp, patchHwpx } from "kordoc";
+import { compare, patchHwp, patchHwpx } from "kordoc";
 import { z } from "zod";
+import { parse } from "../kordoc-parse.js";
 import { markdownToDocx } from "../md-to-docx.js";
 import { resolveSafePath } from "../security.js";
 import {
