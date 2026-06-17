@@ -3,7 +3,8 @@
  * docs/SPEC.md §6, §7
  *
  * 지원 포맷:
- * - .hwp/.hwpx  : markdownToHwpx(newMd, { templateArrayBuffer: 원본 }) — 원본 서식 보존
+ * - .hwpx       : patchHwpx(원본, newMd) — 무손실 서식 보존 패치
+ * - .hwp        : patchHwp(원본, newMd) — 원본 .hwp 형식 그대로 제자리 편집
  * - .docx       : md→docx 재생성 (서식 손실 경고 포함)
  * - .md/.txt    : 그대로 저장
  *

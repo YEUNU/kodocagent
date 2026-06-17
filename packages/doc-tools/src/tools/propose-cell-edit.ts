@@ -2,9 +2,9 @@
  * propose_cell_edit 툴 — HWPX 표 셀 직접 XML 패치
  * docs/SPEC.md §6, §7
  *
- * 기존 propose_edit/propose_form_fill은 kordoc markdownToHwpx를 통해
- * 마크다운 라운드트립을 하기 때문에 병합 셀(cellSpan)이 소실된다.
- * 이 툴은 .hwpx ZIP 안의 section XML을 직접 수정하여 merges를 보존한다.
+ * propose_edit/propose_form_fill은 마크다운 기반 패치(patchHwpx)라
+ * 셀 좌표를 직접 지정하거나 병합(cellSpan) 구조를 다루기 어렵다.
+ * 이 툴은 .hwpx ZIP 안의 section XML을 직접 수정하여 좌표 지정·merges 보존을 지원한다.
  *
  * tableIndex 순서 정책:
  *   - kordoc parse().blocks의 table 블록 순서와 일치 (0-based)

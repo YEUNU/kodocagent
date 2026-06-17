@@ -174,7 +174,7 @@ describe(".hwp 경로 정책", () => {
     expect(willConvertFormat).toBe(".hwp → .hwpx");
   });
 
-  it(".hwp 정책: propose_edit에 .hwp 경로를 주면 proposal.willConvertFormat이 설정됨", async () => {
+  it(".hwp 정책: propose_edit는 .hwp를 .hwpx로 변환하지 않고 원본 형식 그대로 편집한다", async () => {
     const ctx = await makeCtx();
 
     // .hwpx 내용으로 .hwp 파일 생성 (테스트용)
@@ -191,16 +191,18 @@ describe(".hwp 경로 정책", () => {
       ctx,
     });
 
-    // 오류가 아니면 proposal 확인
+    // kordoc 3.x patchHwp 마이그레이션 이후 .hwp는 제자리 편집(변환 없음).
+    // 오류가 아니면 proposal이 .hwp 형식을 유지하고 변환을 표시하지 않아야 한다.
     if (typeof result !== "string") {
       const outcome = result as {
         proposal: import("@kodocagent/shared").Proposal;
         commit: () => Promise<string>;
       };
-      expect(outcome.proposal.willConvertFormat).toBe(".hwp → .hwpx");
-      expect(outcome.proposal.targetPath).toMatch(/\.hwpx$/);
+      expect(outcome.proposal.willConvertFormat).toBeUndefined();
+      expect(outcome.proposal.targetPath).toMatch(/\.hwp$/);
     }
-    // parse가 실패해도 테스트는 통과 (실제 .hwp 바이너리가 아니므로)
+    // 픽스처가 실제 .hwp(HWP5) 바이너리가 아니라 patchHwp parse가 실패할 수 있음 —
+    // 그 경우 result는 오류 문자열이며 위 단언은 건너뛴다.
   }, 30000);
 });
 

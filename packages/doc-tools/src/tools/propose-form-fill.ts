@@ -2,9 +2,9 @@
  * propose_form_fill 툴 — 문서 양식 필드 채우기 제안
  * docs/SPEC.md §6, §7
  *
- * SPEC 일탈: kordoc@2.7.6에는 fillForm이 export되지 않음.
+ * SPEC 일탈: kordoc에는 fillForm이 export되지 않음.
  * 대신 extractFormFields(blocks)로 현재 필드 목록을 읽고,
- * 마크다운에서 필드 값을 직접 치환하여 markdownToHwpx로 재생성한다.
+ * 마크다운에서 필드 값을 직접 치환한 뒤 patchHwpx로 무손실 패치한다.
  *
  * diff: 라벨: 이전 값 → 새 값 표
  */
