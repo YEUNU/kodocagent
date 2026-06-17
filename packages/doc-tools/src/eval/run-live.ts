@@ -19,7 +19,7 @@ import { KodocConfigSchema } from "@kodocagent/shared";
 import { parse } from "kordoc";
 import { createDocTools } from "../index.js";
 import { makeF1, makeF2, makeF3, makeF4, makeF5Hwpx } from "./fixtures.js";
-import { EVAL_SPECS, OPEN_EVAL_SPECS } from "./specs.js";
+import { EVAL_SPECS, type EvalSpec, HARD_EVAL_SPECS, OPEN_EVAL_SPECS } from "./specs.js";
 
 // ─────────────────────────────────────────────────────────
 // 픽스처 이름 매핑
@@ -104,10 +104,7 @@ interface RunResult {
   error?: string;
 }
 
-async function runSpec(
-  spec: (typeof EVAL_SPECS)[number] | (typeof OPEN_EVAL_SPECS)[number],
-  timeoutMs: number,
-): Promise<RunResult> {
+async function runSpec(spec: EvalSpec, timeoutMs: number): Promise<RunResult> {
   const startMs = Date.now();
   const toolsCalled: string[] = [];
   let assistantText = "";
@@ -252,9 +249,15 @@ export async function runAllSpecs(opts?: {
   timeoutMs?: number;
   /** true なら OPEN_EVAL_SPECS を使う */
   useOpenSpecs?: boolean;
+  /**
+   * 커스텀 스펙 배열을 직접 전달한다.
+   * 이 값이 있으면 useOpenSpecs 와 무관하게 해당 배열을 사용한다.
+   * HARD_EVAL_SPECS 등 별도 스펙 셋 실행에 사용한다.
+   */
+  specs?: EvalSpec[];
 }): Promise<SpecRunResult[]> {
   const timeoutMs = opts?.timeoutMs ?? 150_000;
-  const pool = opts?.useOpenSpecs ? OPEN_EVAL_SPECS : EVAL_SPECS;
+  const pool = opts?.specs ?? (opts?.useOpenSpecs ? OPEN_EVAL_SPECS : EVAL_SPECS);
   const selected = opts?.specIds ? pool.filter((s) => opts.specIds?.includes(s.id)) : pool;
   // 자동 검증 불가 스펙(예: 양식 개체 값은 markdown 미노출)은 pass/fail 집계에서 제외
   const specs = selected.filter((s) => {

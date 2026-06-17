@@ -24,7 +24,7 @@ export {
   makeF5Md,
 } from "./fixtures.js";
 export type { AssertExtra, EvalSpec } from "./specs.js";
-export { EVAL_SPECS, OPEN_EVAL_SPECS } from "./specs.js";
+export { EVAL_SPECS, flaggedLimitation, HARD_EVAL_SPECS, OPEN_EVAL_SPECS } from "./specs.js";
 
 // ─────────────────────────────────────────────────────────
 // Stage 2 스텁 — 실모델 에이전트 평가 (미구현)
