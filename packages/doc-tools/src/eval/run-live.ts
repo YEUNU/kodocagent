@@ -49,6 +49,41 @@ async function autoApprove(): Promise<ApprovalResult> {
 }
 
 // ─────────────────────────────────────────────────────────
+// 모델 선택 (env로 파라미터화 — 멀티 프로바이더 교차 검증)
+// ─────────────────────────────────────────────────────────
+
+type EvalProvider = "anthropic" | "openai" | "google";
+
+const DEFAULT_MODELS: Record<EvalProvider, string> = {
+  anthropic: "claude-sonnet-4-6",
+  openai: "gpt-5.4",
+  google: "gemini-3.5-flash",
+};
+
+/**
+ * KODOC_EVAL_PROVIDER / KODOC_EVAL_MODEL 환경변수로 평가 모델을 결정한다.
+ * 기본값은 anthropic / claude-sonnet-4-6.
+ * 키는 각 프로바이더의 표준 환경변수에서 읽는다(openai는 OPENAI_API_KEY).
+ */
+function resolveEvalModel(): {
+  provider: EvalProvider;
+  model: string;
+  apiKeys: { anthropic: string | null; openai: string | null; google: string | null };
+} {
+  const provider = (process.env.KODOC_EVAL_PROVIDER as EvalProvider) || "anthropic";
+  const model = process.env.KODOC_EVAL_MODEL || DEFAULT_MODELS[provider];
+  return {
+    provider,
+    model,
+    apiKeys: {
+      anthropic: process.env.ANTHROPIC_API_KEY ?? null,
+      openai: process.env.OPENAI_API_KEY ?? null,
+      google: process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? null,
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────
 // 단일 spec 실행
 // ─────────────────────────────────────────────────────────
 
@@ -84,11 +119,12 @@ async function runSpec(spec: (typeof EVAL_SPECS)[number], timeoutMs: number): Pr
     const filePath = join(cwd, fileName);
     await writeFile(filePath, fixture.bytes);
 
-    // 2. AgentSession 구성 (CLI chat.ts 패턴 미러)
+    // 2. AgentSession 구성 (CLI chat.ts 패턴 미러) — provider/model은 env로 파라미터화
+    const { provider, model: modelId, apiKeys } = resolveEvalModel();
     const config = KodocConfigSchema.parse({
-      provider: "anthropic",
-      model: "claude-sonnet-4-6",
-      apiKeys: { anthropic: process.env.ANTHROPIC_API_KEY ?? null, openai: null, google: null },
+      provider,
+      model: modelId,
+      apiKeys,
       maxSteps: 16,
       maxContextTokens: 120000,
     });
@@ -102,8 +138,8 @@ async function runSpec(spec: (typeof EVAL_SPECS)[number], timeoutMs: number): Pr
 
     const store = await SessionStore.create({
       cwd,
-      provider: "anthropic",
-      model: "claude-sonnet-4-6",
+      provider,
+      model: modelId,
       createdAt: new Date().toISOString(),
     });
 
@@ -209,13 +245,14 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    process.stderr.write("오류: ANTHROPIC_API_KEY 환경변수가 없습니다.\n");
+  const { provider, model: modelId, apiKeys } = resolveEvalModel();
+  if (!apiKeys[provider]) {
+    process.stderr.write(`오류: ${provider} API 키 환경변수가 없습니다.\n`);
     process.exit(1);
   }
 
   process.stdout.write("=== KODOC LIVE EVAL (Stage 2) ===\n");
+  process.stdout.write(`모델: ${provider}/${modelId}\n`);
   process.stdout.write(`스펙 수: ${EVAL_SPECS.length}\n\n`);
 
   const results = await runAllSpecs();

@@ -14,7 +14,13 @@ import { runAllSpecs } from "./run-live.js";
 import { EVAL_SPECS } from "./specs.js";
 
 const LIVE = process.env.KODOC_EVAL_LIVE === "1";
-const HAS_KEY = !!process.env.ANTHROPIC_API_KEY;
+const PROVIDER = process.env.KODOC_EVAL_PROVIDER ?? "anthropic";
+const PROVIDER_KEY_ENV: Record<string, string> = {
+  anthropic: "ANTHROPIC_API_KEY",
+  openai: "OPENAI_API_KEY",
+  google: "GOOGLE_GENERATIVE_AI_API_KEY",
+};
+const HAS_KEY = !!process.env[PROVIDER_KEY_ENV[PROVIDER] ?? "ANTHROPIC_API_KEY"];
 
 describe("Stage 2 — 실모델 에이전트 평가", () => {
   for (const spec of EVAL_SPECS) {
