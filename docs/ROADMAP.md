@@ -29,6 +29,7 @@
 | R7 | **v0.4.3 발행 — 되돌리기(list_backups/restore_backup)·작업문서 기억(openDocuments)·찾기바꾸기 diff 미리보기** (UX 감사 TOP3, 실모델 end-to-end 검증) | OIDC 자동(2026-06-17) |
 | R8 | **v0.4.4 발행 — --print 읽기전용·찾기바꾸기 폴백 안내·능력 소개(/help)·시트 .xls→.xlsx** (UX 감사 잔여 백로그 4건) | OIDC 자동(2026-06-17) |
 | R9 | **v0.4.5 발행 — 안전·보존 가드**(편집 안전 규칙 프롬프트·scan_pii·PII 승인경고) **+ 버그수정**(openDocuments 복원·restore 모호매칭) (32항목 체크리스트 '원문 안전 보존' 대응, 실모델 e2e 검증) | OIDC 자동(2026-06-17) |
+| R10 | **v0.5.0 발행 — 개인정보 비식별(propose_redact_pii)·구조적 위치 검색(find_in_document)** (OAuth 제외, find↔cell_edit 좌표 일치 실증) | OIDC 자동(2026-06-17) |
 | 운영 | CI 그린(3 OS × Node 22/24), Actions v6, TS6 의존성 최신화 | `4b159d7` |
 | 검증 | 실키 E2E(2026-06-15): **OpenAI gpt-5.5 + Google gemini-3.5-flash + Anthropic claude-sonnet-4-6** 읽기·요약(툴콜)·쓰기 거절+원본 무변경; **법령 MCP(korean-law)** 연동으로 근로기준법 제60조 조회→취업규칙 위반 식별·인용 성공 | — |
 

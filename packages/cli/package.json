@@ -1,6 +1,6 @@
 {
   "name": "@kodocagent/cli",
-  "version": "0.4.5",
+  "version": "0.5.0",
   "description": "한국어 특화 문서 AI 에이전트 — HWP/HWPX/DOCX/XLSX 읽기·수정, 한국 법령 기반 검토",
   "type": "module",
   "license": "MIT",
