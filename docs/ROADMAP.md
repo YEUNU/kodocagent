@@ -32,6 +32,7 @@
 | R10 | **v0.5.0 발행 — 개인정보 비식별(propose_redact_pii)·구조적 위치 검색(find_in_document)** (OAuth 제외, find↔cell_edit 좌표 일치 실증) | OIDC 자동(2026-06-17) |
 | R11 | **v0.6.0 발행 — 한글(.hwp) 직접 편집·무손실 편집(kordoc 3.x 마이그레이션)** (`@clazic/kordoc@2.7.6`→`kordoc@3.1.1`, `patchHwp`로 .hwp 제자리 편집·`patchHwpx` 무손실, 차단 항목 #4 해제, 실문서 e2e·게이트 그린) | OIDC 자동(2026-06-17) |
 | R12 | **v0.6.1 발행 — 에이전트 편집 행동 규칙 강화**(정보부족→질문·날조금지 / 설명말고 실제 propose_* / 일괄 완결성·자가확인) **+ `.hwp` 구조편집 안내 가드** (의도충실도 검증 하네스로 실모델 e2e — claude 원문 6/6 안정, gpt-5.4 불안정) | OIDC 자동(2026-06-17) |
+| R13 | **v0.6.2 발행 — 능력·한계 grounding**(요청을 시스템 능력으로 판단 — 미지원 기능은 어설피 시도 말고 솔직히 flag; '가능' 목록은 도구 레지스트리에서 자동 도출·드리프트 방지) (실모델 e2e — 하드티어 능력 flag claude 3/3, 검증 하네스를 실 .hwpx XML 아티팩트+LLM-judge로 강화·EVAL_SPECS 9/9) | OIDC 자동(2026-06-17) |
 | 운영 | CI 그린(3 OS × Node 22/24), Actions v6, TS6 의존성 최신화 | `4b159d7` |
 | 검증 | 실키 E2E(2026-06-15): **OpenAI gpt-5.5 + Google gemini-3.5-flash + Anthropic claude-sonnet-4-6** 읽기·요약(툴콜)·쓰기 거절+원본 무변경; **법령 MCP(korean-law)** 연동으로 근로기준법 제60조 조회→취업규칙 위반 식별·인용 성공 | — |
 
