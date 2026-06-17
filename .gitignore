@@ -221,6 +221,8 @@ __marimo__/
 node_modules/
 # F6 실문서 검증 코퍼스 (외부 라이선스 바이너리 — 커밋 안 함)
 eval-docs/
+# live-artifacts 하네스가 산출하는 편집 전/후 문서 (한컴 뷰어 열림 검증용 — 커밋 안 함)
+eval-out/
 *.tsbuildinfo
 coverage/
 .DS_Store

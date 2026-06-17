@@ -114,10 +114,25 @@ interface RunResult {
   assistantText: string;
   /** 원본 fixture markdown vs 최종 편집 후 markdown 비교 결과 */
   docChanged: boolean;
+  /** 작업 파일 이름 (예: report.hwpx) */
+  fileName?: string;
+  /** persistDir 가 주어졌을 때 보존된 편집 후 파일 경로 */
+  editedPath?: string;
+  /** persistDir 가 주어졌을 때 보존된 원본 파일 경로 */
+  originalPath?: string;
   error?: string;
 }
 
-async function runSpec(spec: EvalSpec, timeoutMs: number): Promise<RunResult> {
+/**
+ * 단일 spec 실행.
+ * persistDir 가 주어지면 편집 전(orig__) / 편집 후(<id>__) 바이트를 그 폴더에 보존한다.
+ * (Hancom Office Viewer 실파일 열림 검증 등 외부 확인용)
+ */
+export async function runSpec(
+  spec: EvalSpec,
+  timeoutMs: number,
+  persistDir?: string,
+): Promise<RunResult> {
   const startMs = Date.now();
   const toolsCalled: string[] = [];
   let assistantText = "";
@@ -217,6 +232,20 @@ async function runSpec(spec: EvalSpec, timeoutMs: number): Promise<RunResult> {
     // 7. docChanged 비교
     const docChanged = originalMarkdown !== markdown;
 
+    // 7b. 아티팩트 보존 (persistDir) — 외부 도구(한컴 뷰어 등) 열림 검증용
+    let editedPath: string | undefined;
+    let originalPath: string | undefined;
+    if (persistDir) {
+      const safeId = spec.id.replace(/[^0-9A-Za-z]+/g, "");
+      const dot = fileName.lastIndexOf(".");
+      const ext = dot >= 0 ? fileName.slice(dot) : "";
+      const base = dot >= 0 ? fileName.slice(0, dot) : fileName;
+      editedPath = join(persistDir, `${safeId}__${base}${ext}`);
+      originalPath = join(persistDir, `orig__${base}${ext}`);
+      await writeFile(editedPath, editedBytes);
+      await writeFile(originalPath, Buffer.from(fixture.bytes));
+    }
+
     // 8. spec.assert 판정 — async assert 지원 (아티팩트 검사, LLM judge)
     const extra = {
       assistantText,
@@ -247,6 +276,9 @@ async function runSpec(spec: EvalSpec, timeoutMs: number): Promise<RunResult> {
       durationMs: Date.now() - startMs,
       assistantText,
       docChanged,
+      fileName,
+      editedPath,
+      originalPath,
     };
   } catch (err: unknown) {
     const error = err instanceof Error ? err.message : String(err);
