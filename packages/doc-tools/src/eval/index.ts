@@ -22,7 +22,18 @@ export {
   makeF4,
   makeF5Hwpx,
   makeF5Md,
+  makeF6D1,
+  makeF6D3,
 } from "./fixtures.js";
+export {
+  hwpxContainsText,
+  hwpxFootnoteTexts,
+  hwpxFormObjectValue,
+  hwpxRawXml,
+  hwpxTopLevelTableCount,
+} from "./inspect.js";
+export type { JudgeInput, JudgeResult } from "./judge.js";
+export { judgeResult } from "./judge.js";
 export type { AssertExtra, EvalSpec } from "./specs.js";
 export { EVAL_SPECS, flaggedLimitation, HARD_EVAL_SPECS, OPEN_EVAL_SPECS } from "./specs.js";
 

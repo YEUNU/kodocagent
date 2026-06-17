@@ -18,8 +18,8 @@ import type { ApprovalResult } from "@kodocagent/shared";
 import { KodocConfigSchema } from "@kodocagent/shared";
 import { parse } from "kordoc";
 import { createDocTools } from "../index.js";
-import { makeF1, makeF2, makeF3, makeF4, makeF5Hwpx } from "./fixtures.js";
-import { EVAL_SPECS, type EvalSpec, HARD_EVAL_SPECS, OPEN_EVAL_SPECS } from "./specs.js";
+import { makeF1, makeF2, makeF3, makeF4, makeF5Hwpx, makeF6D1, makeF6D3 } from "./fixtures.js";
+import { EVAL_SPECS, type EvalSpec, OPEN_EVAL_SPECS } from "./specs.js";
 
 // ─────────────────────────────────────────────────────────
 // 픽스처 이름 매핑
@@ -33,6 +33,17 @@ const FIXTURE_MAKERS: Record<string, FixtureMaker> = {
   F3: makeF3,
   F4: makeF4,
   F5: makeF5Hwpx,
+  // F6 픽스처는 async null 반환 가능 — runSpec에서 null 처리
+  F6D3: async () => {
+    const f = await makeF6D3();
+    if (!f) throw new Error("F6D3 픽스처 없음 — eval-docs/f6/d3_exam_social.hwpx 필요");
+    return f;
+  },
+  F6D1: async () => {
+    const f = await makeF6D1();
+    if (!f) throw new Error("F6D1 픽스처 없음 — eval-docs/f6/d1_unikorea_press.hwp 필요");
+    return f;
+  },
 };
 
 /** 파일명 (파일 시스템에 쓰는 구체적 이름) */
@@ -42,6 +53,8 @@ const FILE_NAMES: Record<string, string> = {
   F3: "form.hwpx",
   F4: "formobj.hwpx",
   F5: "notice.hwpx",
+  F6D3: "d3_exam_social.hwpx",
+  F6D1: "d1_unikorea_press.hwp",
 };
 
 // ─────────────────────────────────────────────────────────
@@ -204,9 +217,21 @@ async function runSpec(spec: EvalSpec, timeoutMs: number): Promise<RunResult> {
     // 7. docChanged 비교
     const docChanged = originalMarkdown !== markdown;
 
-    // 8. spec.assert 판정 — 새 시그니처(extra 옵션)도 지원
-    const extra = { assistantText, docChanged, originalMarkdown };
-    const { pass, detail } = spec.assert(markdown, extra);
+    // 8. spec.assert 판정 — async assert 지원 (아티팩트 검사, LLM judge)
+    const extra = {
+      assistantText,
+      docChanged,
+      originalMarkdown,
+      afterBytes: new Uint8Array(
+        editedBytes.buffer,
+        editedBytes.byteOffset,
+        editedBytes.byteLength,
+      ),
+      originalBytes: fixture.bytes,
+      fileName,
+    };
+    const assertResult = spec.assert(markdown, extra);
+    const { pass, detail } = assertResult instanceof Promise ? await assertResult : assertResult;
 
     // 9. assistantText 출력 (250자 truncate)
     const textPreview = assistantText.slice(0, 250) + (assistantText.length > 250 ? "…" : "");

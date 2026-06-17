@@ -140,6 +140,9 @@ importers:
       '@kodocagent/core':
         specifier: workspace:*
         version: link:../core
+      ai:
+        specifier: ^6.0.199
+        version: 6.0.199(zod@4.4.3)
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(postcss@8.5.15)(typescript@6.0.3)

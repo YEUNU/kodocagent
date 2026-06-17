@@ -287,3 +287,59 @@ export const FIXTURE_MARKDOWN = {
   F4: F4_MARKDOWN,
   F5: F5_MARKDOWN,
 } as const;
+
+// ─────────────────────────────────────────────────────────
+// F6 — 실 공공문서 픽스처 (gitignored eval-docs/f6/)
+// ─────────────────────────────────────────────────────────
+
+import { existsSync } from "node:fs";
+import { readFile as fsReadFile } from "node:fs/promises";
+import { dirname, join as pathJoin, resolve as pathResolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+function resolveF6Dir(): string {
+  const CORPUS_SUBDIR = "eval-docs/f6";
+  const fromCwd = pathJoin(process.cwd(), CORPUS_SUBDIR);
+  if (existsSync(fromCwd)) return fromCwd;
+  // import.meta.url 기준 — packages/doc-tools/src/eval/fixtures.ts → 4단계 위가 repo root
+  const thisFile = fileURLToPath(import.meta.url);
+  const repoRoot = pathResolve(dirname(thisFile), "../../../..");
+  const fromMeta = pathJoin(repoRoot, CORPUS_SUBDIR);
+  if (existsSync(fromMeta)) return fromMeta;
+  return fromCwd;
+}
+
+/**
+ * F6/D3 — 실 공공문서: d3_exam_social.hwpx (각주+머리말+표 46개)
+ *
+ * 파일이 없으면 null을 반환한다 — 의존 스펙은 파일 부재 시 SKIP해야 한다.
+ */
+export async function makeF6D3(): Promise<Fixture | null> {
+  const f6Dir = resolveF6Dir();
+  const d3Path = pathJoin(f6Dir, "d3_exam_social.hwpx");
+  if (!existsSync(d3Path)) return null;
+  const buf = await fsReadFile(d3Path);
+  return {
+    name: "F6_D3_exam_social",
+    ext: ".hwpx",
+    bytes: new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength),
+  };
+}
+
+/**
+ * F6/D1 — 실 공공문서: d1_unikorea_press.hwp (통일부 보도자료)
+ *
+ * 파일이 없으면 null을 반환한다.
+ */
+export async function makeF6D1(): Promise<Fixture | null> {
+  const f6Dir = resolveF6Dir();
+  const d1Path = pathJoin(f6Dir, "d1_unikorea_press.hwp");
+  if (!existsSync(d1Path)) return null;
+  const buf = await fsReadFile(d1Path);
+  return {
+    name: "F6_D1_unikorea_press",
+    // .hwp은 Fixture.ext 타입에 없으므로 .hwpx 로 캐스팅 (실 확장자는 .hwp이나 bytes는 그대로)
+    ext: ".hwpx",
+    bytes: new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength),
+  };
+}

@@ -47,7 +47,7 @@ describe("픽스처 생성 및 kordoc parse round-trip", () => {
     expect(result.success).toBe(true);
   });
 
-  it("F5 (md) — .md 바이트 비어 있지 않음", () => {
+  it("F5 (md) — .md 바이트 비어 있지 않음", async () => {
     const f = makeF5Md();
     expect(f.ext).toBe(".md");
     expect(f.bytes.length).toBeGreaterThan(0);
@@ -68,7 +68,7 @@ describe("픽스처 생성 및 kordoc parse round-trip", () => {
     const zip = await JSZip.loadAsync(f.bytes);
     const sectionEntry = zip.file("Contents/section0.xml");
     expect(sectionEntry).toBeDefined();
-    const sectionXml = await sectionEntry!.async("string");
+    const sectionXml = await sectionEntry?.async("string");
     expect(sectionXml).toContain('colSpan="2"');
   });
 
@@ -97,7 +97,7 @@ describe("픽스처 생성 및 kordoc parse round-trip", () => {
     const zip = await JSZip.loadAsync(f.bytes);
     const sectionEntry = zip.file("Contents/section0.xml");
     expect(sectionEntry).toBeDefined();
-    const sectionXml = await sectionEntry!.async("string");
+    const sectionXml = await sectionEntry?.async("string");
     expect(sectionXml).toContain('name="성명입력"');
     expect(sectionXml).toContain('name="부서선택"');
     expect(sectionXml).toContain('name="동의여부"');
@@ -109,7 +109,7 @@ describe("픽스처 생성 및 kordoc parse round-trip", () => {
   it("F4 — 콤보박스 항목이 정상 주입됐는지 확인", async () => {
     const f = await makeF4();
     const zip = await JSZip.loadAsync(f.bytes);
-    const sectionXml = await zip.file("Contents/section0.xml")!.async("string");
+    const sectionXml = await zip.file("Contents/section0.xml")?.async("string");
     expect(sectionXml).toContain('value="총무팀"');
     expect(sectionXml).toContain('value="기획팀"');
     expect(sectionXml).toContain('value="개발팀"');
@@ -126,21 +126,21 @@ describe("spec #3 오탈자·띄어쓰기 assert", () => {
   const spec = EVAL_SPECS.find((s) => s.id === "#3");
   if (!spec) throw new Error("spec #3 not found");
 
-  it("BEFORE: 오탈자 '재고', 띄어쓰기 오류 → fail", () => {
+  it("BEFORE: 오탈자 '재고', 띄어쓰기 오류 → fail", async () => {
     const before = "국민 문화 접근성을 재고하고, AI 도입 효과를 확대 합니다.";
-    const r = spec.assert(before);
+    const r = await spec.assert(before);
     expect(r.pass).toBe(false);
   });
 
-  it("AFTER: '제고' 있고 '재고'·'확대 합니다' 없음 → pass", () => {
+  it("AFTER: '제고' 있고 '재고'·'확대 합니다' 없음 → pass", async () => {
     const after = "국민 문화 접근성을 제고하고, AI 도입 효과를 확대합니다.";
-    const r = spec.assert(after);
+    const r = await spec.assert(after);
     expect(r.pass).toBe(true);
   });
 
-  it("'제고' 없으면 → fail (오탈자만 남아 있는 경우)", () => {
+  it("'제고' 없으면 → fail (오탈자만 남아 있는 경우)", async () => {
     const noFix = "국민 문화 접근성을 확대합니다."; // 재고도 없고 제고도 없음
-    const r = spec.assert(noFix);
+    const r = await spec.assert(noFix);
     expect(r.pass).toBe(false);
     expect(r.detail).toContain("제고");
   });
@@ -152,21 +152,21 @@ describe("spec #4 날짜 통일 assert", () => {
   const spec = EVAL_SPECS.find((s) => s.id === "#4");
   if (!spec) throw new Error("spec #4 not found");
 
-  it("BEFORE: 구 날짜 패턴 혼재 → fail", () => {
+  it("BEFORE: 구 날짜 패턴 혼재 → fail", async () => {
     const before = "2026년 1월 1일 기준. 26.1.1 이후 시작. 시작일: 2026-01-01.";
-    const r = spec.assert(before);
+    const r = await spec.assert(before);
     expect(r.pass).toBe(false);
   });
 
-  it("AFTER: YYYY. MM. DD. 형식만 존재 → pass", () => {
+  it("AFTER: YYYY. MM. DD. 형식만 존재 → pass", async () => {
     const after = "2026. 01. 01. 기준. 2026. 01. 01. 이후 시작. 시작일: 2026. 01. 01.";
-    const r = spec.assert(after);
+    const r = await spec.assert(after);
     expect(r.pass).toBe(true);
   });
 
-  it("구 패턴 제거됐지만 새 패턴 없으면 → fail", () => {
+  it("구 패턴 제거됐지만 새 패턴 없으면 → fail", async () => {
     const noNew = "날짜 없는 문서입니다.";
-    const r = spec.assert(noNew);
+    const r = await spec.assert(noNew);
     expect(r.pass).toBe(false);
     expect(r.detail).toContain("YYYY. MM. DD.");
   });
@@ -178,21 +178,21 @@ describe("spec #6 금액 콤마 assert", () => {
   const spec = EVAL_SPECS.find((s) => s.id === "#6");
   if (!spec) throw new Error("spec #6 not found");
 
-  it("BEFORE: 콤마 없는 1500000 → fail", () => {
+  it("BEFORE: 콤마 없는 1500000 → fail", async () => {
     const before = "| 콘텐츠 제작비 | 1500000 |";
-    const r = spec.assert(before);
+    const r = await spec.assert(before);
     expect(r.pass).toBe(false);
   });
 
-  it("AFTER: 1,500,000 있고 1500000 없음 → pass", () => {
-    const after = "| 콘텐츠 제작비 | 1,500,000 |";
-    const r = spec.assert(after);
+  it("AFTER: 세 금액 모두 콤마 형식 → pass", async () => {
+    const after = "| 콘텐츠 제작비 | 1,500,000 |\n| 운영비 | 230,000 |\n총액은 1,730,000원입니다.";
+    const r = await spec.assert(after);
     expect(r.pass).toBe(true);
   });
 
-  it("콤마 형식이 없으면 → fail", () => {
+  it("콤마 형식이 없으면 → fail", async () => {
     const noComma = "| 콘텐츠 제작비 | 150만원 |";
-    const r = spec.assert(noComma);
+    const r = await spec.assert(noComma);
     expect(r.pass).toBe(false);
     expect(r.detail).toContain("1,500,000");
   });
@@ -204,21 +204,21 @@ describe("spec #12 부서명 치환 assert", () => {
   const spec = EVAL_SPECS.find((s) => s.id === "#12");
   if (!spec) throw new Error("spec #12 not found");
 
-  it("BEFORE: 구 부서명 '문화기획팀' 존재 → fail", () => {
+  it("BEFORE: 구 부서명 '문화기획팀' 존재 → fail", async () => {
     const before = "문화기획팀이 주관합니다.";
-    const r = spec.assert(before);
+    const r = await spec.assert(before);
     expect(r.pass).toBe(false);
   });
 
-  it("AFTER: '문화사업팀' 있고 '문화기획팀' 없음 → pass", () => {
+  it("AFTER: '문화사업팀' 있고 '문화기획팀' 없음 → pass", async () => {
     const after = "문화사업팀이 주관합니다.";
-    const r = spec.assert(after);
+    const r = await spec.assert(after);
     expect(r.pass).toBe(true);
   });
 
-  it("구 이름 제거됐지만 새 이름 없으면 → fail", () => {
+  it("구 이름 제거됐지만 새 이름 없으면 → fail", async () => {
     const noNew = "담당팀이 주관합니다.";
-    const r = spec.assert(noNew);
+    const r = await spec.assert(noNew);
     expect(r.pass).toBe(false);
     expect(r.detail).toContain("문화사업팀");
   });
@@ -230,21 +230,21 @@ describe("spec #15 법령명 변경 assert", () => {
   const spec = EVAL_SPECS.find((s) => s.id === "#15");
   if (!spec) throw new Error("spec #15 not found");
 
-  it("BEFORE: 구 법령명 '구 정보통신망법' 존재 → fail", () => {
+  it("BEFORE: 구 법령명 '구 정보통신망법' 존재 → fail", async () => {
     const before = "구 정보통신망법 제22조에 따라";
-    const r = spec.assert(before);
+    const r = await spec.assert(before);
     expect(r.pass).toBe(false);
   });
 
-  it("AFTER: 현행 법령명 있고 구 명칭 없음 → pass", () => {
+  it("AFTER: 현행 법령명 있고 구 명칭 없음 → pass", async () => {
     const after = "정보통신망 이용촉진 및 정보보호 등에 관한 법률 제22조에 따라";
-    const r = spec.assert(after);
+    const r = await spec.assert(after);
     expect(r.pass).toBe(true);
   });
 
-  it("구 명칭 제거됐지만 현행명 없으면 → fail", () => {
+  it("구 명칭 제거됐지만 현행명 없으면 → fail", async () => {
     const noNew = "정보통신망 관련 법률 제22조에 따라";
-    const r = spec.assert(noNew);
+    const r = await spec.assert(noNew);
     expect(r.pass).toBe(false);
     expect(r.detail).toContain("정보통신망 이용촉진");
   });
@@ -256,30 +256,30 @@ describe("spec #28 PII 마스킹 assert", () => {
   const spec = EVAL_SPECS.find((s) => s.id === "#28");
   if (!spec) throw new Error("spec #28 not found");
 
-  it("BEFORE: 원문 주민번호·전화·카드 패턴 존재 → fail", () => {
+  it("BEFORE: 원문 주민번호·전화·카드 패턴 존재 → fail", async () => {
     const before = [
       "주민등록번호: 900101-1234567",
       "전화번호: 010-1234-5678",
       "카드번호: 1234-5678-9012-3456",
     ].join("\n");
-    const r = spec.assert(before);
+    const r = await spec.assert(before);
     expect(r.pass).toBe(false);
   });
 
-  it("AFTER: 마스킹 처리 후 원문 패턴 없음 → pass", () => {
+  it("AFTER: 마스킹 처리 후 원문 패턴 없음 → pass", async () => {
     const after = [
       "주민등록번호: 900101-1*******",
       "전화번호: 010-****-5678",
       "카드번호: 1234-****-****-3456",
       "이메일: h***@example.com",
     ].join("\n");
-    const r = spec.assert(after);
+    const r = await spec.assert(after);
     expect(r.pass).toBe(true);
   });
 
-  it("원문 제거됐지만 마스킹 흔적 없으면 → fail", () => {
+  it("원문 제거됐지만 마스킹 흔적 없으면 → fail", async () => {
     const noMask = "개인정보가 삭제되었습니다.";
-    const r = spec.assert(noMask);
+    const r = await spec.assert(noMask);
     expect(r.pass).toBe(false);
     expect(r.detail).toContain("마스킹");
   });
@@ -295,16 +295,16 @@ describe("spec #S1 셀 편집 assert", () => {
   const spec = EVAL_SPECS.find((s) => s.id === "#S1");
   if (!spec) throw new Error("spec #S1 not found");
 
-  it("BEFORE: '홍길동' 없음 → fail", () => {
+  it("BEFORE: '홍길동' 없음 → fail", async () => {
     const before = "| 성명 |  |\n| 생년월일 |  |";
-    const r = spec.assert(before);
+    const r = await spec.assert(before);
     expect(r.pass).toBe(false);
     expect(r.detail).toContain("홍길동");
   });
 
-  it("AFTER: '홍길동' 존재 → pass", () => {
+  it("AFTER: '홍길동' 존재 → pass", async () => {
     const after = "| 성명 | 홍길동 |\n| 생년월일 |  |";
-    const r = spec.assert(after);
+    const r = await spec.assert(after);
     expect(r.pass).toBe(true);
   });
 });
@@ -315,38 +315,23 @@ describe("spec #S2 표 구조 assert", () => {
   const spec = EVAL_SPECS.find((s) => s.id === "#S2");
   if (!spec) throw new Error("spec #S2 not found");
 
-  it("BEFORE: 5개 이하 행(원본 그대로) → fail", () => {
-    // F3 원본: 헤더 + 구분선 + 3행 데이터 = 5줄
-    const before = [
-      "| 신청서 양식 |  |",
-      "| --- | --- |",
-      "| 성명 |  |",
-      "| 생년월일 |  |",
-      "| 주소 | 서울시 종로구 종로 1가 |",
-    ].join("\n");
-    const r = spec.assert(before);
+  it("바이트(아티팩트) 없으면 fail", async () => {
+    const r = await spec.assert("");
     expect(r.pass).toBe(false);
-    expect(r.detail).toContain("6개 이상");
   });
 
-  it("AFTER: 행이 추가되어 6개 이상 → pass", () => {
-    const after = [
-      "| 신청서 양식 |  |",
-      "| --- | --- |",
-      "| 성명 |  |",
-      "| 생년월일 |  |",
-      "| 주소 | 서울시 종로구 종로 1가 |",
-      "| 비고 |  |",
-    ].join("\n");
-    const r = spec.assert(after);
-    expect(r.pass).toBe(true);
-    expect(r.detail).toContain("추가");
-  });
-
-  it("표 행 0개인 경우(표 없음) → fail", () => {
-    const noTable = "표가 없는 문서입니다.";
-    const r = spec.assert(noTable);
+  it("원본==편집후(행 수 동일)면 fail (XML <hp:tr> 비교)", async () => {
+    const f3 = await makeF3();
+    const r = await spec.assert("", {
+      assistantText: "",
+      docChanged: false,
+      originalMarkdown: "",
+      afterBytes: f3.bytes,
+      originalBytes: f3.bytes,
+      fileName: "form.hwpx",
+    });
     expect(r.pass).toBe(false);
+    expect(r.detail).toContain("행 추가 안 됨");
   });
 });
 
@@ -356,21 +341,21 @@ describe("spec #S3 양식 개체 assert", () => {
   const spec = EVAL_SPECS.find((s) => s.id === "#S3");
   if (!spec) throw new Error("spec #S3 not found");
 
-  it("BEFORE: '홍길동' 없음 → fail", () => {
+  it("BEFORE: '홍길동' 없음 → fail", async () => {
     const before = "# 양식 개체 테스트 문서\n\n아래 양식을 작성해 주세요.";
-    const r = spec.assert(before);
+    const r = await spec.assert(before);
     expect(r.pass).toBe(false);
     expect(r.detail).toContain("홍길동");
   });
 
-  it("AFTER: '홍길동'이 마크다운에 포함된 경우 → pass", () => {
+  it("AFTER: '홍길동'이 마크다운에 포함된 경우 → pass", async () => {
     // kordoc가 양식 개체 텍스트를 마크다운에 포함시키는 구현이면 통과
     const after = "# 양식 개체 테스트 문서\n\n홍길동\n\n아래 양식을 작성해 주세요.";
-    const r = spec.assert(after);
+    const r = await spec.assert(after);
     expect(r.pass).toBe(true);
   });
 
-  it("spec tier가 'structural'인지 확인", () => {
+  it("spec tier가 'structural'인지 확인", async () => {
     expect(spec.tier).toBe("structural");
   });
 });
