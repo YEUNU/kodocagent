@@ -219,6 +219,8 @@ __marimo__/
 
 # --- Node / pnpm (kodocagent) ---
 node_modules/
+# F6 실문서 검증 코퍼스 (외부 라이선스 바이너리 — 커밋 안 함)
+eval-docs/
 *.tsbuildinfo
 coverage/
 .DS_Store
