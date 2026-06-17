@@ -1,0 +1,263 @@
+/**
+ * 문서 편집 검증 하네스 — Stage 2: 실모델 에이전트 평가 실행기
+ *
+ * KODOC_EVAL_LIVE=1 환경변수 없이 실행하면 즉시 스킵 메시지를 출력하고 종료한다.
+ * ANTHROPIC_API_KEY는 repo-root .env에서 환경변수로 주입해 사용한다.
+ *
+ * 사용:
+ *   set -a; . ./.env; set +a
+ *   KODOC_EVAL_LIVE=1 pnpm --filter @kodocagent/doc-tools exec tsx src/eval/run-live.ts
+ *   (또는 빌드 후 node packages/doc-tools/dist/eval/run-live.js)
+ */
+
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { AgentSession, createModel, SessionStore, ToolRegistry } from "@kodocagent/core";
+import type { ApprovalResult } from "@kodocagent/shared";
+import { KodocConfigSchema } from "@kodocagent/shared";
+import { parse } from "kordoc";
+import { createDocTools } from "../index.js";
+import { makeF1, makeF2, makeF5Hwpx } from "./fixtures.js";
+import { EVAL_SPECS } from "./specs.js";
+
+// ─────────────────────────────────────────────────────────
+// 픽스처 이름 매핑
+// ─────────────────────────────────────────────────────────
+
+type FixtureMaker = () => Promise<{ ext: ".hwpx" | ".md"; bytes: Uint8Array }>;
+
+const FIXTURE_MAKERS: Record<string, FixtureMaker> = {
+  F1: makeF1,
+  F2: makeF2,
+  F5: makeF5Hwpx,
+};
+
+/** 파일명 (파일 시스템에 쓰는 구체적 이름) */
+const FILE_NAMES: Record<string, string> = {
+  F1: "report.hwpx",
+  F2: "budget.hwpx",
+  F5: "notice.hwpx",
+};
+
+// ─────────────────────────────────────────────────────────
+// 자동 승인 핸들러
+// ─────────────────────────────────────────────────────────
+
+async function autoApprove(): Promise<ApprovalResult> {
+  return { approved: true };
+}
+
+// ─────────────────────────────────────────────────────────
+// 단일 spec 실행
+// ─────────────────────────────────────────────────────────
+
+interface RunResult {
+  id: string;
+  pass: boolean;
+  detail: string;
+  toolsCalled: string[];
+  durationMs: number;
+  error?: string;
+}
+
+async function runSpec(spec: (typeof EVAL_SPECS)[number], timeoutMs: number): Promise<RunResult> {
+  const startMs = Date.now();
+  const toolsCalled: string[] = [];
+
+  // 임시 디렉토리 — KODOCAGENT_HOME 도 격리
+  const cwd = await mkdtemp(join(tmpdir(), "kodoc-eval-"));
+  const fakeHome = await mkdtemp(join(tmpdir(), "kodoc-eval-home-"));
+  process.env.KODOCAGENT_HOME = fakeHome;
+
+  try {
+    // 1. 픽스처 생성 및 파일 쓰기
+    const fixtureMaker = FIXTURE_MAKERS[spec.fixture];
+    if (!fixtureMaker) {
+      throw new Error(`픽스처 메이커가 없습니다: ${spec.fixture}`);
+    }
+    const fileName = FILE_NAMES[spec.fixture];
+    if (!fileName) {
+      throw new Error(`파일 이름 매핑이 없습니다: ${spec.fixture}`);
+    }
+    const fixture = await fixtureMaker();
+    const filePath = join(cwd, fileName);
+    await writeFile(filePath, fixture.bytes);
+
+    // 2. AgentSession 구성 (CLI chat.ts 패턴 미러)
+    const config = KodocConfigSchema.parse({
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      apiKeys: { anthropic: process.env.ANTHROPIC_API_KEY ?? null, openai: null, google: null },
+      maxSteps: 16,
+      maxContextTokens: 120000,
+    });
+
+    const model = createModel(config);
+
+    const tools = new ToolRegistry();
+    for (const tool of createDocTools({ cwd })) {
+      tools.register(tool as import("@kodocagent/core").ToolDefinition<unknown>);
+    }
+
+    const store = await SessionStore.create({
+      cwd,
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      createdAt: new Date().toISOString(),
+    });
+
+    const session = new AgentSession({
+      config,
+      model,
+      tools,
+      approvalHandler: autoApprove,
+      store,
+      cwd,
+      mcpServers: [],
+    });
+
+    // 3. 프롬프트 구성: 파일 이름 앞에 명시
+    const prompt = `현재 작업 폴더의 \`${fileName}\` 파일에 대해 다음을 수행하세요. ${spec.prompt}`;
+
+    // 4. session.run() 이벤트 루프 + 타임아웃
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => {
+      controller.abort();
+    }, timeoutMs);
+
+    try {
+      for await (const event of session.run(prompt, controller.signal)) {
+        if (event.type === "tool-call") {
+          toolsCalled.push(event.toolName);
+        } else if (event.type === "error") {
+          throw new Error(`에이전트 오류: ${event.message}`);
+        }
+      }
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+
+    if (controller.signal.aborted) {
+      throw new Error(`타임아웃 (${timeoutMs / 1000}s 초과)`);
+    }
+
+    // 5. 편집된 파일 읽기 + parse → markdown
+    const editedBytes = await readFile(filePath);
+    const parseResult = await parse(editedBytes.buffer as ArrayBuffer);
+    if (!parseResult.success) {
+      throw new Error(`kordoc parse 실패: ${parseResult.error}`);
+    }
+    const markdown = parseResult.markdown;
+
+    // 6. spec.assert 판정
+    const { pass, detail } = spec.assert(markdown);
+
+    return {
+      id: spec.id,
+      pass,
+      detail,
+      toolsCalled,
+      durationMs: Date.now() - startMs,
+    };
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err.message : String(err);
+    return {
+      id: spec.id,
+      pass: false,
+      detail: `실행 오류: ${error}`,
+      toolsCalled,
+      durationMs: Date.now() - startMs,
+      error,
+    };
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// 공개 API — index.ts의 runLiveEval이 위임한다
+// ─────────────────────────────────────────────────────────
+
+export interface SpecRunResult extends RunResult {}
+
+export async function runAllSpecs(opts?: {
+  specIds?: string[];
+  timeoutMs?: number;
+}): Promise<SpecRunResult[]> {
+  const timeoutMs = opts?.timeoutMs ?? 150_000;
+  const specs = opts?.specIds ? EVAL_SPECS.filter((s) => opts.specIds?.includes(s.id)) : EVAL_SPECS;
+
+  const results: SpecRunResult[] = [];
+  for (const spec of specs) {
+    process.stdout.write(`  → [${spec.id}] 실행 중…\n`);
+    const result = await runSpec(spec, timeoutMs);
+    results.push(result);
+    const mark = result.pass ? "✅ PASS" : "❌ FAIL";
+    process.stdout.write(
+      `    ${mark}  tools=[${result.toolsCalled.join(",")}]  ${result.detail}\n`,
+    );
+  }
+  return results;
+}
+
+// ─────────────────────────────────────────────────────────
+// CLI 진입점 (tsx로 직접 실행 시)
+// ─────────────────────────────────────────────────────────
+
+async function main(): Promise<void> {
+  if (process.env.KODOC_EVAL_LIVE !== "1") {
+    process.stdout.write("live eval skipped — set KODOC_EVAL_LIVE=1\n");
+    process.exit(0);
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    process.stderr.write("오류: ANTHROPIC_API_KEY 환경변수가 없습니다.\n");
+    process.exit(1);
+  }
+
+  process.stdout.write("=== KODOC LIVE EVAL (Stage 2) ===\n");
+  process.stdout.write(`스펙 수: ${EVAL_SPECS.length}\n\n`);
+
+  const results = await runAllSpecs();
+
+  // 결과 테이블
+  process.stdout.write("\n─────────────────────────────────────────────────────\n");
+  process.stdout.write(`${"id".padEnd(6)} ${"pass".padEnd(6)} ${"tools".padEnd(40)} ${"detail"}\n`);
+  process.stdout.write("─────────────────────────────────────────────────────\n");
+
+  for (const r of results) {
+    const mark = r.pass ? "✅" : "❌";
+    const tools = r.toolsCalled.join(",") || "(없음)";
+    const toolsTrunc = tools.length > 38 ? `${tools.slice(0, 35)}…` : tools;
+    process.stdout.write(`${r.id.padEnd(6)} ${mark}      ${toolsTrunc.padEnd(40)} ${r.detail}\n`);
+  }
+
+  process.stdout.write("─────────────────────────────────────────────────────\n");
+  const passed = results.filter((r) => r.pass).length;
+  process.stdout.write(`합계: ${passed}/${results.length} PASS\n\n`);
+
+  // 실패 분석
+  const failed = results.filter((r) => !r.pass);
+  if (failed.length > 0) {
+    process.stdout.write("[ 실패 분석 ]\n");
+    for (const r of failed) {
+      process.stdout.write(`  ${r.id}: ${r.error ?? r.detail}\n`);
+    }
+    process.stdout.write("\n");
+  }
+}
+
+// ES 모듈 진입점 감지
+const isMain =
+  typeof process !== "undefined" &&
+  process.argv[1] !== undefined &&
+  (import.meta.url === `file://${process.argv[1]}` ||
+    process.argv[1].endsWith("run-live.ts") ||
+    process.argv[1].endsWith("run-live.js"));
+
+if (isMain) {
+  main().catch((err) => {
+    process.stderr.write(`치명적 오류: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exit(1);
+  });
+}

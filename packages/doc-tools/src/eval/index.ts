@@ -30,15 +30,24 @@ export interface LiveEvalResult {
 }
 
 /**
- * TODO(Stage 2): 실모델 에이전트로 각 spec을 평가한다.
+ * 실모델 에이전트로 각 spec을 평가한다.
  *
  * 활성화 조건: KODOC_EVAL_LIVE=1 환경변수
- *
- * @throws 항상 "Stage 2 (live) 미구현" 에러를 던진다.
+ * KODOC_EVAL_LIVE !== "1"이면 결과 배열을 비워 반환한다.
  */
-export async function runLiveEval(_opts?: {
+export async function runLiveEval(opts?: {
   specIds?: string[];
   timeoutMs?: number;
 }): Promise<LiveEvalResult[]> {
-  throw new Error("Stage 2 (live) 미구현: KODOC_EVAL_LIVE=1 환경변수와 실모델 에이전트 연결 필요");
+  if (process.env.KODOC_EVAL_LIVE !== "1") {
+    return [];
+  }
+  const { runAllSpecs } = await import("./run-live.js");
+  const raw = await runAllSpecs(opts);
+  return raw.map((r) => ({
+    specId: r.id,
+    pass: r.pass,
+    detail: r.detail,
+    durationMs: r.durationMs,
+  }));
 }
