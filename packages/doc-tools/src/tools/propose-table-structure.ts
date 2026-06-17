@@ -34,8 +34,8 @@
 
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { parse } from "kordoc";
 import JSZip from "jszip";
+import { parse } from "kordoc";
 import { z } from "zod";
 import { resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";

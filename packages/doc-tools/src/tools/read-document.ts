@@ -11,8 +11,8 @@
  */
 import { readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
-import { parse } from "kordoc";
 import { kordocErrorMessage } from "@kodocagent/shared";
+import { parse } from "kordoc";
 import { z } from "zod";
 import { resolveSafePath } from "../security.js";
 import type { ToolContext, ToolDefinition } from "../types.js";

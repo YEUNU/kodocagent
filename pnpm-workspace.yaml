@@ -3,6 +3,9 @@ packages:
 allowBuilds:
   esbuild: true
   electron: true
+  onnxruntime-node: true
+  protobufjs: true
+  sharp: true
 minimumReleaseAgeExclude:
   - '@ai-sdk/anthropic@3.0.82'
   - '@ai-sdk/gateway@3.0.127'

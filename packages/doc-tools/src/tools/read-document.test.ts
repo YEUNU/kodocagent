@@ -22,8 +22,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { markdownToHwpx } from "kordoc";
 import ExcelJS from "exceljs";
+import { markdownToHwpx } from "kordoc";
 import { beforeAll, describe, expect, it } from "vitest";
 import { markdownToDocx } from "../md-to-docx.js";
 import type { ToolContext } from "../types.js";
