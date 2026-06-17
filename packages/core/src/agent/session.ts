@@ -48,6 +48,31 @@ export class AgentSession {
     }
   }
 
+  /**
+   * 저장된 메시지(어시스턴트 tool-call 파트)에서 열람·작성한 문서 경로를 도출해 기록한다.
+   * 세션이 턴마다 재생성되므로, 시스템 프롬프트("열람한 문서")가 이전 턴의 열람 기록을
+   * 반영하려면 히스토리에서 다시 복원해야 한다.
+   */
+  private recordOpenDocumentsFromMessage(msg: ModelMessage): void {
+    const content = (msg as { content?: unknown }).content;
+    if (!Array.isArray(content)) return;
+    for (const part of content) {
+      if (!part || typeof part !== "object") continue;
+      const p = part as { type?: string; toolName?: string; input?: Record<string, unknown> };
+      if (p.type !== "tool-call" || !p.input) continue;
+      if (
+        p.toolName === "read_document" ||
+        p.toolName === "write_new_document" ||
+        p.toolName === "write_new_spreadsheet"
+      ) {
+        this.recordOpenDocument(p.input.path);
+      } else if (p.toolName === "compare_documents") {
+        this.recordOpenDocument(p.input.pathA);
+        this.recordOpenDocument(p.input.pathB);
+      }
+    }
+  }
+
   /** approval-required 이벤트를 run() 스트림에 전달하기 위한 큐 */
   private pendingApprovalEvents: import("@kodocagent/shared").Proposal[] = [];
 
@@ -66,6 +91,10 @@ export class AgentSession {
   async loadHistory(): Promise<void> {
     const msgs = await this.opts.store.loadMessages();
     this.messages.push(...msgs);
+    // 이전 턴에서 열람·작성한 문서 경로를 복원 (openDocuments → 시스템 프롬프트)
+    for (const msg of msgs) {
+      this.recordOpenDocumentsFromMessage(msg);
+    }
   }
 
   /**
@@ -139,7 +168,10 @@ export class AgentSession {
               } else if (part.toolName === "compare_documents") {
                 this.recordOpenDocument(inp.pathA);
                 this.recordOpenDocument(inp.pathB);
-              } else if (part.toolName === "write_new_document") {
+              } else if (
+                part.toolName === "write_new_document" ||
+                part.toolName === "write_new_spreadsheet"
+              ) {
                 this.recordOpenDocument(inp.path);
               }
             } catch {

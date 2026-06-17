@@ -238,21 +238,37 @@ export const restoreBackupTool: ToolDefinition<RestoreBackupInput> = {
       return `백업을 찾을 수 없습니다: ${targetBase}. list_backups로 사용 가능한 백업을 먼저 확인하세요.`;
     }
 
+    const byNewest = (a: CandidateEntry, b: CandidateEntry) =>
+      b.mtimeMs !== a.mtimeMs ? b.mtimeMs - a.mtimeMs : b.tsToken.localeCompare(a.tsToken);
+
     // 3. 선택: input.backup 지정 또는 최신
     let chosen: CandidateEntry;
-    if (input.backup) {
-      const found = candidates.find(
-        (c) => c.filename === input.backup || c.fullPath.endsWith(input.backup!),
-      );
-      if (!found) {
-        return `지정한 백업을 찾을 수 없습니다: ${input.backup}. list_backups로 사용 가능한 백업을 먼저 확인하세요.`;
+    let ambiguityNote: string | null = null;
+    const requested = input.backup?.trim();
+    if (requested) {
+      // 정확한 파일명 우선 — basename만 주면 endsWith가 모든 후보와 매칭돼
+      // 엉뚱한(오래된) 백업이 조용히 선택되던 문제를 방지한다.
+      const exact = candidates.find((c) => c.filename === requested);
+      if (exact) {
+        chosen = exact;
+      } else {
+        const matches = candidates.filter(
+          (c) => c.filename.endsWith(requested) || c.fullPath.endsWith(requested),
+        );
+        if (matches.length === 0) {
+          return `지정한 백업을 찾을 수 없습니다: ${input.backup}. list_backups로 사용 가능한 백업의 정확한 파일명을 확인하세요.`;
+        }
+        matches.sort(byNewest);
+        chosen = matches[0]!;
+        if (matches.length > 1) {
+          ambiguityNote =
+            `'${input.backup}'와 일치하는 백업이 ${matches.length}개여서 가장 최근(${formatTimestamp(chosen.tsToken)}) 것을 선택했습니다. ` +
+            `특정 백업을 원하면 list_backups의 전체 파일명을 지정하세요.`;
+        }
       }
-      chosen = found;
     } else {
       // 최신순 정렬 후 첫 번째
-      candidates.sort((a, b) =>
-        b.mtimeMs !== a.mtimeMs ? b.mtimeMs - a.mtimeMs : b.tsToken.localeCompare(a.tsToken),
-      );
+      candidates.sort(byNewest);
       chosen = candidates[0]!;
     }
 
@@ -303,12 +319,15 @@ export const restoreBackupTool: ToolDefinition<RestoreBackupInput> = {
 
     // 7. 경고 목록
     const warnings: string[] = [];
-    const autoSelected = !input.backup && candidates.length > 1;
+    const autoSelected = !requested && candidates.length > 1;
     if (autoSelected) {
       warnings.push(
         `백업을 지정하지 않아 가장 최근 백업(${formatTimestamp(chosen.tsToken)})을 자동으로 선택했습니다. ` +
           `다른 백업을 원하면 list_backups로 확인 후 backup 파라미터를 지정하세요.`,
       );
+    }
+    if (ambiguityNote) {
+      warnings.push(ambiguityNote);
     }
     warnings.push(
       "복원을 실행하면 현재 파일도 백업된 뒤 덮어쓰여집니다(복원 자체도 되돌릴 수 있음).",

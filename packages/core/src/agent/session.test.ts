@@ -361,4 +361,93 @@ describe("세션 재개 (loadHistory)", () => {
     expect(promptJson).toContain("두 번째 질문입니다");
     expect(promptJson).toContain("세 번째 질문입니다");
   }, 15000);
+
+  it("이전 턴의 read_document 경로가 시스템 프롬프트(열람한 문서)에 복원된다", async () => {
+    // 1단계: read_document tool-call이 담긴 멀티턴 기록 저장
+    const store = await SessionStore.create({
+      cwd: "/test",
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      createdAt: new Date().toISOString(),
+    });
+    await store.appendUser("보고서.hwpx 읽어줘");
+    await store.appendAssistant({
+      role: "assistant",
+      content: [
+        {
+          type: "tool-call",
+          toolCallId: "c1",
+          toolName: "read_document",
+          input: { path: "보고서.hwpx" },
+        },
+      ],
+    } as import("ai").ModelMessage);
+    await store.appendAssistant({
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "c1",
+          toolName: "read_document",
+          output: { type: "text", value: "문서 내용" },
+        },
+      ],
+    } as import("ai").ModelMessage);
+    await store.appendAssistant({
+      role: "assistant",
+      content: [{ type: "text", text: "읽었습니다" }],
+    } as import("ai").ModelMessage);
+
+    const resumedStore = await SessionStore.load(store.id);
+
+    type AnyStreamPart = Record<string, unknown>;
+    const parts: AnyStreamPart[] = [
+      { type: "stream-start", warnings: [] },
+      { type: "text-start", id: "t1" },
+      { type: "text-delta", id: "t1", delta: "후속 응답" },
+      { type: "text-end", id: "t1" },
+      {
+        type: "finish",
+        finishReason: "stop",
+        usage: { inputTokens: 5, outputTokens: 5, totalTokens: 10 },
+      },
+    ];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mockModel = new MockLanguageModelV3({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      doStream: async () => ({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        stream: simulateReadableStream<any>({
+          chunks: parts,
+          initialDelayInMs: null,
+          chunkDelayInMs: null,
+        }),
+        request: { body: "{}" },
+        response: {},
+      }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any) as unknown as LanguageModel;
+
+    const session = new AgentSession({
+      config: testConfig,
+      model: mockModel,
+      tools: new ToolRegistry(),
+      approvalHandler: async () => ({ approved: true }),
+      store: resumedStore,
+      cwd: "/test",
+    });
+    await session.loadHistory();
+
+    const controller = new AbortController();
+    for await (const _e of session.run("요약해줘", controller.signal)) {
+      // 소비
+    }
+
+    const rawModel = mockModel as unknown as import("ai/test").MockLanguageModelV3;
+    const callOpts = rawModel.doStreamCalls[0]!;
+    // 시스템 프롬프트는 V3 프롬프트의 role:"system" 메시지에 담긴다
+    const callJson = JSON.stringify(callOpts);
+    expect(callJson).toContain("열람한 문서");
+    expect(callJson).toContain("보고서.hwpx");
+  }, 15000);
 });

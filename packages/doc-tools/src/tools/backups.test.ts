@@ -295,3 +295,48 @@ describe("restore_backup — 자동 선택 경고", () => {
     expect(hasAutoWarning).toBe(false);
   });
 });
+
+describe("restore_backup — 백업 지정 모호성 (BUG-1 회귀)", () => {
+  const TARGET = "회귀.txt";
+  let targetPath: string;
+
+  beforeEach(async () => {
+    targetPath = join(testDir, TARGET);
+    await writeFile(targetPath, "현재 내용", "utf-8");
+    // 같은 basename 백업 2개 (오래된 것 / 최신 것)
+    const bOld = makeBackupFilename("2026-06-10T08:00:00.000Z", TARGET);
+    const bNew = makeBackupFilename("2026-06-16T12:00:00.000Z", TARGET);
+    await writeFile(join(KODOC_PATHS.backups, bOld), "오래된 내용", "utf-8");
+    await writeFile(join(KODOC_PATHS.backups, bNew), "최신 내용", "utf-8");
+  });
+
+  it("backup에 basename만 주면 가장 최근 것을 선택하고 모호성 경고를 단다", async () => {
+    const ctx = makeCtx();
+    const outcome = await restoreBackupTool.propose!({
+      // basename만 지정 — 여러 백업과 endsWith 매칭됨
+      input: { path: TARGET, backup: TARGET },
+      ctx,
+    });
+    if (typeof outcome === "string") throw new Error(`propose 오류: ${outcome}`);
+
+    // 최신 백업이 선택됨 (오래된 것이 조용히 선택되던 BUG-1 방지)
+    expect(outcome.proposal.diff).toContain("최신 내용");
+    expect(outcome.proposal.diff).not.toContain("오래된 내용");
+    // 모호성 경고 포함
+    expect(outcome.proposal.warnings.some((w) => w.includes("일치하는 백업이"))).toBe(true);
+  });
+
+  it("정확한 전체 파일명을 주면 그 백업을 선택하고 모호성 경고가 없다", async () => {
+    const exactOld = makeBackupFilename("2026-06-10T08:00:00.000Z", TARGET);
+    const ctx = makeCtx();
+    const outcome = await restoreBackupTool.propose!({
+      input: { path: TARGET, backup: exactOld },
+      ctx,
+    });
+    if (typeof outcome === "string") throw new Error(`propose 오류: ${outcome}`);
+
+    // 정확히 지정한(오래된) 백업이 선택됨
+    expect(outcome.proposal.diff).toContain("오래된 내용");
+    expect(outcome.proposal.warnings.some((w) => w.includes("일치하는 백업이"))).toBe(false);
+  });
+});
