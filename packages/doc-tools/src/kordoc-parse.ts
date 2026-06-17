@@ -25,7 +25,9 @@ import JSZip from "jszip";
 import type { ParseOptions, ParseResult } from "kordoc";
 import { parse as kordocParse } from "kordoc";
 
-// kordoc 도형/이미지 대체텍스트 제거 정규식의 키워드 집합(dist 변형 합집합).
+// kordoc 도형/이미지 대체텍스트 제거 정규식의 키워드 집합 — kordoc dist 의 실제 정규식
+// 전 변형에서 추출한 **완전한 44종**(kordoc 순서 유지). 누락 키워드가 있으면 가드가
+// 해당 합성어 드롭(예 '번호입니다'→'번')을 복원하지 못하므로 kordoc 와 동기화가 중요.
 const SHAPE_ALT_KEYWORDS = [
   "사각형",
   "직사각형",
@@ -54,12 +56,21 @@ const SHAPE_ALT_KEYWORDS = [
   "도넛",
   "평행사변형",
   "사다리꼴",
+  "부채꼴",
+  "호",
+  "반원",
+  "물결",
+  "번개",
+  "하트",
+  "빗금",
+  "블록 화살표",
+  "수식",
+  "표",
+  "그림",
   "개체",
   "그리기\\s?개체",
   "묶음\\s?개체",
   "글상자",
-  "표",
-  "그림",
   "수식\\s?개체",
   "OLE\\s?개체",
 ].join("|");

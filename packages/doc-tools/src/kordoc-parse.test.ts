@@ -51,6 +51,18 @@ describe("kordoc 런타임 가드 — 도형 키워드 합성어 복원", () => 
     );
   });
 
+  it("흔한 합성어(번호·기호·암호)도 복원한다 — 키워드 '호' 완전성", () => {
+    // '호'는 도형 키워드(호=arc) — 한글에 융합된 합성어(번호·기호·암호)에서 과제거됨.
+    // (공백으로 분리된 '수식입니다' 같은 케이스는 룩비하인드가 보호하지 못하는 본질적
+    //  모호성으로, pnpm 패치와 동일하게 대체텍스트로 간주해 복원하지 않는다.)
+    const paras = ["제 전화번호입니다", "이것은 약속된 기호입니다", "잊지 말 암호입니다"];
+    const buggy = paras.map(simulateBuggyDrop).join("\n");
+    expect(buggy).not.toContain("입니다"); // 종결어 소실(과제거 발생)
+    expect(buggy.split("\n")[0]).toBe("제 전화번");
+    const restored = restoreOverStrippedShapeText(buggy, paras);
+    expect(restored).toBe(paras.join("\n"));
+  });
+
   it("독립 단락 도형 대체텍스트는 복원하지 않는다(거짓 양성 없음)", () => {
     const paras = ["사각형입니다.", "표입니다", "그림입니다", "둥근 타원입니다."];
     // 이들은 버그/정상 모두 ""로 제거 → 복원 대상 아님
