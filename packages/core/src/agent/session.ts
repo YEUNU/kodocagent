@@ -114,6 +114,7 @@ export class AgentSession {
       cwd: this.opts.cwd,
       mcpServers: this.opts.mcpServers ?? [],
       openDocuments: this.openDocuments,
+      toolNames: tools.toolNames,
     });
 
     const aiSdkTools = tools.toAiSdkTools();
