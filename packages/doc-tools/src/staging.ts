@@ -203,8 +203,10 @@ export function resolveOutputPath(targetPath: string): {
 } {
   const ext = extname(targetPath).toLowerCase();
   if (ext === ".hwp") {
-    const outputPath = targetPath.slice(0, -4) + ".hwpx";
-    return { outputPath, willConvertFormat: ".hwp → .hwpx" };
+    return { outputPath: targetPath.slice(0, -4) + ".hwpx", willConvertFormat: ".hwp → .hwpx" };
+  }
+  if (ext === ".xls") {
+    return { outputPath: targetPath.slice(0, -4) + ".xlsx", willConvertFormat: ".xls → .xlsx" };
   }
   return { outputPath: targetPath, willConvertFormat: undefined };
 }

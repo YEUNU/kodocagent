@@ -30,6 +30,14 @@ import { createCliApprovalHandler } from "./approve.js";
 
 /** 슬래시 커맨드 도움말 */
 const HELP_TEXT = `
+할 수 있는 일:
+  • 문서 읽기·요약·검토 — .hwp/.hwpx/.docx/.xlsx/.pdf (예: "이 보도자료 요약해줘")
+  • 표·양식 수정 — 셀 값, 양식 빈칸, 행·열 추가/삭제 (예: "이 표의 금액을 30000으로 고쳐줘")
+  • 문서 전체 찾기·바꾸기 (예: "'국민주권'을 '국민중심'으로 다 바꿔줘")
+  • 되돌리기 — 직전 변경을 백업으로 복원 (예: "방금 수정 되돌려줘")
+  • 한국 법령 기반 검토 (예: "이 취업규칙이 근로기준법에 맞는지 봐줘")
+  ※ .hwp는 한글에서 .hwpx로 저장한 후 수정할 수 있습니다.
+
 슬래시 명령:
   /model   — 프로바이더/모델 전환
   /context — 현재 컨텍스트 사용량 표시
@@ -169,6 +177,12 @@ export async function runChat(opts: {
   process.stdout.write(chalk.bold(`kodocagent 채팅 시작 (/help로 도움말)\n`));
   process.stdout.write(
     chalk.dim(`프로바이더: ${config.provider}, 모델: ${config.model ?? "(기본값)"}\n\n`),
+  );
+  process.stdout.write(
+    chalk.dim(
+      "문서를 읽고 표·양식 수정, 찾기·바꾸기, 되돌리기까지 자연어로 요청하세요. " +
+        '예: "이 표의 합계를 다시 계산해줘", "방금 수정 되돌려줘". 자세히: /help\n',
+    ),
   );
 
   while (true) {

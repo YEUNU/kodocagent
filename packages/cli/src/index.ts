@@ -297,9 +297,11 @@ async function runSingleTurn(prompt: string): Promise<void> {
   });
 
   const tools = new ToolRegistry();
-  // 단발 질의는 읽기 툴만 활성
+  // 단발 질의(--print)는 읽기 전용 — 승인이 필요한 쓰기(propose_*/write_new_*) 툴은 등록하지 않는다
   for (const tool of createDocTools({ cwd })) {
-    tools.register(tool as import("@kodocagent/core").ToolDefinition<unknown>);
+    const t = tool as import("@kodocagent/core").ToolDefinition<unknown>;
+    if (t.requiresApproval) continue;
+    tools.register(t);
   }
   // MCP 툴 등록
   for (const mcpTool of mcpManager.getToolDefinitions()) {

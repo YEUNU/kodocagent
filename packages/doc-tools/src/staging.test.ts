@@ -289,4 +289,16 @@ describe("resolveOutputPath", () => {
     expect(result.outputPath).toBe("/path/to/doc.docx");
     expect(result.willConvertFormat).toBeUndefined();
   });
+
+  it(".xls 경로를 .xlsx로 변환하고 willConvertFormat을 반환한다", () => {
+    const result = resolveOutputPath("/path/to/sheet.xls");
+    expect(result.outputPath).toBe("/path/to/sheet.xlsx");
+    expect(result.willConvertFormat).toBe(".xls → .xlsx");
+  });
+
+  it(".xlsx 경로는 그대로 반환한다 (willConvertFormat 없음)", () => {
+    const result = resolveOutputPath("/path/to/sheet.xlsx");
+    expect(result.outputPath).toBe("/path/to/sheet.xlsx");
+    expect(result.willConvertFormat).toBeUndefined();
+  });
 });

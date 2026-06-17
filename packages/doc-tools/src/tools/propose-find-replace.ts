@@ -476,7 +476,8 @@ export const proposeFindReplaceTool: ToolDefinition<ProposeFindReplaceInput> = {
             warnings.push(
               `일부 "${input.find}"(${remaining}곳)이 교체되지 않았습니다. ` +
                 `텍스트가 여러 서식 런에 나뉘어 있어 경계를 가로지르는 패턴은 교체할 수 없습니다(서식이 나뉜 텍스트). ` +
-                `이미 교체된 ${replacedCount}곳은 정상 반영되었습니다.`,
+                `이미 교체된 ${replacedCount}곳은 정상 반영되었습니다. ` +
+                `남은 ${remaining}곳은 표 안의 셀이면 propose_cell_edit으로 한 곳씩 수정하거나, 한글 프로그램에서 직접 찾기·바꾸기로 처리하세요.`,
             );
           }
         }

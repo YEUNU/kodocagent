@@ -11,7 +11,7 @@ import { extname } from "node:path";
 import ExcelJS from "exceljs";
 import { z } from "zod";
 import { resolveSafePath } from "../security.js";
-import { backupFile, commitStaged, stageFile } from "../staging.js";
+import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
 export const proposeSheetEditSchema = z.object({
@@ -118,7 +118,8 @@ export const proposeSheetEditTool: ToolDefinition<ProposeSheetEditInput> = {
     }
 
     const stagedData = modifiedBuffer;
-    const stagedPath = await stageFile(ctx.sessionId, safePath, stagedData);
+    const { outputPath, willConvertFormat } = resolveOutputPath(safePath);
+    const stagedPath = await stageFile(ctx.sessionId, outputPath, stagedData);
 
     const proposalId = crypto.randomUUID();
 
@@ -126,17 +127,18 @@ export const proposeSheetEditTool: ToolDefinition<ProposeSheetEditInput> = {
       proposal: {
         id: proposalId,
         kind: "sheet-edit",
-        targetPath: safePath,
+        targetPath: outputPath,
         stagedPath,
         summary: input.summary,
         diff,
         warnings: [],
+        willConvertFormat,
       },
       commit: async (): Promise<string> => {
-        const backupPath = await backupFile(safePath);
-        await commitStaged(stagedPath, safePath);
+        const backupPath = await backupFile(outputPath);
+        await commitStaged(stagedPath, outputPath);
         const backupInfo = backupPath ? ` (백업: ${backupPath})` : "";
-        return `저장 완료: ${safePath}${backupInfo}`;
+        return `저장 완료: ${outputPath}${backupInfo}`;
       },
     };
   },
