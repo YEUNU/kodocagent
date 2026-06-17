@@ -14,7 +14,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { markdownToHwpx, parse } from "@clazic/kordoc";
+import { markdownToHwpx, parse } from "kordoc";
 import ExcelJS from "exceljs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { markdownToDocx } from "../md-to-docx.js";

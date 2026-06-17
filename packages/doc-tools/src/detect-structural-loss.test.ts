@@ -10,7 +10,7 @@
  * 6. before에 없는 타입이 after에만 있음 → lost:false
  */
 
-import type { IRBlock } from "@clazic/kordoc";
+import type { IRBlock } from "kordoc";
 import { describe, expect, it } from "vitest";
 import { detectStructuralLoss } from "./structural-loss.js";
 

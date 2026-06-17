@@ -5,7 +5,7 @@
  * propose_find_replace, propose_table_structure 등에서 공용으로 사용한다.
  */
 
-import type { IRBlock } from "@clazic/kordoc";
+import type { IRBlock } from "kordoc";
 
 /** detectStructuralLoss 결과 */
 export interface StructuralLossResult {

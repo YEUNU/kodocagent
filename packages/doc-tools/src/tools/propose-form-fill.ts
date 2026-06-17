@@ -11,8 +11,8 @@
 
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { extractFormFields, markdownToHwpx, parse } from "@clazic/kordoc";
 import { kordocErrorMessage } from "@kodocagent/shared";
+import { extractFormFields, parse, patchHwpx } from "kordoc";
 import { z } from "zod";
 import { resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
@@ -104,17 +104,20 @@ export const proposeFormFillTool: ToolDefinition<ProposeFormFillInput> = {
 
     const diff = diffLines.join("\n");
 
-    // markdownToHwpx로 재생성 (원본 서식 보존)
-    const kordocWarnings: string[] = [];
-    const hwpxBuffer = await markdownToHwpx(newMarkdown, {
-      templateArrayBuffer: originalBuffer.buffer as ArrayBuffer,
-      warnings: kordocWarnings,
-    });
-    if (kordocWarnings.length > 0) {
-      warnings.push(...kordocWarnings.map((w) => `kordoc 경고: ${w}`));
+    // patchHwpx로 무손실 서식 보존 채우기
+    const origU8 = new Uint8Array(
+      originalBuffer.buffer,
+      originalBuffer.byteOffset,
+      originalBuffer.byteLength,
+    );
+    const patchResult = await patchHwpx(origU8, newMarkdown);
+    if (!patchResult.success || !patchResult.data) {
+      return `오류: 양식 채우기를 적용하지 못했습니다: ${patchResult.error ?? "알 수 없는 오류"}.`;
     }
-
-    const stagedData = new Uint8Array(hwpxBuffer);
+    const stagedData = patchResult.data;
+    for (const s of patchResult.skipped) {
+      warnings.push(`일부 항목이 적용되지 않았습니다(${s.reason ?? "사유 미상"}).`);
+    }
     const { outputPath, willConvertFormat } = resolveOutputPath(safePath);
     const stagedPath = await stageFile(ctx.sessionId, safePath, stagedData);
 

@@ -19,7 +19,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { markdownToHwpx, parse } from "@clazic/kordoc";
+import { markdownToHwpx, parse } from "kordoc";
 import JSZip from "jszip";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {

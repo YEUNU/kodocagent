@@ -12,7 +12,7 @@
 
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { compare, markdownToHwpx, parse } from "@clazic/kordoc";
+import { compare, parse, patchHwp, patchHwpx } from "kordoc";
 import { z } from "zod";
 import { markdownToDocx } from "../md-to-docx.js";
 import { resolveSafePath } from "../security.js";
@@ -74,16 +74,25 @@ export const proposeEditTool: ToolDefinition<ProposeEditInput> = {
 
     // 포맷별 처리
     if (ext === ".hwpx" || ext === ".hwp") {
-      // kordoc markdownToHwpx — 원본 서식 보존
-      const kordocWarnings: string[] = [];
-      const hwpxBuffer = await markdownToHwpx(input.newMarkdown, {
-        templateArrayBuffer: originalBuffer.buffer as ArrayBuffer,
-        warnings: kordocWarnings,
-      });
-      if (kordocWarnings.length > 0) {
-        warnings.push(...kordocWarnings.map((w) => `kordoc 경고: ${w}`));
+      // kordoc patchHwpx/patchHwp — 무손실 서식 보존 패치
+      const origU8 = new Uint8Array(
+        originalBuffer.buffer,
+        originalBuffer.byteOffset,
+        originalBuffer.byteLength,
+      );
+      const patchResult =
+        ext === ".hwp"
+          ? await patchHwp(origU8, input.newMarkdown)
+          : await patchHwpx(origU8, input.newMarkdown);
+      if (!patchResult.success || !patchResult.data) {
+        return `오류: 편집을 적용하지 못했습니다: ${patchResult.error ?? "알 수 없는 오류"}. read_document로 원본을 다시 확인하세요.`;
       }
-      stagedData = new Uint8Array(hwpxBuffer);
+      stagedData = patchResult.data;
+      for (const s of patchResult.skipped) {
+        warnings.push(
+          `일부 변경이 적용되지 않았습니다(${s.reason ?? "사유 미상"}). 표 구조 변경은 propose_table_structure, 셀 값은 propose_cell_edit을 사용하세요.`,
+        );
+      }
     } else if (ext === ".docx") {
       // DOCX: md→docx 재생성 (서식 손실 경고)
       warnings.push("DOCX 재생성: 복잡한 서식(머리글/각주/스타일)은 손실될 수 있습니다.");
@@ -97,7 +106,12 @@ export const proposeEditTool: ToolDefinition<ProposeEditInput> = {
     }
 
     // 스테이징
-    const { outputPath, willConvertFormat } = resolveOutputPath(safePath);
+    // .hwpx/.hwp는 무손실 패치로 같은 확장자 그대로 저장 (포맷 변환 없음)
+    // 다른 포맷(.docx/.md/.txt 등)은 resolveOutputPath 사용
+    const outputPath =
+      ext === ".hwpx" || ext === ".hwp" ? safePath : resolveOutputPath(safePath).outputPath;
+    const willConvertFormat =
+      ext === ".hwpx" || ext === ".hwp" ? undefined : resolveOutputPath(safePath).willConvertFormat;
     const stagedPath = await stageFile(ctx.sessionId, safePath, stagedData);
 
     // diff 생성

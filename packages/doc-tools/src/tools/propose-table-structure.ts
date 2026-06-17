@@ -34,7 +34,7 @@
 
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { parse } from "@clazic/kordoc";
+import { parse } from "kordoc";
 import JSZip from "jszip";
 import { z } from "zod";
 import { resolveSafePath } from "../security.js";
@@ -1315,7 +1315,7 @@ export const proposeTableStructureTool: ToolDefinition<ProposeTableStructureInpu
     );
 
     // 원본 kordoc parse (구조 손실 게이트용)
-    let originalBlocks: import("@clazic/kordoc").IRBlock[] | null = null;
+    let originalBlocks: import("kordoc").IRBlock[] | null = null;
     try {
       const origResult = await parse(originalBuf.buffer as ArrayBuffer);
       if (origResult.success) {
@@ -1345,7 +1345,7 @@ export const proposeTableStructureTool: ToolDefinition<ProposeTableStructureInpu
     // (1) kordoc parse()로 재파싱 성공 + anchor 텍스트 존재 확인
     let exportedMd = "";
     let kordocOk = false;
-    let exportedBlocks: import("@clazic/kordoc").IRBlock[] | null = null;
+    let exportedBlocks: import("kordoc").IRBlock[] | null = null;
     try {
       const exportedResult = await parse(newBytes.buffer as ArrayBuffer);
       if (exportedResult.success) {

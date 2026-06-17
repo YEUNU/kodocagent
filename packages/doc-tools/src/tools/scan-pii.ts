@@ -7,7 +7,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { parse } from "@clazic/kordoc";
+import { parse } from "kordoc";
 import { detectPii } from "@kodocagent/shared";
 import { z } from "zod";
 import { resolveSafePath } from "../security.js";

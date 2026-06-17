@@ -7,7 +7,7 @@
  * docs/SPEC.md §6
  */
 import { readFile } from "node:fs/promises";
-import { blocksToMarkdown, compare } from "@clazic/kordoc";
+import { blocksToMarkdown, compare } from "kordoc";
 import { z } from "zod";
 import { resolveSafePath } from "../security.js";
 import type { ToolContext, ToolDefinition } from "../types.js";

@@ -12,7 +12,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { markdownToHwpx } from "@clazic/kordoc";
+import { markdownToHwpx } from "kordoc";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { ToolContext } from "../types.js";
 import { compareDocumentsTool } from "./compare-documents.js";

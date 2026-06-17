@@ -13,7 +13,7 @@
 
 import { stat } from "node:fs/promises";
 import { extname } from "node:path";
-import { markdownToHwpx } from "@clazic/kordoc";
+import { markdownToHwpx } from "kordoc";
 import { z } from "zod";
 import { markdownToDocx } from "../md-to-docx.js";
 import { resolveSafePath } from "../security.js";
@@ -64,13 +64,7 @@ export const writeNewDocumentTool: ToolDefinition<WriteNewDocumentInput> = {
 
     if (ext === ".hwpx") {
       // kordoc markdownToHwpx (템플릿 없음)
-      const kordocWarnings: string[] = [];
-      const hwpxBuffer = await markdownToHwpx(input.markdown, {
-        warnings: kordocWarnings,
-      });
-      if (kordocWarnings.length > 0) {
-        warnings.push(...kordocWarnings.map((w) => `kordoc 경고: ${w}`));
-      }
+      const hwpxBuffer = await markdownToHwpx(input.markdown);
       stagedData = new Uint8Array(hwpxBuffer);
     } else if (ext === ".docx") {
       warnings.push("DOCX 생성: 복잡한 서식(머리글/각주/스타일)은 지원되지 않습니다.");
