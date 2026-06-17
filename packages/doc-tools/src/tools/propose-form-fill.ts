@@ -14,7 +14,7 @@ import { extname } from "node:path";
 import { kordocErrorMessage } from "@kodocagent/shared";
 import { extractFormFields, parse, patchHwpx } from "kordoc";
 import { z } from "zod";
-import { resolveSafePath } from "../security.js";
+import { hwpStructuralGuard, resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
@@ -57,6 +57,16 @@ export const proposeFormFillTool: ToolDefinition<ProposeFormFillInput> = {
       originalBuffer = await readFile(safePath);
     } catch {
       return `오류: 파일을 읽을 수 없습니다: ${input.path}. 경로를 확인하세요.`;
+    }
+
+    // OLE2/HWP 바이너리 가드 — 콘텐츠 기반 감지 (확장자 오인식 포함)
+    // patchHwpx는 실제 .hwp OLE 바이너리를 처리할 수 없으므로 조기 차단
+    const structuralGuard = hwpStructuralGuard(
+      ext,
+      new Uint8Array(originalBuffer.buffer, originalBuffer.byteOffset, originalBuffer.byteLength),
+    );
+    if (structuralGuard !== null) {
+      return structuralGuard;
     }
 
     // 원본 파싱

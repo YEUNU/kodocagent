@@ -886,3 +886,42 @@ describe("Capability A+B 통합 테스트 — 레이블 모드로 빈 셀 채우
     }
   }, 30000);
 });
+
+// ─────────────────────────────────────────────────────────
+// OLE2 .hwp 바이너리 가드
+// ─────────────────────────────────────────────────────────
+
+describe("proposeCellEditTool — OLE2 .hwp 바이너리 가드", () => {
+  it("OLE2 시그니처 바이트(.hwp)가 감지되면 친절한 안내 메시지를 반환하고 파일을 쓰지 않는다", async () => {
+    const subDir = join(testDir, `ole2-guard-${Date.now()}`);
+    await mkdir(subDir, { recursive: true });
+
+    // OLE2/CFB 매직 바이트(D0 CF 11 E0 A1 B1 1A E1)로 시작하는 실제 .hwp 바이너리를 모사
+    const oleBytes = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0x00, 0x00]);
+    const hwpPath = join(subDir, "form.hwp");
+    await writeFile(hwpPath, oleBytes);
+
+    const ctx = makeCtx(subDir);
+    const result = await proposeCellEditTool.propose?.({
+      input: {
+        path: "form.hwp",
+        edits: [{ tableIndex: 0, row: 0, col: 0, newText: "새값" }],
+        summary: "hwp OLE 셀 편집 시도",
+      },
+      ctx,
+    });
+
+    // 오류 문자열이 반환되어야 함
+    expect(typeof result).toBe("string");
+    const msg = result as string;
+
+    // 안내 메시지에 .hwpx 언급 + propose_edit 언급 + 변환 안내 포함
+    expect(msg).toContain("hwpx");
+    expect(msg).toContain("propose_edit");
+    expect(msg).toContain("다른 이름으로 저장");
+
+    // 파일이 수정되지 않았는지 확인 (원본 bytes 그대로)
+    const afterBytes = await readFile(hwpPath);
+    expect(Buffer.from(afterBytes).equals(oleBytes)).toBe(true);
+  }, 10000);
+});

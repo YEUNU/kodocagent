@@ -19,7 +19,7 @@ import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import JSZip from "jszip";
 import { z } from "zod";
-import { resolveSafePath } from "../security.js";
+import { hwpStructuralGuard, resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
@@ -619,18 +619,17 @@ async function listFormObjectsFromZip(
 
 /**
  * .hwpx 버퍼의 ZIP 헤더와 확장자를 검증하고 오류 메시지를 반환한다.
+ * OLE2/HWP 바이너리는 hwpStructuralGuard로 구체적인 안내를 반환한다.
  * 통과 시 null 반환.
  */
 function validateHwpxBuffer(ext: string, buffer: Uint8Array): string | null {
-  if (ext === ".hwp") {
-    return (
-      "오류: 이 툴은 .hwpx 파일만 지원합니다. " +
-      ".hwp(구형 OLE 바이너리)는 직접 편집이 불가합니다. " +
-      "한글 프로그램에서 '다른 이름으로 저장 → .hwpx'로 저장한 후 다시 시도하세요."
-    );
-  }
-  if (ext !== ".hwpx") {
+  if (ext !== ".hwpx" && ext !== ".hwp") {
     return `오류: 이 툴은 .hwpx 파일만 지원합니다. 현재 파일 확장자: ${ext}`;
+  }
+  // OLE2/HWP 바이너리 가드 — 콘텐츠 기반 감지 (확장자 오인식 포함)
+  const structuralGuard = hwpStructuralGuard(ext, buffer);
+  if (structuralGuard !== null) {
+    return structuralGuard;
   }
   if (buffer[0] !== 0x50 || buffer[1] !== 0x4b) {
     return (

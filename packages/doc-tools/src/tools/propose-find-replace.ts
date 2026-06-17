@@ -24,7 +24,7 @@ import { extname } from "node:path";
 import JSZip from "jszip";
 import { parse } from "kordoc";
 import { z } from "zod";
-import { resolveSafePath } from "../security.js";
+import { hwpStructuralGuard, resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
@@ -389,15 +389,8 @@ export const proposeFindReplaceTool: ToolDefinition<ProposeFindReplaceInput> = {
     const safePath = await resolveSafePath(ctx.cwd, input.path);
     const ext = extname(safePath).toLowerCase();
 
-    // .hwpx 전용 — .hwp 및 기타 거부
-    if (ext === ".hwp") {
-      return (
-        "오류: propose_find_replace는 .hwpx 파일만 지원합니다. " +
-        ".hwp(구형 OLE 바이너리)는 XML 직접 편집이 불가합니다. " +
-        "한글 프로그램에서 '다른 이름으로 저장 → .hwpx'로 저장한 후 다시 시도하세요."
-      );
-    }
-    if (ext !== ".hwpx") {
+    // .hwpx 전용 — .hwp 및 기타 거부 (확장자 기반 조기 검사)
+    if (ext !== ".hwpx" && ext !== ".hwp") {
       return (
         `오류: propose_find_replace는 .hwpx 파일만 지원합니다. 현재 파일 확장자: ${ext}. ` +
         ".hwpx 파일을 지정하세요."
@@ -412,7 +405,19 @@ export const proposeFindReplaceTool: ToolDefinition<ProposeFindReplaceInput> = {
       return `오류: 파일을 읽을 수 없습니다: ${input.path}. 경로를 확인하세요.`;
     }
 
-    // ZIP 매직 바이트 검증 (PK = 0x504B)
+    const originalBytes = new Uint8Array(
+      originalBuf.buffer,
+      originalBuf.byteOffset,
+      originalBuf.byteLength,
+    );
+
+    // OLE2/HWP 바이너리 가드 — 콘텐츠 기반 감지 (확장자 오인식 포함)
+    const structuralGuard = hwpStructuralGuard(ext, originalBytes);
+    if (structuralGuard !== null) {
+      return structuralGuard;
+    }
+
+    // ZIP 매직 바이트 검증 (PK = 0x504B) — 손상된 파일 등 비-ZIP .hwpx 거부
     if (originalBuf[0] !== 0x50 || originalBuf[1] !== 0x4b) {
       return (
         "오류: 파일이 유효한 .hwpx(ZIP) 포맷이 아닙니다. " +
@@ -420,12 +425,6 @@ export const proposeFindReplaceTool: ToolDefinition<ProposeFindReplaceInput> = {
         "한글 프로그램에서 .hwpx로 저장 후 다시 시도하세요."
       );
     }
-
-    const originalBytes = new Uint8Array(
-      originalBuf.buffer,
-      originalBuf.byteOffset,
-      originalBuf.byteLength,
-    );
 
     // XML 직접 패치 치환 수행
     let newBytes: Uint8Array;
