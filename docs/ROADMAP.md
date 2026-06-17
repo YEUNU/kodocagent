@@ -30,6 +30,7 @@
 | R8 | **v0.4.4 발행 — --print 읽기전용·찾기바꾸기 폴백 안내·능력 소개(/help)·시트 .xls→.xlsx** (UX 감사 잔여 백로그 4건) | OIDC 자동(2026-06-17) |
 | R9 | **v0.4.5 발행 — 안전·보존 가드**(편집 안전 규칙 프롬프트·scan_pii·PII 승인경고) **+ 버그수정**(openDocuments 복원·restore 모호매칭) (32항목 체크리스트 '원문 안전 보존' 대응, 실모델 e2e 검증) | OIDC 자동(2026-06-17) |
 | R10 | **v0.5.0 발행 — 개인정보 비식별(propose_redact_pii)·구조적 위치 검색(find_in_document)** (OAuth 제외, find↔cell_edit 좌표 일치 실증) | OIDC 자동(2026-06-17) |
+| R11 | **v0.6.0 발행 — 한글(.hwp) 직접 편집·무손실 편집(kordoc 3.x 마이그레이션)** (`@clazic/kordoc@2.7.6`→`kordoc@3.1.1`, `patchHwp`로 .hwp 제자리 편집·`patchHwpx` 무손실, 차단 항목 #4 해제, 실문서 e2e·게이트 그린) | OIDC 자동(2026-06-17) |
 | 운영 | CI 그린(3 OS × Node 22/24), Actions v6, TS6 의존성 최신화 | `4b159d7` |
 | 검증 | 실키 E2E(2026-06-15): **OpenAI gpt-5.5 + Google gemini-3.5-flash + Anthropic claude-sonnet-4-6** 읽기·요약(툴콜)·쓰기 거절+원본 무변경; **법령 MCP(korean-law)** 연동으로 근로기준법 제60조 조회→취업규칙 위반 식별·인용 성공 | — |
 
@@ -153,7 +154,7 @@
 | 1 | **찾기/바꾸기** | `propose_find_replace` — 처음엔 rhwp `replaceAll`(`3ed4e30`)이었으나 rhwp 복잡문서 손상으로 **자체 XML 패치로 재구현**(`c6791f9`): section XML `<hp:t>` 텍스트 노드만 치환, 재직렬화 없음 → **모든 문서 무손실**, rhwp 미사용 | ✅ `c6791f9` — 테스트 295, 복잡문서(table-vpos-01) 11곳 치환·구조 완전 동일·한컴 정상 개봉(rhwp판은 손상시켰음) |
 | 2 | 표 구조 편집 | `propose_table_structure`(행·열 삽입/삭제·셀 병합) — **자체 XML 패치로 재구현**(`700a13a`): 깊이 인식 토크나이저로 tbl XML 직접 조작, 내용-anchor 지정, 기존 병합 가로지르면 안전 거부, 자가검증(행·열 델타+구조 손실) | ✅ `700a13a` — 테스트 308, 복잡문서(table-vpos-01) 행 추가 4→5·구조 완전 보존, 병합 가로지름 거부 확인 |
 | 3 | 중첩표 셀 편집 | 중첩표 셀의 텍스트 수정 | ◐ **부분 해결** — `propose_find_replace`(XML)가 **모든 `<hp:t>` 노드(중첩표 셀 포함)를 치환**하므로 중첩 셀 텍스트는 텍스트 기반으로 수정 가능. 좌표 기반 중첩 셀 지정(`propose_cell_edit`은 최상위만, `propose_table_structure`도 최상위 표만)은 미지원 — 빈도 낮아 보류 |
-| ~~4~~ | ~~`.hwp` 직접 저장(`exportHwp`)~~ | **불가 — 보류**: rhwp `exportHwp`가 편집을 반영하지 못함(평문·제목 모두 미저장, 3회 실측 / rhwp #197 "HWPX→HWP 변환기 미완"). kordoc도 .hwp 쓰기 불가 → **현재 어떤 경로로도 .hwp 출력 불가**. .hwp 편집은 .hwpx로 수렴(현 정책). rhwp #197 완성 시 재검토 | 차단(상류 대기) |
+| 4 | `.hwp` 직접 편집/저장 | ✅ **해결(v0.6.0, kordoc 3.x)** — kordoc 3.x `patchHwp`로 `.hwp`(HWP5 바이너리)를 **제자리 무손실 편집**. `propose_edit`에 적용(.hwp→.hwpx 변환 폐지, 안전치 못한 편집은 보수적 skip), 실문서 e2e·한컴 재파싱 확인. rhwp `exportHwp`(편집 미반영)는 폐기했고 kordoc 3.x가 바이너리 패치 경로를 제공. (단, 표·셀·찾기바꾸기 등 구조 편집 툴은 여전히 `.hwpx` ZIP 기반) | ✅ kordoc 3.x |
 
 > **rhwp 쓰기 신뢰성 실측(2026-06-16)**: `exportHwpx`는 평문·표 본문 정확(biz.hwp 본문 교체 깨끗). 단 **스타일 제목 등 특수 객체는 rhwp가 "교체됨" 보고에도 미반영**하는 엣지 존재 → 모든 rhwp 쓰기 기능에 **export 후 kordoc 재검증 게이트 필수**(미완 시 중단, 오도 방지). `exportHwp`(.hwp 쓰기)는 편집 미반영으로 사용 안 함.
 

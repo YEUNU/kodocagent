@@ -1,5 +1,17 @@
 # kodocagent
 
+## 0.6.0
+
+### Minor Changes (한글 `.hwp` 직접 편집 · 무손실 편집 — kordoc 3.x)
+
+- **한글(`.hwp`) 직접 편집** — `propose_edit`가 `.hwp`(HWP5 바이너리)를 **원본 `.hwp` 형식 그대로 제자리 편집**합니다(kordoc 3.x `patchHwp`). 이전에는 `.hwp` 편집 결과를 `.hwpx`로 변환해 저장했으나(어떤 경로로도 `.hwp` 출력 불가했던 차단 항목), 이제 변환 없이 원본 형식을 유지합니다. 안전하게 적용할 수 없는 변경은 보수적으로 건너뛰고 경고합니다. (단, 표·셀·찾기바꾸기 등 구조 편집 툴은 여전히 `.hwpx` 기반)
+- **무손실 편집 패치** — `propose_edit`(`.hwpx`)와 `propose_form_fill`이 마크다운 전체 재생성 대신 **무손실 패치(`patchHwpx`)**로 동작해 서식·구조 보존성이 향상됐습니다.
+
+### 내부 변경
+
+- 의존성 마이그레이션: `@clazic/kordoc@2.7.6` → `kordoc@3.1.1`(활성 후속). 공개 동작 무회귀(게이트: build·typecheck·lint 0, test 384 통과, 실문서 e2e로 `.hwp`/`.hwpx` 편집 검증).
+- 정리: 마이그레이션 잔여 데드코드·미사용 의존성(`core`→`doc-tools`)·구버전 주석 제거, 추적되던 `node_modules` 심링크 정리.
+
 ## 0.5.0
 
 ### Minor Changes (개인정보 비식별 · 구조적 검색)
