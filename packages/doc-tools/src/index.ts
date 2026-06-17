@@ -44,6 +44,7 @@ export { proposeSheetEditTool } from "./tools/propose-sheet-edit.js";
 export { proposeTableStructureTool } from "./tools/propose-table-structure.js";
 export { readDocumentTool } from "./tools/read-document.js";
 export { readFileTool } from "./tools/read-file.js";
+export { scanPiiTool } from "./tools/scan-pii.js";
 export { writeNewDocumentTool } from "./tools/write-new-document.js";
 export { writeNewSpreadsheetTool } from "./tools/write-new-spreadsheet.js";
 export type { ProposeOutcome, ToolContext, ToolDefinition } from "./types.js";
@@ -60,6 +61,7 @@ import { proposeSheetEditTool } from "./tools/propose-sheet-edit.js";
 import { proposeTableStructureTool } from "./tools/propose-table-structure.js";
 import { readDocumentTool } from "./tools/read-document.js";
 import { readFileTool } from "./tools/read-file.js";
+import { scanPiiTool } from "./tools/scan-pii.js";
 import { writeNewDocumentTool } from "./tools/write-new-document.js";
 import { writeNewSpreadsheetTool } from "./tools/write-new-spreadsheet.js";
 
@@ -75,6 +77,7 @@ export function createDocTools(_ctx: { cwd: string }) {
     listFilesTool,
     listBackupsTool,
     readFileTool,
+    scanPiiTool,
     proposeEditTool,
     proposeFormFillTool,
     proposeCellEditTool,

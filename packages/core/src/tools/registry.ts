@@ -11,6 +11,7 @@
  */
 
 import type { ApprovalHandler, Proposal } from "@kodocagent/shared";
+import { detectPii, summarizePii } from "@kodocagent/shared";
 import type { Schema, ToolSet } from "ai";
 import { tool } from "ai";
 import type { z } from "zod";
@@ -163,6 +164,15 @@ export class ToolRegistry {
             }
 
             const { proposal, commit } = outcome;
+
+            // diff에 PII가 포함된 경우 경고를 proposal.warnings에 추가
+            const piiFindings = detectPii(proposal.diff ?? "");
+            if (piiFindings.length > 0) {
+              proposal.warnings = [
+                ...(proposal.warnings ?? []),
+                `개인정보 포함: 이번 변경 영역에 ${summarizePii(piiFindings)}이(가) 있습니다. 외부 공유 시 주의하세요.`,
+              ];
+            }
 
             // 2단계: approval-required 이벤트 발행 (UI용)
             getEventEmitter()?.(proposal);

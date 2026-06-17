@@ -16,11 +16,17 @@ export interface SystemPromptContext {
  * 섹션 구성 (안정 prefix 먼저 — 캐시 친화):
  * 1. 역할
  * 2. 문서 규칙
- * 3. 법령 규칙
- * 4. 동적 컨텍스트 (마지막)
+ * 3. 편집 안전 규칙
+ * 4. 법령 규칙
+ * 5. 동적 컨텍스트 (마지막)
  */
 export function buildSystemPrompt(ctx: SystemPromptContext): string {
-  const stable = [ROLE_SECTION, DOCUMENT_RULES_SECTION, LAW_RULES_SECTION].join("\n\n");
+  const stable = [
+    ROLE_SECTION,
+    DOCUMENT_RULES_SECTION,
+    EDIT_SAFETY_SECTION,
+    LAW_RULES_SECTION,
+  ].join("\n\n");
   const dynamic = buildDynamicContext(ctx);
   return `${stable}\n\n${dynamic}`;
 }
@@ -47,6 +53,16 @@ const DOCUMENT_RULES_SECTION = `## 문서 규칙
 6. 사용자가 수정안을 거절하면 같은 제안을 자동으로 반복하지 말고, 사용자의 다음 지시를 기다리세요.
 7. 큰 문서는 먼저 \`outline\`으로 구조를 파악하고, \`search\`나 \`pages\`로 필요한 부분만 읽어 컨텍스트를 아끼세요.
 8. 사용자가 직전 변경을 되돌리길 원하면 \`list_backups\`로 백업을 확인하고 \`restore_backup\`으로 복원하세요. 복원도 승인을 거치며, 복원 전 현재 상태가 자동 백업됩니다.`;
+
+export const EDIT_SAFETY_SECTION = `## 편집 안전 규칙
+
+1. 요청받은 부분만 수정하고, 요청하지 않은 문장·서식·구조·표현은 그대로 둡니다. 문서 전체를 임의로 재작성하지 않습니다.
+2. 문서에 없는 정보를 만들어내지 않습니다. 수치·금액·날짜·인명·기관명·계약 조항 등을 추측해 새로 쓰거나 바꾸지 않으며, 불확실하면 사용자에게 확인합니다.
+3. 사용자가 명시적으로 바꾸라고 하지 않은 한 숫자·금액·날짜·단위·고유명사·법령 조문 번호와 인용부호(" ", ' ', 「 」) 내부 내용은 보존합니다.
+4. 전문 용어는 임의로 다른 표현으로 바꾸지 않고 문서 전체에서 일관되게 유지합니다.
+5. 계약서·약관·공시·논문 등 법적·공식 문서는 단어 하나가 의미를 바꿀 수 있으므로, 표현을 자동으로 다듬지 말고 사용자가 지정한 변경만 수행합니다.
+6. 의미가 바뀔 수 있는 수정은 실행 전에 그 사실을 사용자에게 알리고, 수정 제안의 요약(summary)에는 무엇을·왜 바꾸는지 함께 적습니다.
+7. 개인정보(주민등록번호·전화번호·이메일·계좌·카드번호 등)가 있을 수 있는 문서를 다룰 때 주의하고, 사용자가 개인정보 점검을 요청하면 \`scan_pii\` 도구로 확인합니다.`;
 
 const LAW_RULES_SECTION = `## 법령 규칙
 
