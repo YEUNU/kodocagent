@@ -99,7 +99,7 @@ export type ProposeCellEditInput = z.infer<typeof proposeCellEditSchema>;
  * t_open: <hp:t> (내용 있는 텍스트 런 시작)
  * t_empty: <hp:t/> (self-closing 빈 텍스트 런 — 빈 셀에 사용)
  */
-type TokenKind =
+export type TokenKind =
   | "tbl_open"
   | "tbl_close"
   | "tc_open"
@@ -109,7 +109,7 @@ type TokenKind =
   | "cell_addr"
   | "cell_span";
 
-interface XmlToken {
+export interface XmlToken {
   kind: TokenKind;
   pos: number; // 태그 시작 위치
   end: number; // 태그 끝 위치 (exclusive)
@@ -127,7 +127,7 @@ interface XmlToken {
  * <hp:t> (여는 태그)는 t_open 토큰으로 처리한다.
  * 두 패턴을 구분하기 위해 <hp:t/>를 <hp:t> 보다 먼저 매칭한다.
  */
-function tokenizeHwpxXml(xml: string): XmlToken[] {
+export function tokenizeHwpxXml(xml: string): XmlToken[] {
   const tokens: XmlToken[] = [];
   // 순서 중요: <hp:t/> 를 <hp:t> 보다 먼저 감지해야 함
   const re =
@@ -195,7 +195,7 @@ function escapeXml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-interface TcRange {
+export interface TcRange {
   start: number;
   end: number;
   /** targetTbl 기준 내부 tbl 깊이 (0 = 직접 자식) */
@@ -210,7 +210,11 @@ interface TcRange {
  * 따라서 tblStart 이후의 토큰만 처리하되 tblEnd 미만만 포함하며,
  * innerDepth는 tblStart 직후부터 카운팅 시작 (타겟 표 자체는 이미 열려있음).
  */
-function collectDirectTcRanges(tokens: XmlToken[], tblStart: number, tblEnd: number): TcRange[] {
+export function collectDirectTcRanges(
+  tokens: XmlToken[],
+  tblStart: number,
+  tblEnd: number,
+): TcRange[] {
   // tblStart 위치의 tbl_open 태그는 "이미 열려있는" 타겟 표이므로 건너뜀
   // innerDepth=0: 타겟 표 직속, 1: 첫 번째 중첩 표, ...
   const tblTokens = tokens.filter((t) => t.pos > tblStart && t.pos < tblEnd);
@@ -241,7 +245,7 @@ function collectDirectTcRanges(tokens: XmlToken[], tblStart: number, tblEnd: num
  * <hp:t/> (self-closing 빈 런)는 빈 문자열을 기여한다.
  * 반환값은 XML 엔티티 디코딩 완료.
  */
-function readOwnTextFromTc(
+export function readOwnTextFromTc(
   xml: string,
   tokens: XmlToken[],
   tcStart: number,
@@ -269,7 +273,7 @@ function readOwnTextFromTc(
  * 최상위 표의 범위(start, end)를 반환한다.
  * tableIndex: 0-based, kordoc 순서와 동일 (중첩 표는 별도 카운팅 안 함).
  */
-function findTopLevelTableRange(
+export function findTopLevelTableRange(
   tokens: XmlToken[],
   tableIndex: number,
 ): { start: number; end: number } | null {
