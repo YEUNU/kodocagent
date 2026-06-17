@@ -1,0 +1,105 @@
+diff --git a/dist/chunk-FJON4QNB.cjs b/dist/chunk-FJON4QNB.cjs
+index 2e90cb6e40c409bfd0363bb2955e025a8a0e06bd..c6c7ac8ecd63f089cb36be40215ec9b5ec3d34e5 100644
+--- a/dist/chunk-FJON4QNB.cjs
++++ b/dist/chunk-FJON4QNB.cjs
+@@ -333,7 +333,7 @@ function convertTableToText(rows) {
+ function escapeGfm(text) {
+   return text.replace(/~/g, "\\~");
+ }
+-var HWP_SHAPE_ALT_TEXT_RE = /(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|이등변 삼각형|직각 삼각형|선|직선|곡선|화살표|굵은 화살표|이중 화살표|오각형|육각형|팔각형|별|[4-8]점별|십자|십자형|구름|구름형|마름모|도넛|평행사변형|사다리꼴|부채꼴|호|반원|물결|번개|하트|빗금|블록 화살표|수식|표|그림|개체|그리기\s?개체|묶음\s?개체|글상자|수식\s?개체|OLE\s?개체)\s?입니다\.?/g;
++var HWP_SHAPE_ALT_TEXT_RE = /(?<![가-힣])(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|이등변 삼각형|직각 삼각형|선|직선|곡선|화살표|굵은 화살표|이중 화살표|오각형|육각형|팔각형|별|[4-8]점별|십자|십자형|구름|구름형|마름모|도넛|평행사변형|사다리꼴|부채꼴|호|반원|물결|번개|하트|빗금|블록 화살표|수식|표|그림|개체|그리기\s?개체|묶음\s?개체|글상자|수식\s?개체|OLE\s?개체)\s?입니다\.?/g;
+ function sanitizeText(text) {
+   let result = mapPuaText(text).replace(/[\u{F0000}-\u{FFFFD}]/gu, "").replace(HWP_SHAPE_ALT_TEXT_RE, "").replace(/  +/g, " ").trim();
+   if (result.length <= 30 && result.includes(" ")) {
+diff --git a/dist/chunk-KR6DSGM7.js b/dist/chunk-KR6DSGM7.js
+index c3d9ac8279a0b4da8681a1723d5b3a40abbbfeee..fa4b89ef5511dd896b6df7ff4610d015f992023c 100644
+--- a/dist/chunk-KR6DSGM7.js
++++ b/dist/chunk-KR6DSGM7.js
+@@ -339,7 +339,7 @@ function convertTableToText(rows) {
+ function escapeGfm(text) {
+   return text.replace(/~/g, "\\~");
+ }
+-var HWP_SHAPE_ALT_TEXT_RE = /(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|이등변 삼각형|직각 삼각형|선|직선|곡선|화살표|굵은 화살표|이중 화살표|오각형|육각형|팔각형|별|[4-8]점별|십자|십자형|구름|구름형|마름모|도넛|평행사변형|사다리꼴|부채꼴|호|반원|물결|번개|하트|빗금|블록 화살표|수식|표|그림|개체|그리기\s?개체|묶음\s?개체|글상자|수식\s?개체|OLE\s?개체)\s?입니다\.?/g;
++var HWP_SHAPE_ALT_TEXT_RE = /(?<![가-힣])(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|이등변 삼각형|직각 삼각형|선|직선|곡선|화살표|굵은 화살표|이중 화살표|오각형|육각형|팔각형|별|[4-8]점별|십자|십자형|구름|구름형|마름모|도넛|평행사변형|사다리꼴|부채꼴|호|반원|물결|번개|하트|빗금|블록 화살표|수식|표|그림|개체|그리기\s?개체|묶음\s?개체|글상자|수식\s?개체|OLE\s?개체)\s?입니다\.?/g;
+ function sanitizeText(text) {
+   let result = mapPuaText(text).replace(/[\u{F0000}-\u{FFFFD}]/gu, "").replace(HWP_SHAPE_ALT_TEXT_RE, "").replace(/  +/g, " ").trim();
+   if (result.length <= 30 && result.includes(" ")) {
+diff --git a/dist/chunk-VMUP5WPI.js b/dist/chunk-VMUP5WPI.js
+index f09cc41c803084236fa87b09b0ce73183468e0a7..fcc00cc7c9dea01d25222c7088037b296a9f6c18 100644
+--- a/dist/chunk-VMUP5WPI.js
++++ b/dist/chunk-VMUP5WPI.js
+@@ -1795,7 +1795,7 @@ function extractParagraphInfo(para, styleMap, ctx) {
+   let cleanText = text.replace(/[ \t]+/g, " ").trim();
+   if (/^그림입니다\.?\s*원본\s*그림의\s*(이름|크기)/.test(cleanText)) cleanText = "";
+   cleanText = cleanText.replace(/그림입니다\.?\s*원본\s*그림의\s*(이름|크기)[^\n]*(\n[^\n]*원본\s*그림의\s*(이름|크기)[^\n]*)*/g, "").trim();
+-  cleanText = cleanText.replace(/(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|선|직선|곡선|화살표|오각형|육각형|팔각형|별|십자|구름|마름모|도넛|평행사변형|사다리꼴|개체|그리기\s?개체|묶음\s?개체|글상자|표|그림|OLE\s?개체)\s?입니다\.?/g, "").trim();
++  cleanText = cleanText.replace(/(?<![가-힣])(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|선|직선|곡선|화살표|오각형|육각형|팔각형|별|십자|구름|마름모|도넛|평행사변형|사다리꼴|개체|그리기\s?개체|묶음\s?개체|글상자|표|그림|OLE\s?개체)\s?입니다\.?/g, "").trim();
+   let style;
+   if (styleMap && charPrId) {
+     const charProp = styleMap.charProperties.get(charPrId);
+@@ -20478,7 +20478,7 @@ function splitMarkdownUnits(md2) {
+ function escapeGfm(text) {
+   return text.replace(/~/g, "\\~");
+ }
+-var HWP_SHAPE_ALT_TEXT_RE = /(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|이등변 삼각형|직각 삼각형|선|직선|곡선|화살표|굵은 화살표|이중 화살표|오각형|육각형|팔각형|별|[4-8]점별|십자|십자형|구름|구름형|마름모|도넛|평행사변형|사다리꼴|부채꼴|호|반원|물결|번개|하트|빗금|블록 화살표|수식|표|그림|개체|그리기\s?개체|묶음\s?개체|글상자|수식\s?개체|OLE\s?개체)\s?입니다\.?/g;
++var HWP_SHAPE_ALT_TEXT_RE = /(?<![가-힣])(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|이등변 삼각형|직각 삼각형|선|직선|곡선|화살표|굵은 화살표|이중 화살표|오각형|육각형|팔각형|별|[4-8]점별|십자|십자형|구름|구름형|마름모|도넛|평행사변형|사다리꼴|부채꼴|호|반원|물결|번개|하트|빗금|블록 화살표|수식|표|그림|개체|그리기\s?개체|묶음\s?개체|글상자|수식\s?개체|OLE\s?개체)\s?입니다\.?/g;
+ function sanitizeText(text) {
+   let result = mapPuaText(text).replace(/[\u{F0000}-\u{FFFFD}]/gu, "").replace(HWP_SHAPE_ALT_TEXT_RE, "").replace(/  +/g, " ").trim();
+   if (result.length <= 30 && result.includes(" ")) {
+diff --git a/dist/chunk-ZZNSI4GV.js b/dist/chunk-ZZNSI4GV.js
+index 081b59110c85b753baf20069c9493247b69c470d..0021af68000f3a21d1c355447617f6e9f8d50f67 100644
+--- a/dist/chunk-ZZNSI4GV.js
++++ b/dist/chunk-ZZNSI4GV.js
+@@ -333,7 +333,7 @@ function convertTableToText(rows) {
+ function escapeGfm(text) {
+   return text.replace(/~/g, "\\~");
+ }
+-var HWP_SHAPE_ALT_TEXT_RE = /(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|이등변 삼각형|직각 삼각형|선|직선|곡선|화살표|굵은 화살표|이중 화살표|오각형|육각형|팔각형|별|[4-8]점별|십자|십자형|구름|구름형|마름모|도넛|평행사변형|사다리꼴|부채꼴|호|반원|물결|번개|하트|빗금|블록 화살표|수식|표|그림|개체|그리기\s?개체|묶음\s?개체|글상자|수식\s?개체|OLE\s?개체)\s?입니다\.?/g;
++var HWP_SHAPE_ALT_TEXT_RE = /(?<![가-힣])(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|이등변 삼각형|직각 삼각형|선|직선|곡선|화살표|굵은 화살표|이중 화살표|오각형|육각형|팔각형|별|[4-8]점별|십자|십자형|구름|구름형|마름모|도넛|평행사변형|사다리꼴|부채꼴|호|반원|물결|번개|하트|빗금|블록 화살표|수식|표|그림|개체|그리기\s?개체|묶음\s?개체|글상자|수식\s?개체|OLE\s?개체)\s?입니다\.?/g;
+ function sanitizeText(text) {
+   let result = mapPuaText(text).replace(/[\u{F0000}-\u{FFFFD}]/gu, "").replace(HWP_SHAPE_ALT_TEXT_RE, "").replace(/  +/g, " ").trim();
+   if (result.length <= 30 && result.includes(" ")) {
+diff --git a/dist/index.cjs b/dist/index.cjs
+index f9529c8eafc3ea4d1da75655d633637a313cd265..c8c8f398f24a86a29fdb0955e1a50299edc6ecf7 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -2030,7 +2030,7 @@ function extractParagraphInfo(para, styleMap, ctx) {
+   let cleanText = text.replace(/[ \t]+/g, " ").trim();
+   if (/^그림입니다\.?\s*원본\s*그림의\s*(이름|크기)/.test(cleanText)) cleanText = "";
+   cleanText = cleanText.replace(/그림입니다\.?\s*원본\s*그림의\s*(이름|크기)[^\n]*(\n[^\n]*원본\s*그림의\s*(이름|크기)[^\n]*)*/g, "").trim();
+-  cleanText = cleanText.replace(/(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|선|직선|곡선|화살표|오각형|육각형|팔각형|별|십자|구름|마름모|도넛|평행사변형|사다리꼴|개체|그리기\s?개체|묶음\s?개체|글상자|표|그림|OLE\s?개체)\s?입니다\.?/g, "").trim();
++  cleanText = cleanText.replace(/(?<![가-힣])(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|선|직선|곡선|화살표|오각형|육각형|팔각형|별|십자|구름|마름모|도넛|평행사변형|사다리꼴|개체|그리기\s?개체|묶음\s?개체|글상자|표|그림|OLE\s?개체)\s?입니다\.?/g, "").trim();
+   let style;
+   if (styleMap && charPrId) {
+     const charProp = styleMap.charProperties.get(charPrId);
+@@ -20699,7 +20699,7 @@ function splitMarkdownUnits(md2) {
+ function escapeGfm(text) {
+   return text.replace(/~/g, "\\~");
+ }
+-var HWP_SHAPE_ALT_TEXT_RE = /(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|이등변 삼각형|직각 삼각형|선|직선|곡선|화살표|굵은 화살표|이중 화살표|오각형|육각형|팔각형|별|[4-8]점별|십자|십자형|구름|구름형|마름모|도넛|평행사변형|사다리꼴|부채꼴|호|반원|물결|번개|하트|빗금|블록 화살표|수식|표|그림|개체|그리기\s?개체|묶음\s?개체|글상자|수식\s?개체|OLE\s?개체)\s?입니다\.?/g;
++var HWP_SHAPE_ALT_TEXT_RE = /(?<![가-힣])(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|이등변 삼각형|직각 삼각형|선|직선|곡선|화살표|굵은 화살표|이중 화살표|오각형|육각형|팔각형|별|[4-8]점별|십자|십자형|구름|구름형|마름모|도넛|평행사변형|사다리꼴|부채꼴|호|반원|물결|번개|하트|빗금|블록 화살표|수식|표|그림|개체|그리기\s?개체|묶음\s?개체|글상자|수식\s?개체|OLE\s?개체)\s?입니다\.?/g;
+ function sanitizeText(text) {
+   let result = _chunkFJON4QNBcjs.mapPuaText.call(void 0, text).replace(/[\u{F0000}-\u{FFFFD}]/gu, "").replace(HWP_SHAPE_ALT_TEXT_RE, "").replace(/  +/g, " ").trim();
+   if (result.length <= 30 && result.includes(" ")) {
+diff --git a/dist/index.js b/dist/index.js
+index cf484aa478d64db8da2a496130385ca12cb8cae2..06ece3fb55dc499a3f8e4f6c212e03f5042ba647 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -2027,7 +2027,7 @@ function extractParagraphInfo(para, styleMap, ctx) {
+   let cleanText = text.replace(/[ \t]+/g, " ").trim();
+   if (/^그림입니다\.?\s*원본\s*그림의\s*(이름|크기)/.test(cleanText)) cleanText = "";
+   cleanText = cleanText.replace(/그림입니다\.?\s*원본\s*그림의\s*(이름|크기)[^\n]*(\n[^\n]*원본\s*그림의\s*(이름|크기)[^\n]*)*/g, "").trim();
+-  cleanText = cleanText.replace(/(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|선|직선|곡선|화살표|오각형|육각형|팔각형|별|십자|구름|마름모|도넛|평행사변형|사다리꼴|개체|그리기\s?개체|묶음\s?개체|글상자|표|그림|OLE\s?개체)\s?입니다\.?/g, "").trim();
++  cleanText = cleanText.replace(/(?<![가-힣])(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|선|직선|곡선|화살표|오각형|육각형|팔각형|별|십자|구름|마름모|도넛|평행사변형|사다리꼴|개체|그리기\s?개체|묶음\s?개체|글상자|표|그림|OLE\s?개체)\s?입니다\.?/g, "").trim();
+   let style;
+   if (styleMap && charPrId) {
+     const charProp = styleMap.charProperties.get(charPrId);
+@@ -20696,7 +20696,7 @@ function splitMarkdownUnits(md2) {
+ function escapeGfm(text) {
+   return text.replace(/~/g, "\\~");
+ }
+-var HWP_SHAPE_ALT_TEXT_RE = /(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|이등변 삼각형|직각 삼각형|선|직선|곡선|화살표|굵은 화살표|이중 화살표|오각형|육각형|팔각형|별|[4-8]점별|십자|십자형|구름|구름형|마름모|도넛|평행사변형|사다리꼴|부채꼴|호|반원|물결|번개|하트|빗금|블록 화살표|수식|표|그림|개체|그리기\s?개체|묶음\s?개체|글상자|수식\s?개체|OLE\s?개체)\s?입니다\.?/g;
++var HWP_SHAPE_ALT_TEXT_RE = /(?<![가-힣])(?:모서리가 둥근 |둥근 )?(?:사각형|직사각형|정사각형|원|타원|삼각형|이등변 삼각형|직각 삼각형|선|직선|곡선|화살표|굵은 화살표|이중 화살표|오각형|육각형|팔각형|별|[4-8]점별|십자|십자형|구름|구름형|마름모|도넛|평행사변형|사다리꼴|부채꼴|호|반원|물결|번개|하트|빗금|블록 화살표|수식|표|그림|개체|그리기\s?개체|묶음\s?개체|글상자|수식\s?개체|OLE\s?개체)\s?입니다\.?/g;
+ function sanitizeText(text) {
+   let result = mapPuaText(text).replace(/[\u{F0000}-\u{FFFFD}]/gu, "").replace(HWP_SHAPE_ALT_TEXT_RE, "").replace(/  +/g, " ").trim();
+   if (result.length <= 30 && result.includes(" ")) {

@@ -11,3 +11,5 @@ minimumReleaseAgeExclude:
   - '@ai-sdk/gateway@3.0.127'
   - '@ai-sdk/openai@3.0.69'
   - ai@6.0.199
+patchedDependencies:
+  kordoc@3.1.1: patches/kordoc@3.1.1.patch
