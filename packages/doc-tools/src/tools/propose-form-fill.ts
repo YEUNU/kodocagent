@@ -2,17 +2,18 @@
  * propose_form_fill 툴 — 문서 양식 필드 채우기 제안
  * docs/SPEC.md §6, §7
  *
- * SPEC 일탈: kordoc에는 fillForm이 export되지 않음.
- * 대신 extractFormFields(blocks)로 현재 필드 목록을 읽고,
- * 마크다운에서 필드 값을 직접 치환한 뒤 patchHwpx로 무손실 패치한다.
+ * kordoc `fillHwpx(hwpxBuffer, {라벨: 값})` 로 HWPX 원본을 직접 수정해 서식 필드를
+ * 채운다(스타일 100% 보존). 과거에는 fillForm 미export로 마크다운 정규식 치환 +
+ * patchHwpx 우회를 썼으나, kordoc 3.1.x 가 전용 API 를 제공하므로 이를 채택한다.
+ * (직접 XML 수정이라 patchHwpx 의 전-마크다운 LCS 재조정 경로를 타지 않는다.)
  *
- * diff: 라벨: 이전 값 → 새 값 표
+ * diff: 라벨: 이전 값 → 새 값 표. 미매칭 라벨은 fillHwpx 의 unmatched 로 경고.
  */
 
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { kordocErrorMessage } from "@kodocagent/shared";
-import { extractFormFields, patchHwpx } from "kordoc";
+import { extractFormFields, fillHwpx } from "kordoc";
 import { z } from "zod";
 import { parse } from "../kordoc-parse.js";
 import { hwpStructuralGuard, resolveSafePath } from "../security.js";
@@ -80,54 +81,40 @@ export const proposeFormFillTool: ToolDefinition<ProposeFormFillInput> = {
       return `오류: ${msg}`;
     }
 
-    // 현재 양식 필드 추출
+    // 현재 양식 필드 추출 (diff 의 '이전 값' 표시용)
     const formResult = extractFormFields(parseResult.blocks);
     const existingFields = new Map(formResult.fields.map((f) => [f.label, f.value]));
-
-    // 매핑되지 않은 필드 경고
-    const unknownLabels = Object.keys(input.fields).filter((label) => !existingFields.has(label));
     const warnings: string[] = [];
-    if (unknownLabels.length > 0) {
-      warnings.push(
-        `다음 라벨을 찾을 수 없습니다: ${unknownLabels.join(", ")}. read_document로 현재 필드 목록을 확인하세요.`,
-      );
-    }
 
-    // 마크다운에서 필드 값 치환하여 새 마크다운 생성
-    let newMarkdown = parseResult.markdown;
+    // diff 구성: 라벨 | 이전 값 | 새 값
     const diffLines: string[] = ["| 라벨 | 이전 값 | 새 값 |", "| --- | --- | --- |"];
-
     for (const [label, newValue] of Object.entries(input.fields)) {
       const oldValue = existingFields.get(label) ?? "(없음)";
       diffLines.push(`| ${label} | ${oldValue} | ${newValue} |`);
-
-      // 마크다운에서 "라벨: 이전값" 또는 "라벨 이전값" 패턴 치환
-      // 표 형식: | 라벨 | 이전값 | → | 라벨 | 새값 |
-      const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const escapedOld = oldValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      if (oldValue !== "(없음)") {
-        newMarkdown = newMarkdown.replace(
-          new RegExp(`(\\|\\s*${escapedLabel}\\s*\\|\\s*)${escapedOld}(\\s*\\|)`, "g"),
-          `$1${newValue}$2`,
-        );
-      }
     }
-
     const diff = diffLines.join("\n");
 
-    // patchHwpx로 무손실 서식 보존 채우기
-    const origU8 = new Uint8Array(
-      originalBuffer.buffer,
+    // kordoc fillHwpx — HWPX 원본을 직접 수정해 서식 필드를 채움(스타일 100% 보존)
+    const origAB = originalBuffer.buffer.slice(
       originalBuffer.byteOffset,
-      originalBuffer.byteLength,
-    );
-    const patchResult = await patchHwpx(origU8, newMarkdown);
-    if (!patchResult.success || !patchResult.data) {
-      return `오류: 양식 채우기를 적용하지 못했습니다: ${patchResult.error ?? "알 수 없는 오류"}.`;
-    }
-    const stagedData = patchResult.data;
-    for (const s of patchResult.skipped) {
-      warnings.push(`일부 항목이 적용되지 않았습니다(${s.reason ?? "사유 미상"}).`);
+      originalBuffer.byteOffset + originalBuffer.byteLength,
+    ) as ArrayBuffer;
+    let stagedData: Uint8Array;
+    try {
+      const fillResult = await fillHwpx(origAB, input.fields);
+      if (fillResult.unmatched.length > 0) {
+        warnings.push(
+          `다음 라벨을 찾을 수 없습니다: ${fillResult.unmatched.join(", ")}. read_document로 현재 필드 목록을 확인하세요.`,
+        );
+      }
+      if (fillResult.filled.length === 0) {
+        return `오류: 채워진 양식 필드가 없습니다. 라벨이 문서와 일치하는지 read_document로 확인하세요${
+          fillResult.unmatched.length > 0 ? ` (미매칭: ${fillResult.unmatched.join(", ")})` : ""
+        }.`;
+      }
+      stagedData = new Uint8Array(fillResult.buffer);
+    } catch (err) {
+      return `오류: 양식 채우기를 적용하지 못했습니다: ${err instanceof Error ? err.message : String(err)}.`;
     }
     const { outputPath, willConvertFormat } = resolveOutputPath(safePath);
     const stagedPath = await stageFile(ctx.sessionId, safePath, stagedData);

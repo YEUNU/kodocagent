@@ -9,6 +9,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { makeF3 } from "../eval/fixtures.js";
+import { parse } from "../kordoc-parse.js";
 import { proposeFormFillTool } from "./propose-form-fill.js";
 
 // ─────────────────────────────────────────────────────────
@@ -70,4 +72,45 @@ describe("proposeFormFillTool — OLE2 .hwp 바이너리 가드", () => {
     const afterBytes = await readFile(hwpPath);
     expect(Buffer.from(afterBytes).equals(oleBytes)).toBe(true);
   }, 10000);
+});
+
+// ─────────────────────────────────────────────────────────
+// fillHwpx 채우기 (F3 .hwpx 라벨-값 양식) — propose → commit → 재파싱
+// ─────────────────────────────────────────────────────────
+
+describe("proposeFormFillTool — fillHwpx 채우기", () => {
+  it("성명 셀을 채우고 커밋하면 결과에 반영되며 미매칭 라벨은 경고된다", async () => {
+    const subDir = join(testDir, `fill-${Date.now()}`);
+    await mkdir(subDir, { recursive: true });
+    const f3 = await makeF3();
+    const formPath = join(subDir, "form.hwpx");
+    await writeFile(formPath, f3.bytes);
+
+    const ctx = makeCtx(subDir);
+    const result = await proposeFormFillTool.propose?.({
+      input: {
+        path: "form.hwpx",
+        fields: { 성명: "홍길동", 없는라벨: "X" },
+        summary: "양식 채우기",
+      },
+      ctx,
+    });
+
+    // 제안(객체)이 반환되어야 함
+    expect(typeof result).toBe("object");
+    if (result == null || typeof result === "string") throw new Error(String(result));
+
+    // diff 에 새 값, 경고에 미매칭 라벨
+    expect(result.proposal.diff).toContain("홍길동");
+    expect(result.proposal.warnings.join(" ")).toContain("없는라벨");
+
+    // 커밋 → 결과 파일 재파싱에 값 반영
+    await result.commit();
+    const out = await readFile(formPath);
+    const re = await parse(
+      out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer,
+    );
+    expect(re.success).toBe(true);
+    if (re.success) expect(re.markdown).toContain("홍길동");
+  }, 15000);
 });
