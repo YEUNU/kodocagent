@@ -19,7 +19,7 @@ import { KodocConfigSchema } from "@kodocagent/shared";
 import { parse } from "kordoc";
 import { createDocTools } from "../index.js";
 import { makeF1, makeF2, makeF3, makeF4, makeF5Hwpx } from "./fixtures.js";
-import { EVAL_SPECS } from "./specs.js";
+import { EVAL_SPECS, OPEN_EVAL_SPECS } from "./specs.js";
 
 // ─────────────────────────────────────────────────────────
 // 픽스처 이름 매핑
@@ -97,12 +97,20 @@ interface RunResult {
   detail: string;
   toolsCalled: string[];
   durationMs: number;
+  /** 에이전트가 생성한 자연어 응답 전체 */
+  assistantText: string;
+  /** 원본 fixture markdown vs 최종 편집 후 markdown 비교 결과 */
+  docChanged: boolean;
   error?: string;
 }
 
-async function runSpec(spec: (typeof EVAL_SPECS)[number], timeoutMs: number): Promise<RunResult> {
+async function runSpec(
+  spec: (typeof EVAL_SPECS)[number] | (typeof OPEN_EVAL_SPECS)[number],
+  timeoutMs: number,
+): Promise<RunResult> {
   const startMs = Date.now();
   const toolsCalled: string[] = [];
+  let assistantText = "";
 
   // 임시 디렉토리 — KODOCAGENT_HOME 도 격리
   const cwd = await mkdtemp(join(tmpdir(), "kodoc-eval-"));
@@ -170,6 +178,8 @@ async function runSpec(spec: (typeof EVAL_SPECS)[number], timeoutMs: number): Pr
       for await (const event of session.run(prompt, controller.signal)) {
         if (event.type === "tool-call") {
           toolsCalled.push(event.toolName);
+        } else if (event.type === "text-delta") {
+          assistantText += event.text;
         } else if (event.type === "error") {
           throw new Error(`에이전트 오류: ${event.message}`);
         }
@@ -182,7 +192,11 @@ async function runSpec(spec: (typeof EVAL_SPECS)[number], timeoutMs: number): Pr
       throw new Error(`타임아웃 (${timeoutMs / 1000}s 초과)`);
     }
 
-    // 5. 편집된 파일 읽기 + parse → markdown
+    // 5. 원본 fixture parse → originalMarkdown
+    const originalParseResult = await parse(fixture.bytes.buffer as ArrayBuffer);
+    const originalMarkdown = originalParseResult.success ? originalParseResult.markdown : "";
+
+    // 6. 편집된 파일 읽기 + parse → markdown
     const editedBytes = await readFile(filePath);
     const parseResult = await parse(editedBytes.buffer as ArrayBuffer);
     if (!parseResult.success) {
@@ -190,8 +204,18 @@ async function runSpec(spec: (typeof EVAL_SPECS)[number], timeoutMs: number): Pr
     }
     const markdown = parseResult.markdown;
 
-    // 6. spec.assert 판정
-    const { pass, detail } = spec.assert(markdown);
+    // 7. docChanged 비교
+    const docChanged = originalMarkdown !== markdown;
+
+    // 8. spec.assert 판정 — 새 시그니처(extra 옵션)도 지원
+    const extra = { assistantText, docChanged, originalMarkdown };
+    const { pass, detail } = spec.assert(markdown, extra);
+
+    // 9. assistantText 출력 (250자 truncate)
+    const textPreview = assistantText.slice(0, 250) + (assistantText.length > 250 ? "…" : "");
+    if (textPreview) {
+      process.stdout.write(`    assistantText: ${textPreview}\n`);
+    }
 
     return {
       id: spec.id,
@@ -199,6 +223,8 @@ async function runSpec(spec: (typeof EVAL_SPECS)[number], timeoutMs: number): Pr
       detail,
       toolsCalled,
       durationMs: Date.now() - startMs,
+      assistantText,
+      docChanged,
     };
   } catch (err: unknown) {
     const error = err instanceof Error ? err.message : String(err);
@@ -208,6 +234,8 @@ async function runSpec(spec: (typeof EVAL_SPECS)[number], timeoutMs: number): Pr
       detail: `실행 오류: ${error}`,
       toolsCalled,
       durationMs: Date.now() - startMs,
+      assistantText,
+      docChanged: false,
       error,
     };
   }
@@ -222,11 +250,12 @@ export interface SpecRunResult extends RunResult {}
 export async function runAllSpecs(opts?: {
   specIds?: string[];
   timeoutMs?: number;
+  /** true なら OPEN_EVAL_SPECS を使う */
+  useOpenSpecs?: boolean;
 }): Promise<SpecRunResult[]> {
   const timeoutMs = opts?.timeoutMs ?? 150_000;
-  const selected = opts?.specIds
-    ? EVAL_SPECS.filter((s) => opts.specIds?.includes(s.id))
-    : EVAL_SPECS;
+  const pool = opts?.useOpenSpecs ? OPEN_EVAL_SPECS : EVAL_SPECS;
+  const selected = opts?.specIds ? pool.filter((s) => opts.specIds?.includes(s.id)) : pool;
   // 자동 검증 불가 스펙(예: 양식 개체 값은 markdown 미노출)은 pass/fail 집계에서 제외
   const specs = selected.filter((s) => {
     if (s.autoVerifiable === false) {
@@ -275,14 +304,19 @@ async function main(): Promise<void> {
 
   // 결과 테이블
   process.stdout.write("\n─────────────────────────────────────────────────────\n");
-  process.stdout.write(`${"id".padEnd(6)} ${"pass".padEnd(6)} ${"tools".padEnd(40)} ${"detail"}\n`);
+  process.stdout.write(
+    `${"id".padEnd(6)} ${"pass".padEnd(6)} ${"docChanged".padEnd(12)} ${"tools".padEnd(40)} ${"detail"}\n`,
+  );
   process.stdout.write("─────────────────────────────────────────────────────\n");
 
   for (const r of results) {
     const mark = r.pass ? "✅" : "❌";
     const tools = r.toolsCalled.join(",") || "(없음)";
     const toolsTrunc = tools.length > 38 ? `${tools.slice(0, 35)}…` : tools;
-    process.stdout.write(`${r.id.padEnd(6)} ${mark}      ${toolsTrunc.padEnd(40)} ${r.detail}\n`);
+    const changed = r.docChanged ? "변경됨" : "변경없음";
+    process.stdout.write(
+      `${r.id.padEnd(6)} ${mark}      ${changed.padEnd(12)} ${toolsTrunc.padEnd(40)} ${r.detail}\n`,
+    );
   }
 
   process.stdout.write("─────────────────────────────────────────────────────\n");

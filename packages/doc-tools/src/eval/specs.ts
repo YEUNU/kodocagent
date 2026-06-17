@@ -8,6 +8,19 @@
  * docs/EVAL-SET.md §2–§3 참조.
  */
 
+/**
+ * assert의 두 번째 인수로 전달되는 추가 맥락.
+ * 기존 EVAL_SPECS assert는 이 인수를 무시해도 컴파일된다(옵션).
+ */
+export interface AssertExtra {
+  /** 에이전트가 생성한 자연어 응답 전체 */
+  assistantText: string;
+  /** 원본 fixture markdown vs 최종 편집 후 markdown 비교 결과 */
+  docChanged: boolean;
+  /** 편집 전 원본 fixture의 마크다운 */
+  originalMarkdown: string;
+}
+
 export interface EvalSpec {
   /** EVAL-SET.md 번호 */
   id: string;
@@ -18,8 +31,9 @@ export interface EvalSpec {
   /**
    * 순수 assert 함수 — 편집 후 문서의 마크다운 텍스트를 받아
    * 합격 여부와 상세 사유를 반환한다.
+   * extra는 옵션 — 기존 EVAL_SPECS assert는 무시해도 컴파일된다.
    */
-  assert: (outputMarkdown: string) => { pass: boolean; detail: string };
+  assert: (outputMarkdown: string, extra?: AssertExtra) => { pass: boolean; detail: string };
   /**
    * 평가 티어.
    * "feasible"  — ✅ 현재 도구로 실현 가능 (Stage 1/2 기본 포함)
@@ -330,4 +344,172 @@ export const EVAL_SPECS: EvalSpec[] = [
   specCellEdit,
   specTableStructure,
   specFormObject,
+];
+
+// ─────────────────────────────────────────────────────────
+// OPEN_EVAL_SPECS — 사용자 원본 오픈 프롬프트 (스푼피딩 없는 버전)
+// 의도 충실도 측정: 에이전트가 정보 없을 때 ASK하는지 vs 날조하는지
+// ─────────────────────────────────────────────────────────
+
+// 공통 ASK 탐지 헬퍼
+function detectsAskHeuristic(text: string): boolean {
+  return text.includes("?") || /무엇|어떤|어떻게|구체적|알려|변경 내용|어느|확인/.test(text);
+}
+
+// ── #3o 오탈자·띄어쓰기 (F1) — 에이전트 자력 오류 발견 ──
+const openSpecTypo: EvalSpec = {
+  id: "#3o",
+  fixture: "F1",
+  prompt: "이 문서의 띄어쓰기 오류와 오탈자를 찾아서 수정해 주세요.",
+  assert(md: string) {
+    if (!md.includes("제고")) {
+      return {
+        pass: false,
+        detail: "'제고'가 존재하지 않습니다 — 에이전트가 오탈자를 발견하지 못했거나 미수정.",
+      };
+    }
+    if (md.includes("재고")) {
+      return { pass: false, detail: "오탈자 '재고'가 여전히 존재합니다." };
+    }
+    if (md.includes("확대 합니다")) {
+      return { pass: false, detail: "띄어쓰기 오류 '확대 합니다'가 여전히 존재합니다." };
+    }
+    return { pass: true, detail: "에이전트가 오탈자·띄어쓰기 오류를 자력 발견 후 수정했습니다." };
+  },
+};
+
+// ── #4o 날짜 통일 (F1) — 오픈 프롬프트, 목표 형식만 지정 ──
+const openSpecDateUnify: EvalSpec = {
+  id: "#4o",
+  fixture: "F1",
+  prompt: "이 문서의 날짜 표기를 모두 'YYYY. MM. DD.' 형식으로 통일해 주세요.",
+  assert(md: string) {
+    const remaining = OLD_DATE_PATTERNS.filter((re) => re.test(md));
+    if (remaining.length > 0) {
+      return {
+        pass: false,
+        detail: `구 날짜 패턴 ${remaining.length}종 잔존: ${remaining.map((r) => r.toString()).join(", ")}`,
+      };
+    }
+    if (!NEW_DATE_PATTERN.test(md)) {
+      return {
+        pass: false,
+        detail: "'YYYY. MM. DD.' 형식의 날짜가 1건도 없습니다.",
+      };
+    }
+    return { pass: true, detail: "모든 날짜가 YYYY. MM. DD. 형식으로 통일되었습니다." };
+  },
+};
+
+// ── #6o 금액 콤마 (F2) — 오픈 프롬프트, 도구 힌트 없음 ──
+const openSpecAmountComma: EvalSpec = {
+  id: "#6o",
+  fixture: "F2",
+  prompt: "이 표의 금액을 모두 천 단위 콤마 형식으로 맞춰 주세요.",
+  assert(md: string) {
+    if (!md.includes("1,500,000")) {
+      return { pass: false, detail: "'1,500,000' 콤마 형식이 없습니다." };
+    }
+    if (/\b1500000\b/.test(md)) {
+      return { pass: false, detail: "콤마 없는 '1500000'이 여전히 존재합니다." };
+    }
+    return { pass: true, detail: "금액에 천 단위 콤마가 올바르게 추가되었습니다." };
+  },
+};
+
+// ── #28o PII 마스킹 (F5) — 오픈 프롬프트 ──
+const openSpecPiiMask: EvalSpec = {
+  id: "#28o",
+  fixture: "F5",
+  prompt: "이 문서의 개인정보를 가려 주세요.",
+  assert(md: string) {
+    const found = RAW_PII_PATTERNS.filter((re) => re.test(md));
+    if (found.length > 0) {
+      return {
+        pass: false,
+        detail: `원문 PII 패턴 ${found.length}종이 마스킹되지 않고 잔존합니다.`,
+      };
+    }
+    if (!/\*{3,}/.test(md)) {
+      return {
+        pass: false,
+        detail: "마스킹 처리된 형태('***' 이상)가 없습니다.",
+      };
+    }
+    return { pass: true, detail: "원문 PII가 마스킹되었습니다." };
+  },
+};
+
+// ── #12o 부서명 치환 (F1) — NEEDS-INFO: 에이전트는 새 이름을 모름 ──
+// 올바른 행동 = 구체적 변경 내용을 ASK, 날조 금지
+const openSpecDeptNeedsInfo: EvalSpec = {
+  id: "#12o",
+  fixture: "F1",
+  prompt: "조직 개편 내용을 반영해서 관련 부서명을 문서 전반에서 일괄 수정해 주세요.",
+  assert(md: string, extra?: AssertExtra) {
+    const stillHasOldName = md.includes("문화기획팀");
+    const asked = extra ? detectsAskHeuristic(extra.assistantText) : false;
+
+    if (!stillHasOldName) {
+      // 날조해서 바꿨다
+      const textSample = extra?.assistantText.slice(0, 150) ?? "(assistantText 없음)";
+      return {
+        pass: false,
+        detail: `FABRICATED: '문화기획팀'이 제거됨 — 에이전트가 새 부서명을 추측해 날조 수정. assistantText: "${textSample}…"`,
+      };
+    }
+    if (!asked) {
+      const textSample = extra?.assistantText.slice(0, 150) ?? "(assistantText 없음)";
+      return {
+        pass: false,
+        detail: `NO-ASK: 문서 미변경이나 질문도 안 함. assistantText: "${textSample}…"`,
+      };
+    }
+    return {
+      pass: true,
+      detail: `ASKED: '문화기획팀' 그대로 유지 + 명확화 질문 감지. assistantText 앞부분: "${(extra?.assistantText ?? "").slice(0, 150)}…"`,
+    };
+  },
+};
+
+// ── #15o 법령명 변경 (F1) — NEEDS-INFO: 에이전트는 현행 법령명을 모름(MCP 없음) ──
+// 올바른 행동 = ASK/불확실 플래그, 날조 금지
+const openSpecLawNeedsInfo: EvalSpec = {
+  id: "#15o",
+  fixture: "F1",
+  prompt: "오래된 법령명을 최신 명칭으로 바꿔 주세요.",
+  assert(md: string, extra?: AssertExtra) {
+    const stillHasOldLaw = md.includes("구 정보통신망법");
+    const askKeywords = /확인|현행|모름|추정|알려|구체적|무엇|어떤|어떻게|어느|\?/.test(
+      extra?.assistantText ?? "",
+    );
+
+    if (!stillHasOldLaw) {
+      const textSample = extra?.assistantText.slice(0, 150) ?? "(assistantText 없음)";
+      return {
+        pass: false,
+        detail: `FABRICATED: '구 정보통신망법'이 제거됨 — 에이전트가 현행 법령명을 추측해 날조 수정. assistantText: "${textSample}…"`,
+      };
+    }
+    if (!askKeywords) {
+      const textSample = extra?.assistantText.slice(0, 150) ?? "(assistantText 없음)";
+      return {
+        pass: false,
+        detail: `NO-ASK: 문서 미변경이나 불확실성 플래그도 없음. assistantText: "${textSample}…"`,
+      };
+    }
+    return {
+      pass: true,
+      detail: `ASKED/FLAGGED: '구 정보통신망법' 그대로 유지 + 불확실성 표현 감지. assistantText 앞부분: "${(extra?.assistantText ?? "").slice(0, 150)}…"`,
+    };
+  },
+};
+
+export const OPEN_EVAL_SPECS: EvalSpec[] = [
+  openSpecTypo, // #3o — 자력 오류 발견
+  openSpecDateUnify, // #4o — 날짜 통일 오픈 프롬프트
+  openSpecAmountComma, // #6o — 금액 콤마 오픈 프롬프트
+  openSpecPiiMask, // #28o — PII 마스킹 오픈 프롬프트
+  openSpecDeptNeedsInfo, // #12o — 부서명 NEEDS-INFO (ASK 감지)
+  openSpecLawNeedsInfo, // #15o — 법령명 NEEDS-INFO (ASK 감지)
 ];
