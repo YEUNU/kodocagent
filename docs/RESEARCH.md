@@ -4,6 +4,8 @@
 
 ## 1. kordoc — 한국 문서 파싱/변환
 
+> **업데이트(2026-06-17, v0.6.0):** 이 조사는 `@clazic/kordoc@2.7.6`(스코프드, 당시 npm 최신) 기준이다. 이후 활성 후속인 **언스코프드 `kordoc@3.1.1`로 마이그레이션**했고, `markdownToHwpx({templateArrayBuffer})`/`fillForm` 대신 **무손실 패치 API `patchHwpx`·`patchHwp`(.hwp 바이너리 제자리 편집)**를 쓴다. 아래 매트릭스의 'HWP 5.x 쓰기 ✗'은 `patchHwp`로 해소됨. 상세: [SPEC.md](SPEC.md) §2, [ROADMAP.md](ROADMAP.md) R11.
+
 - **저장소**: https://github.com/chrisryugj/kordoc (TypeScript, MIT, ★1,011)
 - **배포**: npm `@clazic/kordoc` **v2.7.6 (npm 최신 — GitHub 릴리스 v2.9.1과 차이 있음, npm 기준으로 핀)** / CLI(`npx kordoc`) / MCP 서버 셋 다 제공
 - **요구사항**: Node 18+, ESM+CJS 듀얼
@@ -91,7 +93,7 @@
 | Anthropic 모델 | `claude-opus-4-8`($5/$25), `claude-fable-5`($10/$50), `claude-sonnet-4-6`($3/$15), `claude-haiku-4-5`($1/$5). **Opus 4.7+/Fable 5는 temperature/top_p/top_k에 400** — 샘플링 파라미터 미설정 원칙 |
 | OpenAI 모델 | `gpt-5.5`(플래그십), `gpt-5.4`, `gpt-5.4-mini`, `gpt-5` |
 | Gemini 모델 | `gemini-3.5-flash`(GA 안정), `gemini-3.1-pro-preview`, `gemini-2.5-pro/flash` |
-| npm 이름 | `kodocagent`, `@kodocagent/*` 모두 미등록(확보 가능) |
+| npm 이름 | (조사 시점 미등록) → 현재 **`@kodocagent/cli`** 발행, 내부 `@kodocagent/*`는 비공개 워크스페이스 |
 | 쓰기 라이브러리 | `docx@9.7.1`(MIT), `exceljs@4.4.0`(MIT) |
 
 ## 결론
@@ -105,6 +107,6 @@
 5. **법령 기반 검토** → korean-law-mcp 기본 번들 (`npx`, `LAW_OC`, 무료 API)
 
 주요 갭과 정책:
-- HWP 5.0 바이너리 **쓰기**는 kordoc·rhwp 모두 불가(검증) → `.hwp` 편집 결과는 `.hwpx` 저장 정책
+- ~~HWP 5.0 바이너리 **쓰기**는 kordoc·rhwp 모두 불가~~ → **(v0.6.0 갱신)** kordoc 3.x `patchHwp`로 `.hwp` 제자리 편집 가능(조사 시점엔 불가로 판단해 `.hwpx` 저장 정책이었음)
 - 시각 미리보기는 Node에서 불가(rhwp 브라우저 전용) → v1은 텍스트/구조 diff, 시각화는 M5 GUI
 - DOCX 편집은 마크다운 경유 재생성이라 복잡 서식 손실 → proposal 카드에 경고 명시

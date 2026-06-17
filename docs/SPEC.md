@@ -10,7 +10,7 @@
 | 2 | 하네스 | Vercel AI SDK 위 자체 경량 루프 |
 | 3 | 한국 사이트 자동화 | MCP 클라이언트 생태계 (korean-law-mcp 기본 번들) |
 | 4 | 문서 수정 UX | 스테이징 → diff 미리보기 → 승인 → 백업 후 저장 |
-| 5 | v1 쓰기 범위 | **HWPX + DOCX + XLSX 모두 쓰기** (HWP 5.0 바이너리 쓰기는 제외, `.hwp` 편집 결과는 `.hwpx`) |
+| 5 | v1 쓰기 범위 | **HWPX + DOCX + XLSX 쓰기**. v0.6.0~ kordoc 3.x `patchHwp`로 **HWP 5.0 바이너리 직접 편집**도 지원(`propose_edit`이 `.hwp`를 제자리 무손실 편집; 표·셀 등 구조 편집 툴은 `.hwpx` 기반) |
 | 6 | 미리보기 | **텍스트/구조 diff만** (rhwp 시각 렌더링은 브라우저 전용이므로 M5 GUI로 이관) |
 | 7 | 에이전트 접근 범위 | 읽기전용 파일 탐색(cwd 이하) + 문서 툴. 일반 쓰기·셸 실행 없음 |
 | 8 | 기본 모델 | 프로바이더별 플래그십 (아래 §3) |
@@ -26,7 +26,7 @@
 | `@ai-sdk/anthropic` | ^3.0 | Anthropic 프로바이더 | Apache-2.0 |
 | `@ai-sdk/google` | ^3.0 | Gemini 프로바이더 | Apache-2.0 |
 | `@modelcontextprotocol/sdk` | ^1.29 | MCP 클라이언트 | MIT |
-| `@clazic/kordoc` | ^2.7.6 | HWP/HWPX/DOCX/XLSX/PDF 읽기, HWPX 쓰기, 비교, 폼 | MIT |
+| `kordoc` | ^3.1.1 | HWP/HWPX/DOCX/XLSX/PDF 읽기, HWPX/HWP 무손실 패치 쓰기, 비교, 폼 | MIT |
 | `docx` | ^9.7 | DOCX 생성/쓰기 | MIT |
 | `exceljs` | ^4.4 | XLSX 읽기보조/셀 단위 수정 (서식 보존) | MIT |
 | `zod` | ^4.4 | 툴 스키마·설정 검증 | MIT |
@@ -38,11 +38,11 @@
 
 ### 개발
 
-tsup 8.5 / vitest 4.1 / @biomejs/biome 2.4 / @changesets/cli 2.31 / TypeScript 5.x / Node ≥ 20, ESM-only.
+tsup 8.5 / vitest 4.1 / @biomejs/biome 2.4 / @changesets/cli 2.31 / TypeScript 6.x / Node ≥ 20, ESM-only.
 
 **v1에서 제외된 의존성**: `@rhwp/core`(브라우저 전용 — `measureTextWidth` canvas 필요, Node PNG 불가, 쓰기 API 미노출 → M5 GUI에서 `@rhwp/editor`로 사용), keytar(네이티브 모듈), ink(React 의존).
 
-**npm 배포 구조**: `kodocagent` 단일 패키지만 npm에 배포된다. `@kodocagent/core`, `@kodocagent/doc-tools`, `@kodocagent/shared`는 `"private": true` 워크스페이스 전용 패키지로, CLI 빌드 시 tsup `noExternal` 설정에 의해 `kodocagent` 번들에 인라인된다. 사용자는 `npm i -g kodocagent` 하나만 설치하면 모든 기능을 사용할 수 있다.
+**npm 배포 구조**: `@kodocagent/cli` 단일 패키지만 npm에 배포된다(실행 명령은 `kodocagent`). `@kodocagent/core`, `@kodocagent/doc-tools`, `@kodocagent/shared`는 `"private": true` 워크스페이스 전용 패키지로, CLI 빌드 시 tsup `noExternal` 설정에 의해 `@kodocagent/cli` 번들에 인라인된다. 사용자는 `npm i -g @kodocagent/cli` 하나만 설치하면 된다. 단, kordoc 3.x는 OCR·이미지용 optional 의존성(`@huggingface/transformers`·`onnxruntime-node`·`sharp`·`@hyzyla/pdfium` 등 네이티브 ML 스택)을 함께 설치하므로 설치 용량이 크다(전체 설치 채택, v0.6.0).
 
 ### 구현 시 재확인 항목 (문서화 시점에 미검증)
 
@@ -50,30 +50,33 @@ tsup 8.5 / vitest 4.1 / @biomejs/biome 2.4 / @changesets/cli 2.31 / TypeScript 5
 - `@modelcontextprotocol/sdk` v1.29의 transport import 경로 (`client/stdio.js`, `client/streamableHttp.js`로 추정 — 타입 정의에서 확인)
 - `ai@6` × `zod@4` 툴 스키마 호환성 (스캐폴딩 시 스모크 테스트)
 
-## 2. kordoc 검증된 API (이대로 코딩 가능)
+## 2. kordoc 검증된 API (kordoc 3.x — 이대로 코딩 가능)
 
 ```ts
-import { parse, compare, fillForm, markdownToHwpx } from "@clazic/kordoc";
+import { parse, compare, patchHwpx, patchHwp, extractFormFields, markdownToHwpx } from "kordoc";
 
 // 1) 읽기 — 절대 throw하지 않음. 항상 ParseResult 반환
-parse(input: string /*경로*/ | ArrayBuffer | Buffer, options?: ParseOptions): Promise<ParseResult>
-// 성공: { success: true, markdown, blocks: IRBlock[], metadata?, outline?, warnings?, fileType, pageCount? }
+parse(input: string /*경로*/ | ArrayBuffer | Buffer | Uint8Array, options?: ParseOptions): Promise<ParseResult>
+// 성공: { success: true, markdown, blocks: IRBlock[], metadata?, images?, ... }
 // 실패: { success: false, error, code? }  // code: "ENCRYPTED" | "DRM_PROTECTED" | "CORRUPTED" | "UNSUPPORTED_FORMAT" | "IMAGE_BASED_PDF" | ...
 
 // 2) 비교 — ArrayBuffer만 받음 (경로 불가). 포맷 교차 비교 지원
 compare(a: ArrayBuffer, b: ArrayBuffer, options?): Promise<DiffResult>
 // DiffResult: { stats: {added, removed, modified, unchanged}, /* block-level diffs */ }
 
-// 3) 폼 필드 추출 — ⚠ 2.7.6에는 fillForm이 없음 (M2 구현 시 확인).
-//    폼 채우기는 extractFormFields(blocks)로 현재 값을 읽고 마크다운 치환 후
-//    markdownToHwpx(템플릿=원본)로 재생성하는 방식으로 구현함
+// 3) 무손실 패치 쓰기 (쓰기 경로의 핵심) — 원본 + 수정 마크다운을 받아 변경 노드만 XML 패치
+patchHwpx(original: Uint8Array, editedMarkdown: string, options?): Promise<PatchResult>  // .hwpx
+patchHwp(original: Uint8Array, editedMarkdown: string, options?): Promise<PatchResult>    // .hwp(HWP5 바이너리, 제자리)
+// PatchResult: { success, data?: Uint8Array, applied, skipped: { reason: string }[], verification?, error? }
+
+// 4) 폼 필드 추출 — 현재 값 읽기(채우기는 마크다운 치환 후 patchHwpx로 적용)
 extractFormFields(blocks: IRBlock[]): FormField[]
 
-// 4) 마크다운→HWPX — templateArrayBuffer에 원본을 넘기면 원본 스타일 보존
-markdownToHwpx(markdown: string, options?: { templateArrayBuffer?: ArrayBuffer, warnings?: string[], images?: ExtractedImage[] }): Promise<ArrayBuffer>
+// 5) 신규 문서 생성 — 마크다운 → 새 HWPX (템플릿 없음)
+markdownToHwpx(markdown: string, options?: { theme?: string }): Promise<ArrayBuffer>
 ```
 
-핵심 포인트: **`propose_edit`은 `markdownToHwpx(newMarkdown, { templateArrayBuffer: 원본 })`으로 원본 서식을 보존**한다. 암호화 문서는 `code: "ENCRYPTED"`로 반환되므로 에러 메시지로 변환해 모델에 전달.
+핵심 포인트: **`propose_edit`은 `patchHwpx`/`patchHwp`로 원본을 무손실 패치**한다 — 마크다운 전체 재생성이 아니라 변경된 노드만 패치하므로 건드리지 않은 표·병합·서식이 보존된다. `.hwp`는 `patchHwp`로 **제자리 편집**(포맷 변환 없음), 신규 문서만 `markdownToHwpx`로 생성한다. 안전하게 적용 못 한 변경은 `PatchResult.skipped`로 보고된다. 암호화 문서는 `code: "ENCRYPTED"`로 반환되므로 에러 메시지로 변환해 모델에 전달.
 
 ## 3. 모델 레지스트리 (`core/src/providers/registry.ts`)
 
@@ -184,7 +187,7 @@ class AgentSession {
 
 섹션 구성 (안정 prefix 우선 — 캐시 친화):
 1. 역할: 한국어 문서 전문 에이전트. 기본 응답 언어 한국어
-2. 문서 규칙: 수정 전 반드시 `read_document` / 모든 저장은 `propose_*` 경유, 승인 전 "저장했다"고 말하지 않기 / `.hwp` 편집 결과는 `.hwpx`로 저장됨을 사용자에게 고지
+2. 문서 규칙: 수정 전 반드시 `read_document` / 모든 저장은 `propose_*` 경유, 승인 전 "저장했다"고 말하지 않기 / `propose_edit`은 `.hwp`/`.hwpx`를 원본 형식 그대로 편집(표·셀 등 구조 편집 툴은 `.hwpx` 기반이라 `.hwp`가 `.hwpx`로 변환될 수 있음을 고지) / 편집 안전 규칙(요청 범위만 수정·날조 금지·수치/인명/날짜/인용 보존)
 3. 법령 규칙: 법령 인용은 「법령명」 제N조 제N항 제N호 형식, 현행 여부는 MCP 법령 툴로 확인 후 인용, 확인 못 한 법령 내용은 추정임을 명시
 4. 동적 컨텍스트 (마지막에 주입): cwd, 연결된 MCP 서버 목록, 열람한 문서 목록
 
@@ -205,11 +208,19 @@ class AgentSession {
 
 | 툴 | 시그니처 | 구현 |
 |---|---|---|
-| `propose_edit` | `(path, newMarkdown, summary)` | `.hwp`/`.hwpx` → `markdownToHwpx(md, {templateArrayBuffer: 원본})`, `.docx` → `docx` 라이브러리로 재생성(서식 손실을 proposal에 명시), `.md`/`.txt` → 그대로 |
-| `propose_form_fill` | `(path, fields: Record<string,string>, summary)` | kordoc `extractFormFields` + 마크다운 치환 + `markdownToHwpx`(원본 템플릿) — 2.7.6에 fillForm 부재 |
+| `propose_edit` | `(path, newMarkdown, summary)` | `.hwpx` → `patchHwpx`(무손실), `.hwp` → `patchHwp`(제자리 무손실), `.docx` → `docx` 라이브러리로 재생성(서식 손실을 proposal에 명시), `.md`/`.txt` → 그대로 |
+| `propose_form_fill` | `(path, fields: Record<string,string>, summary)` | kordoc `extractFormFields` + 마크다운 치환 + `patchHwpx`(무손실) |
 | `propose_sheet_edit` | `(path, updates: {sheet, cell, value}[], summary)` | exceljs로 원본 워크북 로드 → 셀 단위 수정 → 서식 보존 저장 |
 | `write_new_document` | `(path, markdown)` | 확장자별: `.hwpx` kordoc / `.docx` docx / `.md` fs. 신규 파일이므로 diff 없이 내용 미리보기로 승인 |
 | `write_new_spreadsheet` | `(path, sheets: {name, rows: string[][]}[])` | exceljs 신규 생성 |
+
+### 추가 툴 (v0.4.0~0.6.0 도입 — 상세 동작은 루트 [README](../README.md) 기능 섹션)
+
+위 표 이후 도입된 툴. 모두 `.hwpx` ZIP의 XML을 직접 패치하며(무손실), 쓰기 툴은 동일한 스테이징·승인 파이프라인을 거친다.
+
+- **구조 정밀 편집**: `propose_cell_edit`(표 셀 좌표/라벨 지정, 병합 보존·빈칸 채우기), `propose_table_structure`(행·열 추가/삭제·셀 병합, 병합 가로지름 안전 거부), `propose_find_replace`(본문·표·머리말 전체 찾기/바꾸기), `list_form_objects`/`propose_form_object`(편집상자·누름틀·콤보·체크/라디오 5종)
+- **개인정보**: `scan_pii`(주민/전화/이메일/카드 탐지·읽기전용), `propose_redact_pii`(마스킹 비식별, 원문 미노출)
+- **탐색·복구**: `find_in_document`(텍스트→표 셀 좌표/본문 위치), `list_backups`/`restore_backup`(승인 백업 되돌리기, 복원도 승인·자동 백업)
 
 경로 정규화: 모든 path는 NFC 정규화(macOS NFD 대응) + cwd 이하 검증.
 
@@ -227,7 +238,7 @@ propose_* 호출
                  willConvertFormat?: ".hwp → .hwpx" }
  4. CLI: 컬러 diff 렌더 → clack select: [승인 / 거절 / 거절+사유 입력]
  5-a. 승인: 원본을 ~/.kodocagent/backups/<ISO타임스탬프>-<파일명> 복사(항상)
-      → 같은 볼륨에 temp 쓰기 + rename(원자적). .hwp 대상이면 <이름>.hwpx로 저장하고 원본 .hwp는 보존
+      → 같은 볼륨에 temp 쓰기 + rename(원자적). `propose_edit`의 .hwp는 제자리 편집(원본은 백업에 보존); 구조 편집 툴(.hwpx 기반)에 .hwp를 주면 <이름>.hwpx로 저장
       → 툴 결과: "저장 완료: <경로> (백업: <경로>)"
  5-b. 거절: 스테이징 파일 유지(세션 종료 시 정리), 툴 결과: "사용자 거절: <사유>" → 모델이 재제안
 ```
@@ -268,10 +279,10 @@ propose_* 호출
 
 ## 9. OTA 업데이트 (`cli/src/update.ts`)
 
-- 시작 시(24h 1회, `~/.kodocagent/update-check.json` 캐시) `https://registry.npmjs.org/kodocagent/latest` 조회(3s 타임아웃, 실패 무시)
+- 시작 시(24h 1회, `~/.kodocagent/update-check.json` 캐시) `https://registry.npmjs.org/@kodocagent/cli/latest` 조회(3s 타임아웃, 실패 무시)
 - 새 버전 존재 시 비차단 배너: `새 버전 vX.Y.Z — kodocagent update 로 업데이트`
-- `kodocagent update`: 실행 경로로 설치 방식 감지(글로벌 npm/pnpm → 해당 PM으로 `i -g kodocagent@latest`, npx → "항상 최신 사용 중" 안내)
-- **배포 형태**: 단일 npm 패키지 `kodocagent`. 내부 워크스페이스 패키지(`@kodocagent/core|doc-tools|shared`)는 빌드 시 번들링되며 npm에는 배포되지 않음. changesets → GitHub Actions에서 `kodocagent` 패키지만 publish.
+- `kodocagent update`: 실행 경로로 설치 방식 감지(글로벌 npm/pnpm → 해당 PM으로 `i -g @kodocagent/cli@latest`, npx → "항상 최신 사용 중" 안내)
+- **배포 형태**: 단일 npm 패키지 `@kodocagent/cli`. 내부 워크스페이스 패키지(`@kodocagent/core|doc-tools|shared`)는 빌드 시 번들링되며 npm에는 배포되지 않음. GitHub Actions(OIDC Trusted Publishing)에서 `@kodocagent/cli` 패키지만 publish.
 
 ## 10. 에러 처리 정책
 
@@ -296,5 +307,5 @@ propose_* 호출
 | **M1** | 3사 실키로 한국어 채팅 + `read_document`/`list_files` 툴콜 동작, Ctrl+C 후 `--continue` 복원, `/model` 전환 |
 | **M2** | 실제 .hwpx: "날짜를 2026년으로 변경" → diff → 거절(재제안 확인) → 승인 → 한컴오피스에서 열림 + 백업 존재. .xlsx 셀 수정, .docx 신규 생성 동일 검증 |
 | **M3** | `LAW_OC` 키로 "근로기준법 제60조 확인해서 이 취업규칙 검토" → `mcp__korean-law__*` 호출 → 조문 인용 수정안. 프로젝트 mcp.json으로 서드파티 서버 1개 추가 연결 |
-| **M4** | 클린 머신 `npx kodocagent@latest` 온보딩→법령 기반 수정 E2E, 패치 배포 후 업데이트 배너 |
+| **M4** | 클린 머신 `npx @kodocagent/cli@latest` 온보딩→법령 기반 수정 E2E, 패치 배포 후 업데이트 배너 |
 | **M5 (v2)** | Tauri/Electron + `@rhwp/editor` 임베드(시각 미리보기·편집), ApprovalHandler를 다이얼로그로 |
