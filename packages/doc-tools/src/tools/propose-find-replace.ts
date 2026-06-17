@@ -51,11 +51,58 @@ export type ProposeFindReplaceInput = z.infer<typeof proposeFindReplaceSchema>;
 // 순수 XML 치환 함수 (단위 테스트 가능)
 // ─────────────────────────────────────────────────────────
 
+/** diff 미리보기에 표시할 최대 샘플 수 */
+const MAX_DIFF_SAMPLES = 20;
+
 /**
  * XML 특수문자를 이스케이프한다 (& < > 만 처리 — 속성 인용 제외).
  */
 export function escapeXml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** XML 이스케이프를 평문으로 되돌린다 (표시용). 순서 중요: &amp; 마지막. */
+export function unescapeXml(text: string): string {
+  return text.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+}
+
+/** 두 문자열의 공통 접두/접미 길이를 빼서 변경 구간 주변만 잘라낸 스니펫을 만든다. */
+export function makeChangeSnippet(
+  before: string,
+  after: string,
+  ctx = 24,
+): { before: string; after: string } {
+  let p = 0;
+  while (p < before.length && p < after.length && before[p] === after[p]) p++;
+  const maxSuffix = Math.min(before.length - p, after.length - p);
+  let s = 0;
+  while (s < maxSuffix && before[before.length - 1 - s] === after[after.length - 1 - s]) s++;
+  const slice = (str: string) => {
+    const start = Math.max(0, p - ctx);
+    const end = Math.min(str.length, str.length - s + ctx);
+    return (start > 0 ? "…" : "") + str.slice(start, end) + (end < str.length ? "…" : "");
+  };
+  return { before: slice(before), after: slice(after) };
+}
+
+/** 치환 전/후 섹션 XML에서 내용이 바뀐 <hp:t> 노드를 찾아 표시용 스니펫 목록을 만든다. */
+export function collectChangedSnippets(
+  beforeXml: string,
+  afterXml: string,
+  maxSamples: number,
+): Array<{ before: string; after: string }> {
+  const re = /<hp:t>([\s\S]*?)<\/hp:t>/g;
+  const beforeNodes = [...beforeXml.matchAll(re)].map((m) => m[1] ?? "");
+  const afterNodes = [...afterXml.matchAll(re)].map((m) => m[1] ?? "");
+  const out: Array<{ before: string; after: string }> = [];
+  const n = Math.min(beforeNodes.length, afterNodes.length);
+  for (let i = 0; i < n && out.length < maxSamples; i++) {
+    if (beforeNodes[i] !== afterNodes[i]) {
+      const snip = makeChangeSnippet(unescapeXml(beforeNodes[i]!), unescapeXml(afterNodes[i]!));
+      out.push(snip);
+    }
+  }
+  return out;
 }
 
 /**
@@ -214,7 +261,7 @@ function countOccurrences(str: string, sub: string): number {
  * .hwpx ZIP 버퍼에서 모든 section*.xml에 find/replace를 적용하고
  * 수정된 ZIP 버퍼를 반환한다.
  *
- * @returns { buffer, count } — count는 전체 치환 횟수
+ * @returns { buffer, count, samples } — count는 전체 치환 횟수, samples는 diff 미리보기용 스니펫
  */
 async function applyFindReplaceToHwpx(
   hwpxBuffer: Uint8Array,
@@ -222,7 +269,11 @@ async function applyFindReplaceToHwpx(
   replace: string,
   caseSensitive: boolean,
   replaceAll: boolean,
-): Promise<{ buffer: Uint8Array; count: number }> {
+): Promise<{
+  buffer: Uint8Array;
+  count: number;
+  samples: Array<{ before: string; after: string }>;
+}> {
   const zip = await JSZip.loadAsync(hwpxBuffer);
 
   // 섹션 파일 목록 수집 (Contents/section0.xml, section1.xml, …)
@@ -266,7 +317,21 @@ async function applyFindReplaceToHwpx(
 
   // 치환이 없으면 ZIP 재생성 불필요
   if (totalCount === 0) {
-    return { buffer: hwpxBuffer, count: 0 };
+    return { buffer: hwpxBuffer, count: 0, samples: [] };
+  }
+
+  // 변경된 노드 스니펫 수집 (diff 미리보기용)
+  const samples: Array<{ before: string; after: string }> = [];
+  for (let si = 0; si < sectionFiles.length && samples.length < MAX_DIFF_SAMPLES; si++) {
+    const remaining = MAX_DIFF_SAMPLES - samples.length;
+    const snippets = collectChangedSnippets(
+      sectionXmls[si] ?? "",
+      newSectionXmls[si] ?? "",
+      remaining,
+    );
+    for (const snip of snippets) {
+      samples.push(snip);
+    }
   }
 
   // 새 ZIP 생성 (mimetype은 STORE로 첫 번째 — ZIP 스펙 요구사항)
@@ -291,6 +356,7 @@ async function applyFindReplaceToHwpx(
   return {
     buffer: new Uint8Array(buf as unknown as ArrayBuffer),
     count: totalCount,
+    samples,
   };
 }
 
@@ -364,6 +430,7 @@ export const proposeFindReplaceTool: ToolDefinition<ProposeFindReplaceInput> = {
     // XML 직접 패치 치환 수행
     let newBytes: Uint8Array;
     let replacedCount: number;
+    let diffSamples: Array<{ before: string; after: string }>;
     try {
       const result = await applyFindReplaceToHwpx(
         originalBytes,
@@ -374,6 +441,7 @@ export const proposeFindReplaceTool: ToolDefinition<ProposeFindReplaceInput> = {
       );
       newBytes = result.buffer;
       replacedCount = result.count;
+      diffSamples = result.samples;
     } catch (e) {
       return `오류: 치환 중 오류가 발생했습니다. ${String(e)}`;
     }
@@ -421,9 +489,26 @@ export const proposeFindReplaceTool: ToolDefinition<ProposeFindReplaceInput> = {
     // 출력 경로 결정 (.hwpx → .hwpx, 포맷 변환 없음)
     const { outputPath, willConvertFormat } = resolveOutputPath(safePath);
 
-    // diff 텍스트 생성
+    // diff 텍스트 생성 (per-match before→after 스니펫 미리보기)
     const allLabel = (input.all ?? true) ? `${replacedCount}곳` : "첫 번째 1곳";
-    const diff = `찾기: "${input.find}" → 바꾸기: "${input.replace}" (${allLabel} 교체됨)`;
+    let diff: string;
+    if (diffSamples.length === 0) {
+      // 샘플 없음 — 폴백 (replace===find 등 극히 드문 케이스)
+      diff = `찾기: "${input.find}" → 바꾸기: "${input.replace}" (${allLabel} 교체됨)`;
+    } else {
+      const lines: string[] = [`${replacedCount}곳 교체: "${input.find}" → "${input.replace}"`];
+      for (let i = 0; i < diffSamples.length; i++) {
+        const sample = diffSamples[i]!;
+        lines.push(`  ${i + 1}. - ${sample.before}`);
+        lines.push(`     + ${sample.after}`);
+      }
+      if (replacedCount > diffSamples.length) {
+        lines.push(
+          `  … 외 ${replacedCount - diffSamples.length}곳 (미리보기는 최대 ${MAX_DIFF_SAMPLES}곳)`,
+        );
+      }
+      diff = lines.join("\n");
+    }
 
     // 스테이징
     const stagedPath = await stageFile(ctx.sessionId, outputPath, newBytes);

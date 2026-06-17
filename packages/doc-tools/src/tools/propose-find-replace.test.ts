@@ -27,7 +27,14 @@ import { extname, join } from "node:path";
 import { markdownToHwpx, parse } from "@clazic/kordoc";
 import JSZip from "jszip";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { escapeXml, proposeFindReplaceTool, replaceInSectionXml } from "./propose-find-replace.js";
+import {
+  collectChangedSnippets,
+  escapeXml,
+  makeChangeSnippet,
+  proposeFindReplaceTool,
+  replaceInSectionXml,
+  unescapeXml,
+} from "./propose-find-replace.js";
 
 // ─────────────────────────────────────────────────────────
 // 헬퍼
@@ -212,7 +219,95 @@ describe("replaceInSectionXml — 순수 함수 단위 테스트", () => {
 });
 
 // ─────────────────────────────────────────────────────────
-// 2. 통합 테스트
+// 2. 새 순수 헬퍼 단위 테스트
+// ─────────────────────────────────────────────────────────
+
+describe("unescapeXml — XML 이스케이프 역변환", () => {
+  it("escapeXml의 역함수: &amp; &lt; &gt; 를 평문으로 되돌린다", () => {
+    const original = "a&b<c>d";
+    expect(unescapeXml(escapeXml(original))).toBe(original);
+  });
+
+  it("순서: &amp; 를 마지막에 처리해 이중 치환 없음", () => {
+    // &amp;lt; → &lt; (amp를 먼저 처리하면 &lt;가 되고 그게 다시 < 로 바뀌는 버그 발생)
+    // 올바른 구현은 lt/gt를 먼저, amp를 마지막에
+    expect(unescapeXml("&amp;lt;")).toBe("&lt;");
+    expect(unescapeXml("&lt;&gt;&amp;")).toBe("<>&");
+  });
+
+  it("이스케이프 없는 일반 텍스트는 그대로 반환", () => {
+    expect(unescapeXml("hello world")).toBe("hello world");
+  });
+});
+
+describe("makeChangeSnippet — 변경 구간 스니펫 생성", () => {
+  it("짧은 문자열은 통째로 반환 (… 없음)", () => {
+    const { before, after } = makeChangeSnippet("abc", "axc");
+    expect(before).toBe("abc");
+    expect(after).toBe("axc");
+    expect(before).not.toContain("…");
+    expect(after).not.toContain("…");
+  });
+
+  it("긴 문자열에서 가운데만 바뀌면 양끝이 잘리고 … 가 붙는다", () => {
+    const prefix = "A".repeat(50);
+    const suffix = "Z".repeat(50);
+    const before = `${prefix}OLD${suffix}`;
+    const after = `${prefix}NEW${suffix}`;
+    const snip = makeChangeSnippet(before, after);
+    // 변경 구간(OLD/NEW) 은 포함
+    expect(snip.before).toContain("OLD");
+    expect(snip.after).toContain("NEW");
+    // 양쪽 끝은 잘려서 … 가 있어야 함
+    expect(snip.before).toContain("…");
+    expect(snip.after).toContain("…");
+    // 원본 전체 길이보다 짧아야 함
+    expect(snip.before.length).toBeLessThan(before.length);
+  });
+
+  it("앞만 다른 경우 — 뒤쪽만 … 붙거나 안 붙음", () => {
+    const before = "CHANGED" + "X".repeat(60);
+    const after = "NEWVAL" + "X".repeat(60);
+    const snip = makeChangeSnippet(before, after);
+    expect(snip.before).toContain("CHANGED");
+    expect(snip.after).toContain("NEWVAL");
+  });
+});
+
+describe("collectChangedSnippets — 변경 노드 스니펫 수집", () => {
+  it("변경된 <hp:t> 노드만 반환한다", () => {
+    const beforeXml = `<hp:t>unchanged</hp:t><hp:t>original</hp:t>`;
+    const afterXml = `<hp:t>unchanged</hp:t><hp:t>replaced</hp:t>`;
+    const snippets = collectChangedSnippets(beforeXml, afterXml, 10);
+    expect(snippets).toHaveLength(1);
+    expect(snippets[0]!.before).toBe("original");
+    expect(snippets[0]!.after).toBe("replaced");
+  });
+
+  it("변경 없으면 빈 배열 반환", () => {
+    const xml = `<hp:t>same</hp:t><hp:t>same2</hp:t>`;
+    expect(collectChangedSnippets(xml, xml, 10)).toHaveLength(0);
+  });
+
+  it("maxSamples를 초과하면 잘린다", () => {
+    const beforeXml = Array.from({ length: 5 }, (_, i) => `<hp:t>before${i}</hp:t>`).join("");
+    const afterXml = Array.from({ length: 5 }, (_, i) => `<hp:t>after${i}</hp:t>`).join("");
+    const snippets = collectChangedSnippets(beforeXml, afterXml, 3);
+    expect(snippets).toHaveLength(3);
+  });
+
+  it("XML 이스케이프를 평문으로 변환해서 반환한다", () => {
+    const beforeXml = `<hp:t>A&amp;B</hp:t>`;
+    const afterXml = `<hp:t>C&amp;D</hp:t>`;
+    const snippets = collectChangedSnippets(beforeXml, afterXml, 10);
+    expect(snippets).toHaveLength(1);
+    expect(snippets[0]!.before).toBe("A&B");
+    expect(snippets[0]!.after).toBe("C&D");
+  });
+});
+
+// ─────────────────────────────────────────────────────────
+// 3. 통합 테스트
 // ─────────────────────────────────────────────────────────
 
 describe("proposeFindReplaceTool — 기본 치환 (단락)", () => {
@@ -262,7 +357,8 @@ describe("proposeFindReplaceTool — 기본 치환 (단락)", () => {
     };
     expect(proposal.diff).toContain("원본텍스트");
     expect(proposal.diff).toContain("바뀐텍스트");
-    expect(proposal.diff).toContain("교체됨");
+    // 새 포맷: "N곳 교체: ..." 헤더 + numbered 스니펫 라인
+    expect(proposal.diff).toContain("곳 교체:");
     expect(proposal.kind).toBe("find-replace");
 
     // .hwpx 입력 → 출력도 .hwpx (포맷 변환 없음)
@@ -407,7 +503,8 @@ describe("proposeFindReplaceTool — 여러 곳 치환 (all:true)", () => {
     expect(typeof result).not.toBe("string");
     const outcome = result as { proposal: unknown; commit: () => Promise<string> };
     const proposal = outcome.proposal as { diff: string };
-    expect(proposal.diff).toContain("교체됨");
+    // 새 포맷: "N곳 교체: ..." 헤더
+    expect(proposal.diff).toContain("곳 교체:");
 
     await outcome.commit();
 
