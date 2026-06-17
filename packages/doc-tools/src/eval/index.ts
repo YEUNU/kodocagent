@@ -14,7 +14,15 @@
  */
 
 export type { Fixture } from "./fixtures.js";
-export { FIXTURE_MARKDOWN, makeF1, makeF2, makeF5Hwpx, makeF5Md } from "./fixtures.js";
+export {
+  FIXTURE_MARKDOWN,
+  makeF1,
+  makeF2,
+  makeF3,
+  makeF4,
+  makeF5Hwpx,
+  makeF5Md,
+} from "./fixtures.js";
 export type { EvalSpec } from "./specs.js";
 export { EVAL_SPECS } from "./specs.js";
 

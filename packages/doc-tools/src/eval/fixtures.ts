@@ -5,6 +5,7 @@
  * docs/EVAL-SET.md §0 참조.
  */
 
+import JSZip from "jszip";
 import { markdownToHwpx } from "kordoc";
 
 export interface Fixture {
@@ -160,9 +161,129 @@ export function makeF5Md(): Fixture {
   };
 }
 
+// ─────────────────────────────────────────────────────────
+// 내부 HWPX ZIP 패치 헬퍼
+// ─────────────────────────────────────────────────────────
+
+/**
+ * HWPX ZIP 바이트의 section0.xml을 패처 함수로 변환한다.
+ * form-objects.test.ts / propose-cell-edit.test.ts 의 buildTestHwpx 패턴을 재사용.
+ */
+async function patchSectionXml(
+  hwpxBuf: ArrayBuffer | Uint8Array,
+  patcher: (xml: string) => string,
+): Promise<Uint8Array> {
+  const zip = await JSZip.loadAsync(hwpxBuf instanceof Uint8Array ? hwpxBuf : hwpxBuf);
+  const sectionEntry = zip.file("Contents/section0.xml");
+  if (!sectionEntry) throw new Error("section0.xml not found");
+  const originalXml = await sectionEntry.async("string");
+  const patchedXml = patcher(originalXml);
+
+  const out = new JSZip();
+  const mimetypeEntry = zip.file("mimetype");
+  if (mimetypeEntry) {
+    out.file("mimetype", await mimetypeEntry.async("uint8array"), { compression: "STORE" });
+  }
+  for (const [name, entry] of Object.entries(zip.files)) {
+    if (name === "mimetype" || entry.dir) continue;
+    if (name === "Contents/section0.xml") {
+      out.file(name, patchedXml);
+    } else {
+      out.file(name, await entry.async("uint8array"));
+    }
+  }
+  const nodeBuf = await out.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+  return new Uint8Array(nodeBuf.buffer as ArrayBuffer, nodeBuf.byteOffset, nodeBuf.byteLength);
+}
+
+// ─────────────────────────────────────────────────────────
+// F3 — 신청서 양식 (라벨/값 2열, 병합 헤더, 빈 값칸)
+// ─────────────────────────────────────────────────────────
+//
+// 구조:
+//  행0: "신청서 양식" (colspan=2 병합 헤더)
+//  행1: "성명"   | (빈칸)
+//  행2: "생년월일" | (빈칸)
+//  행3: "주소"   | "서울시 종로구 종로 1가"  ← 미리 채워진 행
+//
+// 마크다운 → markdownToHwpx로 기본 구조 생성 후
+// 첫 번째 셀의 cellSpan을 colSpan="2"로 패치해 병합 헤더를 만든다.
+
+const F3_MARKDOWN = `\
+| 신청서 양식 |  |
+|---|---|
+| 성명 |  |
+| 생년월일 |  |
+| 주소 | 서울시 종로구 종로 1가 |
+`;
+
+/** F3 — 신청서 양식 표 (.hwpx): 병합 헤더 + 빈 값칸 */
+export async function makeF3(): Promise<Fixture> {
+  const baseBuf = await markdownToHwpx(F3_MARKDOWN);
+
+  // 첫 번째 셀(row=0, col=0)의 colSpan을 2로 패치 → 병합 헤더
+  const patched = await patchSectionXml(new Uint8Array(baseBuf), (xml) => {
+    // markdownToHwpx는 각 셀에 colSpan="1" rowSpan="1"을 쓴다.
+    // 첫 번째 cellSpan 태그만 교체한다.
+    return xml.replace('colSpan="1" rowSpan="1"', 'colSpan="2" rowSpan="1"');
+  });
+
+  return {
+    name: "F3_신청서_양식",
+    ext: ".hwpx",
+    bytes: patched,
+  };
+}
+
+// ─────────────────────────────────────────────────────────
+// F4 — 양식 개체 문서 (편집상자 + 콤보 + 체크박스)
+// ─────────────────────────────────────────────────────────
+//
+// form-objects.test.ts의 buildTestHwpx 패턴을 재사용해
+// markdownToHwpx로 기본 문서를 생성하고 section0.xml에 양식 개체를 주입한다.
+//
+// 주입 개체:
+//  - hp:edit    name="성명입력" (편집상자, 빈값)
+//  - hp:comboBox name="부서선택" items=[총무팀, 기획팀, 개발팀] (콤보)
+//  - hp:checkBtn name="동의여부" value=UNCHECKED (체크박스)
+
+const F4_MARKDOWN = `\
+# 양식 개체 테스트 문서
+
+아래 양식을 작성해 주세요.
+`;
+
+const F4_FORM_OBJECTS_XML = `
+<hp:p xmlns:hp="urn:hancom:partype">
+  <hp:run>
+    <hp:edit multiLine="0" passwordChar="" maxLength="2147483647" scrollBars="NONE" tabKeyBehavior="NEXT_OBJECT" numOnly="0" readOnly="0" alignText="LEFT" name="성명입력" foreColor="#000000" backColor="#F0F0F0" groupName="" tabStop="1" editable="1" tabOrder="1" enabled="1" borderTypeIDRef="5" drawFrame="1" printable="1" command=""><hp:formCharPr charPrIDRef="0" followContext="0" autoSz="0" wordWrap="0"/><hp:text/></hp:edit>
+    <hp:comboBox listBoxRows="4" listBoxWidth="0" editEnable="1" selectedValue="" name="부서선택" foreColor="#000000" backColor="#F0F0F0" groupName="" tabStop="1" editable="1" tabOrder="2" enabled="1" borderTypeIDRef="5" drawFrame="1" printable="1" command=""><hp:formCharPr charPrIDRef="0" followContext="0" autoSz="1" wordWrap="0"/><hp:listItem displayText="" value="총무팀"/><hp:listItem displayText="" value="기획팀"/><hp:listItem displayText="" value="개발팀"/></hp:comboBox>
+    <hp:checkBtn caption="개인정보 수집 동의" value="UNCHECKED" radioGroupName="" triState="0" backStyle="OPAQUE" name="동의여부" foreColor="#000000" backColor="#FFFFFF" groupName="" tabStop="1" editable="1" tabOrder="3" enabled="1" borderTypeIDRef="0" drawFrame="1" printable="1" command=""><hp:formCharPr charPrIDRef="0" followContext="0" autoSz="0" wordWrap="0"/></hp:checkBtn>
+  </hp:run>
+</hp:p>`;
+
+/** F4 — 양식 개체 문서 (.hwpx): 편집상자 + 콤보박스 + 체크박스 */
+export async function makeF4(): Promise<Fixture> {
+  const baseBuf = await markdownToHwpx(F4_MARKDOWN);
+
+  const patched = await patchSectionXml(new Uint8Array(baseBuf), (xml) => {
+    // </hs:sec> 직전에 양식 개체 단락을 삽입
+    const insertPoint = xml.lastIndexOf("</");
+    return xml.slice(0, insertPoint) + F4_FORM_OBJECTS_XML + xml.slice(insertPoint);
+  });
+
+  return {
+    name: "F4_양식개체_문서",
+    ext: ".hwpx",
+    bytes: patched,
+  };
+}
+
 /** 테스트·디버그용: 각 픽스처의 원본 마크다운을 반환한다. */
 export const FIXTURE_MARKDOWN = {
   F1: F1_MARKDOWN,
   F2: F2_MARKDOWN,
+  F3: F3_MARKDOWN,
+  F4: F4_MARKDOWN,
   F5: F5_MARKDOWN,
 } as const;

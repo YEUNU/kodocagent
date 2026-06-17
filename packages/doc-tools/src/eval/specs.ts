@@ -20,6 +20,19 @@ export interface EvalSpec {
    * 합격 여부와 상세 사유를 반환한다.
    */
   assert: (outputMarkdown: string) => { pass: boolean; detail: string };
+  /**
+   * 평가 티어.
+   * "feasible"  — ✅ 현재 도구로 실현 가능 (Stage 1/2 기본 포함)
+   * "structural" — ⚠️ 구조 편집 티어 (셀/표/양식 개체 수정 관여)
+   * 기본값: "feasible"
+   */
+  tier?: "feasible" | "structural";
+  /**
+   * 자동 검증 가능 여부. false면 라이브 러너가 pass/fail 집계에서 제외한다.
+   * 예: 양식 개체(편집상자) 값은 kordoc parse().markdown에 노출되지 않아
+   * markdown 기반 assert로 확인 불가 → list_form_objects 기반 검증은 향후 과제.
+   */
+  autoVerifiable?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -209,14 +222,112 @@ const specTypo: EvalSpec = {
 };
 
 // ─────────────────────────────────────────────────────────
+// ⚠️ structural 티어 스펙 — F3/F4 픽스처 기반
+// ─────────────────────────────────────────────────────────
+
+// ── #S1 셀 편집 (F3) ────────────────────────────────────
+// F3의 "성명" 라벨 오른쪽 빈 셀에 "홍길동"을 채운다.
+// 합격: 결과 마크다운에 "홍길동" 존재
+
+const specCellEdit: EvalSpec = {
+  id: "#S1",
+  fixture: "F3",
+  prompt:
+    "신청서 양식 표에서 '성명' 옆 빈칸(값 칸)에 '홍길동'을 입력해 주세요. " +
+    "propose_cell_edit의 label 모드를 사용하고 direction은 right 입니다.",
+  assert(md: string) {
+    if (!md.includes("홍길동")) {
+      return { pass: false, detail: "'홍길동'이 결과 마크다운에 없습니다." };
+    }
+    return { pass: true, detail: "'홍길동'이 결과 마크다운에 존재합니다." };
+  },
+  tier: "structural",
+};
+
+// ── #S2 표 구조 (F3) ────────────────────────────────────
+// F3 표에 행을 1개 추가한다.
+// 합격: 마크다운 표 행 수가 원본(헤더 포함 5행) + 1 = 6행 이상
+
+/**
+ * 마크다운 텍스트에서 표 행 수를 근사 계산한다.
+ * '|'로 시작하는 줄의 수를 센다(구분선 행 포함).
+ */
+function countMarkdownTableRows(md: string): number {
+  return md.split("\n").filter((line) => /^\s*\|/.test(line)).length;
+}
+
+const specTableStructure: EvalSpec = {
+  id: "#S2",
+  fixture: "F3",
+  prompt:
+    "신청서 양식 표 맨 아래에 행을 1개 추가해 주세요. " +
+    "새 행의 라벨 칸에는 '비고', 값 칸은 비워 두세요. " +
+    "propose_table_structure 도구를 사용하세요.",
+  assert(md: string) {
+    // F3 원본: 헤더 행 + 구분선 + 데이터 3행 = 5행(마크다운 표 줄 기준)
+    // 행 추가 후: 6행 이상
+    const rowCount = countMarkdownTableRows(md);
+    if (rowCount < 6) {
+      return {
+        pass: false,
+        detail: `표 행 수가 ${rowCount}개 — 추가 후 6개 이상이어야 합니다.`,
+      };
+    }
+    return { pass: true, detail: `표 행 수 ${rowCount}개 — 행이 추가되었습니다.` };
+  },
+  tier: "structural",
+};
+
+// ── #S3 양식 개체 (F4) ───────────────────────────────────
+// F4의 "성명입력" 편집상자에 "홍길동"을 입력한다.
+// 합격: 결과 마크다운 또는 list_form_objects 출력에 "홍길동" 존재
+// (마크다운에는 양식 개체 텍스트가 포함되지 않으므로 assert는
+//  kordoc parse가 form object 텍스트를 포함하는지 체크하는 대신
+//  에이전트가 propose_form_object 후 list_form_objects를 호출하도록 유도하고
+//  단순 substring 검사로 근사한다.)
+
+const specFormObject: EvalSpec = {
+  id: "#S3",
+  fixture: "F4",
+  prompt:
+    "양식 개체 문서에서 '성명입력' 편집상자에 '홍길동'을 입력해 주세요. " +
+    "propose_form_object 도구를 사용하고 name은 '성명입력', set.text='홍길동'입니다.",
+  assert(md: string) {
+    // kordoc parse()의 마크다운 출력에 양식 개체 텍스트가 반영될 경우 확인
+    // 반영 안 될 수도 있으므로 pass 기준은 마크다운에 "홍길동"이 있거나
+    // "성명입력" 개체가 언급되는 경우도 허용 (느슨한 근사)
+    if (md.includes("홍길동")) {
+      return { pass: true, detail: "'홍길동'이 결과 마크다운에 존재합니다." };
+    }
+    // 양식 개체 텍스트가 kordoc 마크다운에 나타나지 않는 경우도 있으므로
+    // 문서가 편집됐다는 다른 증거(성명입력 등 라벨)를 허용하지 않고
+    // 실제 값 존재를 요구한다. 이 assert는 라이브 실행 시 kordoc parse
+    // 마크다운 기반이므로 편집상자 텍스트가 나타나지 않으면 실패 처리.
+    return {
+      pass: false,
+      detail:
+        "'홍길동'이 결과 마크다운에 없습니다. (양식 개체 텍스트가 kordoc 마크다운에 포함되지 않을 수 있음 — ⚠️ 티어 한계)",
+    };
+  },
+  tier: "structural",
+  // 양식 개체 값은 markdown에 노출되지 않아 라이브 자동 집계에서 제외(수동/list_form_objects 검증 필요)
+  autoVerifiable: false,
+};
+
+// ─────────────────────────────────────────────────────────
 // 배열 export
 // ─────────────────────────────────────────────────────────
 
 export const EVAL_SPECS: EvalSpec[] = [
+  // ✅ feasible 티어 (기존 6종)
   specTypo,
   specDateUnify,
   specAmountComma,
   specDeptRename,
   specLawRename,
   specPiiMask,
+  // ⚠️ structural 티어 (신규 3종)
+  specCellEdit,
+  specTableStructure,
+  specFormObject,
 ];

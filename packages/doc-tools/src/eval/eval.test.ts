@@ -9,9 +9,10 @@
  * Stage 2 (실모델 e2e)는 KODOC_EVAL_LIVE=1 환경변수로 별도 활성화한다.
  */
 
+import JSZip from "jszip";
 import { parse } from "kordoc";
 import { describe, expect, it } from "vitest";
-import { makeF1, makeF2, makeF5Hwpx, makeF5Md } from "./fixtures.js";
+import { makeF1, makeF2, makeF3, makeF4, makeF5Hwpx, makeF5Md } from "./fixtures.js";
 import { EVAL_SPECS } from "./specs.js";
 
 // ─────────────────────────────────────────────────────────
@@ -52,6 +53,66 @@ describe("픽스처 생성 및 kordoc parse round-trip", () => {
     expect(f.bytes.length).toBeGreaterThan(0);
     const text = new TextDecoder().decode(f.bytes);
     expect(text).toContain("개인정보");
+  });
+
+  it("F3 — .hwpx 생성 후 parse() 성공 + 병합 셀 주입 확인", async () => {
+    const f = await makeF3();
+    expect(f.ext).toBe(".hwpx");
+    expect(f.bytes.length).toBeGreaterThan(0);
+
+    // kordoc round-trip
+    const result = await parse(f.bytes.buffer as ArrayBuffer);
+    expect(result.success).toBe(true);
+
+    // ZIP 열어서 colSpan="2" 패치가 반영됐는지 확인
+    const zip = await JSZip.loadAsync(f.bytes);
+    const sectionEntry = zip.file("Contents/section0.xml");
+    expect(sectionEntry).toBeDefined();
+    const sectionXml = await sectionEntry!.async("string");
+    expect(sectionXml).toContain('colSpan="2"');
+  });
+
+  it("F3 — 표에 라벨/빈칸 구조가 존재하는지 확인", async () => {
+    const f = await makeF3();
+    const result = await parse(f.bytes.buffer as ArrayBuffer);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      // 마크다운에 라벨과 주소 값이 모두 포함되어야 한다
+      expect(result.markdown).toContain("성명");
+      expect(result.markdown).toContain("주소");
+      expect(result.markdown).toContain("서울시");
+    }
+  });
+
+  it("F4 — .hwpx 생성 후 parse() 성공 + 양식 개체 XML 주입 확인", async () => {
+    const f = await makeF4();
+    expect(f.ext).toBe(".hwpx");
+    expect(f.bytes.length).toBeGreaterThan(0);
+
+    // kordoc round-trip
+    const result = await parse(f.bytes.buffer as ArrayBuffer);
+    expect(result.success).toBe(true);
+
+    // ZIP 열어서 양식 개체 태그들이 주입됐는지 확인
+    const zip = await JSZip.loadAsync(f.bytes);
+    const sectionEntry = zip.file("Contents/section0.xml");
+    expect(sectionEntry).toBeDefined();
+    const sectionXml = await sectionEntry!.async("string");
+    expect(sectionXml).toContain('name="성명입력"');
+    expect(sectionXml).toContain('name="부서선택"');
+    expect(sectionXml).toContain('name="동의여부"');
+    expect(sectionXml).toContain("<hp:edit");
+    expect(sectionXml).toContain("<hp:comboBox");
+    expect(sectionXml).toContain("<hp:checkBtn");
+  });
+
+  it("F4 — 콤보박스 항목이 정상 주입됐는지 확인", async () => {
+    const f = await makeF4();
+    const zip = await JSZip.loadAsync(f.bytes);
+    const sectionXml = await zip.file("Contents/section0.xml")!.async("string");
+    expect(sectionXml).toContain('value="총무팀"');
+    expect(sectionXml).toContain('value="기획팀"');
+    expect(sectionXml).toContain('value="개발팀"');
   });
 });
 
@@ -221,5 +282,95 @@ describe("spec #28 PII 마스킹 assert", () => {
     const r = spec.assert(noMask);
     expect(r.pass).toBe(false);
     expect(r.detail).toContain("마스킹");
+  });
+});
+
+// ─────────────────────────────────────────────────────────
+// ⚠️ structural 티어 spec.assert 단위 테스트
+// ─────────────────────────────────────────────────────────
+
+// ── #S1 셀 편집 ──────────────────────────────────────────
+
+describe("spec #S1 셀 편집 assert", () => {
+  const spec = EVAL_SPECS.find((s) => s.id === "#S1");
+  if (!spec) throw new Error("spec #S1 not found");
+
+  it("BEFORE: '홍길동' 없음 → fail", () => {
+    const before = "| 성명 |  |\n| 생년월일 |  |";
+    const r = spec.assert(before);
+    expect(r.pass).toBe(false);
+    expect(r.detail).toContain("홍길동");
+  });
+
+  it("AFTER: '홍길동' 존재 → pass", () => {
+    const after = "| 성명 | 홍길동 |\n| 생년월일 |  |";
+    const r = spec.assert(after);
+    expect(r.pass).toBe(true);
+  });
+});
+
+// ── #S2 표 구조 ──────────────────────────────────────────
+
+describe("spec #S2 표 구조 assert", () => {
+  const spec = EVAL_SPECS.find((s) => s.id === "#S2");
+  if (!spec) throw new Error("spec #S2 not found");
+
+  it("BEFORE: 5개 이하 행(원본 그대로) → fail", () => {
+    // F3 원본: 헤더 + 구분선 + 3행 데이터 = 5줄
+    const before = [
+      "| 신청서 양식 |  |",
+      "| --- | --- |",
+      "| 성명 |  |",
+      "| 생년월일 |  |",
+      "| 주소 | 서울시 종로구 종로 1가 |",
+    ].join("\n");
+    const r = spec.assert(before);
+    expect(r.pass).toBe(false);
+    expect(r.detail).toContain("6개 이상");
+  });
+
+  it("AFTER: 행이 추가되어 6개 이상 → pass", () => {
+    const after = [
+      "| 신청서 양식 |  |",
+      "| --- | --- |",
+      "| 성명 |  |",
+      "| 생년월일 |  |",
+      "| 주소 | 서울시 종로구 종로 1가 |",
+      "| 비고 |  |",
+    ].join("\n");
+    const r = spec.assert(after);
+    expect(r.pass).toBe(true);
+    expect(r.detail).toContain("추가");
+  });
+
+  it("표 행 0개인 경우(표 없음) → fail", () => {
+    const noTable = "표가 없는 문서입니다.";
+    const r = spec.assert(noTable);
+    expect(r.pass).toBe(false);
+  });
+});
+
+// ── #S3 양식 개체 ────────────────────────────────────────
+
+describe("spec #S3 양식 개체 assert", () => {
+  const spec = EVAL_SPECS.find((s) => s.id === "#S3");
+  if (!spec) throw new Error("spec #S3 not found");
+
+  it("BEFORE: '홍길동' 없음 → fail", () => {
+    const before = "# 양식 개체 테스트 문서\n\n아래 양식을 작성해 주세요.";
+    const r = spec.assert(before);
+    expect(r.pass).toBe(false);
+    expect(r.detail).toContain("홍길동");
+  });
+
+  it("AFTER: '홍길동'이 마크다운에 포함된 경우 → pass", () => {
+    // kordoc가 양식 개체 텍스트를 마크다운에 포함시키는 구현이면 통과
+    const after = "# 양식 개체 테스트 문서\n\n홍길동\n\n아래 양식을 작성해 주세요.";
+    const r = spec.assert(after);
+    expect(r.pass).toBe(true);
+  });
+
+  it("spec tier가 'structural'인지 확인", () => {
+    expect(spec.tier).toBe("structural");
   });
 });

@@ -18,7 +18,7 @@ import type { ApprovalResult } from "@kodocagent/shared";
 import { KodocConfigSchema } from "@kodocagent/shared";
 import { parse } from "kordoc";
 import { createDocTools } from "../index.js";
-import { makeF1, makeF2, makeF5Hwpx } from "./fixtures.js";
+import { makeF1, makeF2, makeF3, makeF4, makeF5Hwpx } from "./fixtures.js";
 import { EVAL_SPECS } from "./specs.js";
 
 // ─────────────────────────────────────────────────────────
@@ -30,6 +30,8 @@ type FixtureMaker = () => Promise<{ ext: ".hwpx" | ".md"; bytes: Uint8Array }>;
 const FIXTURE_MAKERS: Record<string, FixtureMaker> = {
   F1: makeF1,
   F2: makeF2,
+  F3: makeF3,
+  F4: makeF4,
   F5: makeF5Hwpx,
 };
 
@@ -37,6 +39,8 @@ const FIXTURE_MAKERS: Record<string, FixtureMaker> = {
 const FILE_NAMES: Record<string, string> = {
   F1: "report.hwpx",
   F2: "budget.hwpx",
+  F3: "form.hwpx",
+  F4: "formobj.hwpx",
   F5: "notice.hwpx",
 };
 
@@ -220,7 +224,19 @@ export async function runAllSpecs(opts?: {
   timeoutMs?: number;
 }): Promise<SpecRunResult[]> {
   const timeoutMs = opts?.timeoutMs ?? 150_000;
-  const specs = opts?.specIds ? EVAL_SPECS.filter((s) => opts.specIds?.includes(s.id)) : EVAL_SPECS;
+  const selected = opts?.specIds
+    ? EVAL_SPECS.filter((s) => opts.specIds?.includes(s.id))
+    : EVAL_SPECS;
+  // 자동 검증 불가 스펙(예: 양식 개체 값은 markdown 미노출)은 pass/fail 집계에서 제외
+  const specs = selected.filter((s) => {
+    if (s.autoVerifiable === false) {
+      process.stdout.write(
+        `  → [${s.id}] 건너뜀 — markdown 자동 검증 불가(수동/list_form_objects 필요)\n`,
+      );
+      return false;
+    }
+    return true;
+  });
 
   const results: SpecRunResult[] = [];
   for (const spec of specs) {
