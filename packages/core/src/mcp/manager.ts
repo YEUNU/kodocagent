@@ -6,6 +6,7 @@
  * 불변 원칙: console.* 사용 금지, 한국어 에러 메시지
  */
 
+import { PROVIDER_ENV_VARS } from "@kodocagent/shared";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -39,6 +40,34 @@ const STDIO_CONNECT_TIMEOUT_MS = 60_000;
 /** HTTP 기본 타임아웃 (15초) */
 const HTTP_CONNECT_TIMEOUT_MS = 15_000;
 const MAX_MCP_TOOLS_WARN = 40;
+
+// ── 환경변수 필터 ─────────────────────────────────────────────────────────────
+
+/** LLM 제공자 API 키 환경변수 이름 집합 */
+const LLM_KEY_NAMES = new Set(Object.values(PROVIDER_ENV_VARS));
+
+/**
+ * stdio 자식 프로세스에 전달할 환경변수를 구성한다.
+ *
+ * process.env에서 LLM 제공자 키(ANTHROPIC_API_KEY 등)를 제거하고,
+ * 서버 설정에 명시된 env를 오버레이한다.
+ * PATH·HOME 등 일반 환경변수와 LAW_OC는 그대로 보존된다.
+ *
+ * @param serverEnv  서버 설정에 명시된 env (선택)
+ * @returns          자식에 전달할 env 레코드
+ */
+export function buildChildEnv(serverEnv?: Record<string, string>): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v !== undefined && !LLM_KEY_NAMES.has(k)) {
+      env[k] = v;
+    }
+  }
+  if (serverEnv) {
+    Object.assign(env, serverEnv);
+  }
+  return env;
+}
 
 // ── McpManager 옵션 ──────────────────────────────────────────────────────────
 
@@ -94,15 +123,10 @@ export class McpManager {
       const client = new Client({ name: "kodocagent", version: "0.1.0" });
 
       if (config.type === "stdio") {
-        // process.env 병합 + 서버별 env 오버라이드
-        // StdioClientTransport는 env가 주어지면 PATH 등이 사라지므로 명시 병합
-        const mergedEnv: Record<string, string> = {};
-        for (const [k, v] of Object.entries(process.env)) {
-          if (v !== undefined) mergedEnv[k] = v;
-        }
-        if (config.env) {
-          Object.assign(mergedEnv, config.env);
-        }
+        // process.env 병합 + 서버별 env 오버라이드.
+        // LLM 제공자 키(ANTHROPIC_API_KEY 등)는 자식에 전달하지 않는다 (H3 보안).
+        // StdioClientTransport는 env가 주어지면 PATH 등이 사라지므로 명시 병합.
+        const mergedEnv = buildChildEnv(config.env);
 
         transport = new StdioClientTransport({
           command: config.command,

@@ -32,6 +32,32 @@ async function makeTmpDir(prefix: string): Promise<string> {
   return dir;
 }
 
+describe("H5: stageFile 권한", () => {
+  it("스테이징 파일이 0o600 모드로 생성된다 (non-Windows)", async () => {
+    if (process.platform === "win32") return;
+    const baseDir = await makeTmpDir("staging-perm");
+    const sessionId = `perm-session-${Date.now()}`;
+    const path = await stageFile(sessionId, "doc.hwpx", "권한 테스트", baseDir);
+    const info = await stat(path);
+    expect(info.mode & 0o777).toBe(0o600);
+  });
+});
+
+describe("H5: backupFile 권한", () => {
+  it("백업 파일이 0o600 모드로 생성된다 (non-Windows)", async () => {
+    if (process.platform === "win32") return;
+    const baseDir = await makeTmpDir("backups-perm");
+    const srcDir = await makeTmpDir("src-perm");
+    const srcFile = join(srcDir, "report.hwpx");
+    await writeFile(srcFile, "원본 내용");
+
+    const backupPath = await backupFile(srcFile, baseDir);
+    expect(backupPath).not.toBeNull();
+    const info = await stat(backupPath!);
+    expect(info.mode & 0o777).toBe(0o600);
+  });
+});
+
 describe("stageFile", () => {
   it("세션 디렉터리에 n-basename 형식으로 파일을 스테이징한다", async () => {
     const baseDir = await makeTmpDir("staging");

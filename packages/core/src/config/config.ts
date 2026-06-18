@@ -2,7 +2,7 @@
  * 설정 파일 로드/저장 — ~/.kodocagent/config.json (mode 0600)
  * docs/SPEC.md §4
  */
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { KodocConfig } from "@kodocagent/shared";
 import { KODOC_PATHS, KodocConfigSchema, KodocError } from "@kodocagent/shared";
@@ -63,12 +63,22 @@ export async function saveConfig(config: KodocConfig): Promise<void> {
   }
 
   const json = JSON.stringify(config, null, 2);
-  await writeFile(CONFIG_PATH, json, { encoding: "utf-8", mode: 0o600 });
 
-  // 모드를 명시적으로 0600으로 설정 (umask 보호)
+  // 원자적 교체: tmp 파일에 먼저 쓰고 rename (M4)
+  // 같은 디렉터리 내 tmp → 같은 파일시스템 보장
+  const tmpPath = `${CONFIG_PATH}.tmp-${process.pid}-${Date.now()}`;
   try {
-    await chmod(CONFIG_PATH, 0o600);
-  } catch {
-    // Windows 등에서 chmod 미지원 — 무시
+    await writeFile(tmpPath, json, { encoding: "utf-8", mode: 0o600 });
+    // 모드를 명시적으로 0600으로 설정 (umask 보호)
+    try {
+      await chmod(tmpPath, 0o600);
+    } catch {
+      // Windows 등에서 chmod 미지원 — 무시
+    }
+    await rename(tmpPath, CONFIG_PATH);
+  } catch (err) {
+    // rename 실패 시 tmp 파일 best-effort 정리
+    await unlink(tmpPath).catch(() => undefined);
+    throw err;
   }
 }

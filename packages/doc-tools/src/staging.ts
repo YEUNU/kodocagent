@@ -12,7 +12,17 @@
  */
 
 import { constants } from "node:fs";
-import { copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  copyFile,
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { KODOC_PATHS, KodocError } from "@kodocagent/shared";
 import { createTwoFilesPatch } from "diff";
@@ -37,7 +47,7 @@ export async function stageFile(
 ): Promise<string> {
   const stagingRoot = baseDir ?? KODOC_PATHS.staging;
   const sessionDir = join(stagingRoot, sessionId);
-  await mkdir(sessionDir, { recursive: true });
+  await mkdir(sessionDir, { recursive: true, mode: 0o700 });
 
   const counter = (stagingCounters.get(sessionId) ?? 0) + 1;
   stagingCounters.set(sessionId, counter);
@@ -46,9 +56,9 @@ export async function stageFile(
   const stagedPath = join(sessionDir, `${counter}-${name}`);
 
   if (typeof data === "string") {
-    await writeFile(stagedPath, data, "utf-8");
+    await writeFile(stagedPath, data, { encoding: "utf-8", mode: 0o600 });
   } else {
-    await writeFile(stagedPath, data);
+    await writeFile(stagedPath, data, { mode: 0o600 });
   }
 
   return stagedPath;
@@ -75,7 +85,7 @@ export async function backupFile(
   }
 
   const backupsRoot = baseDir ?? KODOC_PATHS.backups;
-  await mkdir(backupsRoot, { recursive: true });
+  await mkdir(backupsRoot, { recursive: true, mode: 0o700 });
 
   // ISO 타임스탬프 (파일 이름에 안전한 문자로).
   // 같은 ms 내 연속 백업이 같은 파일명을 낼 수 있으므로 COPYFILE_EXCL(배타적 생성)으로
@@ -83,7 +93,7 @@ export async function backupFile(
   // TOCTOU 없이 원자적으로 충돌을 회피한다. 정규식(-<name> 포맷)은 절대 바꾸지 않는다.
   const name = basename(targetPath);
   let ms = Date.now();
-  let backupPath: string;
+  let backupPath = "";
   for (;;) {
     const ts = new Date(ms).toISOString().replace(/[:.]/g, "-");
     backupPath = join(backupsRoot, `${ts}-${name}`);
@@ -97,6 +107,13 @@ export async function backupFile(
       }
       throw err; // 그 외 오류(권한·디스크 등)는 그대로 전파
     }
+  }
+
+  // 백업 파일 권한을 0o600으로 제한 (소유자만 읽기·쓰기)
+  try {
+    await chmod(backupPath, 0o600);
+  } catch {
+    // Windows 등 chmod 미지원 환경 — 무시
   }
 
   // 작업 메타데이터 사이드카(되돌리기 타임라인 표시용). 선행 점(.)으로 시작해
@@ -209,6 +226,8 @@ export async function cleanSessionStaging(sessionId: string, baseDir?: string): 
   const stagingRoot = baseDir ?? KODOC_PATHS.staging;
   const sessionDir = join(stagingRoot, sessionId);
   await rm(sessionDir, { recursive: true, force: true });
+  // 메모리 누수 방지: 카운터 맵에서 해당 세션 제거
+  stagingCounters.delete(sessionId);
 }
 
 /**
@@ -233,6 +252,8 @@ export async function cleanAllStaging(baseDir?: string): Promise<number> {
     await rm(fullPath, { recursive: true, force: true });
     count++;
   }
+  // 메모리 누수 방지: 전체 카운터 맵 초기화
+  stagingCounters.clear();
   return count;
 }
 

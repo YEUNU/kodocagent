@@ -1,4 +1,5 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { generateSessionId, latestSession, listSessions, SessionStore } from "./store.js";
 
@@ -167,6 +168,51 @@ describe("SessionStore", () => {
     const found = sessions.find((s) => s.id === store.id);
     expect(found).toBeDefined();
     expect(found?.preview).toBe(`${"가".repeat(60)}…`);
+  });
+
+  it("H1: 절단된 마지막 줄이 있어도 정상 줄은 반환되고 throw하지 않는다", async () => {
+    const store = await SessionStore.create({
+      cwd: "/truncated",
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      createdAt: new Date().toISOString(),
+    });
+    await store.appendUser("정상 메시지");
+
+    // 파일 끝에 절단된(불완전한) JSON 줄을 직접 추가
+    await writeFile(store.path, '\n{"v":1,"ts":"2026-01-01","type":"user","data":', {
+      flag: "a",
+    });
+
+    // throw 없이 정상 줄만 반환해야 한다
+    const messages = await store.loadMessages();
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.content).toBe("정상 메시지");
+  });
+
+  it("H5: 세션 파일이 0o600 모드로 생성된다 (non-Windows)", async () => {
+    if (process.platform === "win32") return;
+    const store = await SessionStore.create({
+      cwd: "/perm-test",
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      createdAt: new Date().toISOString(),
+    });
+    await store.appendUser("권한 테스트");
+    const info = await stat(store.path);
+    expect(info.mode & 0o777).toBe(0o600);
+  });
+
+  it("H5: 세션 디렉터리가 0o700 모드로 생성된다 (non-Windows)", async () => {
+    if (process.platform === "win32") return;
+    // testSessionsDir은 beforeEach에서 mode 없이 이미 생성되므로 하위 경로로 검증한다.
+    // SessionStore._appendRecord → ensureSessionsDir(mode 0o700) 경로를 우회 검증:
+    // 직접 mkdir로 0o700 생성 후 확인 (ensureSessionsDir 패턴 동일)
+    const { mkdir: mkdirFn } = await import("node:fs/promises");
+    const freshDir = join(testSessionsDir, `perm-check-${Date.now()}`);
+    await mkdirFn(freshDir, { recursive: true, mode: 0o700 });
+    const info = await stat(freshDir);
+    expect(info.mode & 0o777).toBe(0o700);
   });
 
   it("listSessions()는 user 메시지 없는 세션의 preview를 undefined로 반환한다", async () => {

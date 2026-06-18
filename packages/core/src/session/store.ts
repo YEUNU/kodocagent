@@ -56,7 +56,7 @@ function sessionPath(id: string): string {
 }
 
 async function ensureSessionsDir(): Promise<void> {
-  await mkdir(SESSIONS_DIR, { recursive: true });
+  await mkdir(SESSIONS_DIR, { recursive: true, mode: 0o700 });
 }
 
 function now(): string {
@@ -120,11 +120,15 @@ export class SessionStore {
     const messages: ModelMessage[] = [];
 
     for (const line of lines) {
-      const record = JSON.parse(line) as JournalRecord;
-      if (record.type === "user" || record.type === "assistant") {
-        messages.push(record.data as ModelMessage);
+      try {
+        const record = JSON.parse(line) as JournalRecord;
+        if (record.type === "user" || record.type === "assistant") {
+          messages.push(record.data as ModelMessage);
+        }
+        // tool-result는 assistant 메시지에 포함되므로 별도 처리하지 않음
+      } catch {
+        // 절단·손상된 줄 무시 (전원차단·SIGKILL 등) — listSessions와 동일 패턴
       }
-      // tool-result는 assistant 메시지에 포함되므로 별도 처리하지 않음
     }
     return messages;
   }
@@ -153,7 +157,7 @@ export class SessionStore {
   private async _appendRecord(partial: Omit<JournalRecord, "v" | "ts">): Promise<void> {
     await ensureSessionsDir();
     const record: JournalRecord = { v: 1, ts: now(), ...partial };
-    await appendFile(this.path, writeLine(record), "utf-8");
+    await appendFile(this.path, writeLine(record), { encoding: "utf-8", mode: 0o600 });
   }
 }
 

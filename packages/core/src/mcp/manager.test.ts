@@ -14,7 +14,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { ServerConnectionConfig } from "./config.js";
-import { McpManager } from "./manager.js";
+import { buildChildEnv, McpManager } from "./manager.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ECHO_SERVER_PATH = join(__dirname, "__fixtures__/echo-server.mjs");
@@ -201,6 +201,38 @@ describe("McpManager — 트랜스포트별 타임아웃", () => {
     // "최초 실행" 힌트 포함
     expect(statuses[0]?.reason).toContain("최초 실행");
   }, 5_000);
+});
+
+describe("H3: buildChildEnv — LLM 제공자 키 제거", () => {
+  it("ANTHROPIC_API_KEY 등 LLM 키는 자식 env에서 제거된다", () => {
+    const origEnv = process.env;
+    // 테스트용 LLM 키 임시 주입
+    process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+    process.env.OPENAI_API_KEY = "sk-openai-test";
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = "google-test";
+    process.env.PATH = process.env.PATH ?? "/usr/bin";
+    process.env.LAW_OC = "law-key-test";
+
+    try {
+      const env = buildChildEnv();
+      expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+      expect(env.OPENAI_API_KEY).toBeUndefined();
+      expect(env.GOOGLE_GENERATIVE_AI_API_KEY).toBeUndefined();
+      // 일반 환경변수는 보존
+      expect(env.PATH).toBeDefined();
+      expect(env.LAW_OC).toBe("law-key-test");
+    } finally {
+      process.env = origEnv;
+    }
+  });
+
+  it("serverEnv 오버레이가 적용된다", () => {
+    const env = buildChildEnv({ MY_SERVER_VAR: "value123" });
+    expect(env.MY_SERVER_VAR).toBe("value123");
+    // LLM 키는 serverEnv로도 주입 가능 (서버가 명시적으로 필요한 경우)
+    const envWithKey = buildChildEnv({ ANTHROPIC_API_KEY: "explicit-override" });
+    expect(envWithKey.ANTHROPIC_API_KEY).toBe("explicit-override");
+  });
 });
 
 describe("McpManager — >40 툴 경고 (mock)", () => {

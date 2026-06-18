@@ -24,7 +24,7 @@ import {
 } from "@kodocagent/core";
 import { cleanSessionStaging, createDocTools } from "@kodocagent/doc-tools";
 import type { KodocConfig } from "@kodocagent/shared";
-import { KNOWN_MODELS, resolveApiKey } from "@kodocagent/shared";
+import { KNOWN_MODELS, PROVIDERS, type Provider, resolveApiKey } from "@kodocagent/shared";
 import chalk from "chalk";
 import { createCliApprovalHandler } from "./approve.js";
 import { formatCumulativeUsage } from "./usage.js";
@@ -493,6 +493,44 @@ async function handleSlashCommand(
 }
 
 /** /model 명령 처리 */
+/** /model 커스텀 입력 파싱·검증 결과 */
+export type ModelSelection =
+  | { ok: true; provider: Provider; modelId: string; isKnown: boolean }
+  | { ok: false; error?: string };
+
+/**
+ * "provider:modelId" 또는 "modelId" 입력을 파싱·검증한다.
+ * H6: provider가 PROVIDERS에 없으면(오타 등) 거부 — 잘못된 값이 config에 저장돼
+ * 다음 기동 시 safeParse 실패로 전체 키가 유실되는 것을 막는다.
+ */
+export function parseCustomModelInput(rawInput: string, currentProvider: Provider): ModelSelection {
+  const modelInput = rawInput.trim();
+  if (!modelInput) return { ok: false };
+
+  let provider: string = currentProvider;
+  let modelId: string;
+  const colonIdx = modelInput.indexOf(":");
+  if (colonIdx >= 0) {
+    provider = modelInput.slice(0, colonIdx);
+    modelId = modelInput.slice(colonIdx + 1);
+  } else {
+    modelId = modelInput;
+  }
+
+  if (!modelId) return { ok: false };
+
+  if (!(PROVIDERS as readonly string[]).includes(provider)) {
+    return {
+      ok: false,
+      error: `'${provider}'는 지원하지 않는 프로바이더입니다. 사용 가능: ${PROVIDERS.join(", ")}`,
+    };
+  }
+
+  const knownForProvider = KNOWN_MODELS[provider as keyof typeof KNOWN_MODELS] ?? [];
+  const isKnown = (knownForProvider as readonly string[]).includes(modelId);
+  return { ok: true, provider: provider as Provider, modelId, isKnown };
+}
+
 async function handleModelSwitch(_config: KodocConfig): Promise<{ config: KodocConfig } | null> {
   // API 키가 있는 프로바이더만 표시
   type ProviderOption = { value: string; label: string; hint?: string };
@@ -542,35 +580,19 @@ async function handleModelSwitch(_config: KodocConfig): Promise<{ config: KodocC
 
     if (isCancel(customInput) || !customInput) return null;
 
-    const modelInput = String(customInput).trim();
-    if (!modelInput) return null;
-
-    // "provider:modelId" 형태이면 분리, 아니면 현재 provider 유지
-    let provider = loadedConfig.provider as KodocConfig["provider"];
-    let modelId: string;
-
-    if (modelInput.includes(":")) {
-      const colonIdx = modelInput.indexOf(":");
-      provider = modelInput.slice(0, colonIdx) as KodocConfig["provider"];
-      modelId = modelInput.slice(colonIdx + 1);
-    } else {
-      modelId = modelInput;
+    const sel = parseCustomModelInput(String(customInput), loadedConfig.provider as Provider);
+    if (!sel.ok) {
+      if (sel.error) process.stdout.write(chalk.red(`${sel.error}\n`));
+      return null;
     }
-
-    if (!modelId) return null;
-
-    // KNOWN_MODELS에 없는 경우 안내
-    const knownForProvider = KNOWN_MODELS[provider as keyof typeof KNOWN_MODELS] ?? [];
-    const isKnown = (knownForProvider as readonly string[]).includes(modelId);
-    if (!isKnown) {
+    // KNOWN_MODELS에 없는 경우 안내(저장은 진행)
+    if (!sel.isKnown) {
       process.stdout.write(
         chalk.dim("등록되지 않은 모델 ID입니다 — 프로바이더가 지원하는지 확인하세요\n"),
       );
     }
 
-    const newConfig = { ...loadedConfig };
-    newConfig.provider = provider;
-    newConfig.model = modelId;
+    const newConfig = { ...loadedConfig, provider: sel.provider, model: sel.modelId };
     await saveConfig(newConfig);
 
     return { config: newConfig };
