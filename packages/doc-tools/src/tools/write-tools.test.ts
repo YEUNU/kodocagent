@@ -280,6 +280,69 @@ describe("propose_sheet_edit XLSX 라운드트립", () => {
     expect(result as string).toContain("없는시트");
     expect(result as string).toContain("실제시트");
   }, 10000);
+
+  it("④ 수식 셀을 편집하면 이전 값에 수식을 표시하고 수식 소실을 경고한다", async () => {
+    const ctx = await makeCtx();
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Sheet1");
+    sheet.getCell("A1").value = 10;
+    sheet.getCell("A2").value = { formula: "A1*2", result: 20 };
+    const xlsxBuf = await workbook.xlsx.writeBuffer();
+    const fixturePath = join(ctx.cwd, "formula.xlsx");
+    await writeFile(fixturePath, new Uint8Array(xlsxBuf as unknown as ArrayBuffer));
+
+    const result = await proposeSheetEditTool.propose!({
+      input: {
+        path: "formula.xlsx",
+        updates: [{ sheet: "Sheet1", cell: "A2", value: 99 }],
+        summary: "수식 셀을 고정 값으로 변경",
+      },
+      ctx,
+    });
+
+    expect(typeof result).not.toBe("string");
+    const outcome = result as {
+      proposal: import("@kodocagent/shared").Proposal;
+      commit: () => Promise<string>;
+    };
+    // 이전 값에 '[object Object]'가 아니라 실제 수식이 표시되어야 한다
+    expect(outcome.proposal.diff).toContain("=A1*2");
+    expect(outcome.proposal.diff).not.toContain("[object Object]");
+    // 수식 소실 경고
+    expect(outcome.proposal.warnings.some((w) => w.includes("수식"))).toBe(true);
+  }, 20000);
+
+  it("⑩ 병합된 셀의 슬레이브 주소를 편집하면 대표 셀이 바뀜을 경고한다", async () => {
+    const ctx = await makeCtx();
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Sheet1");
+    sheet.getCell("A1").value = "병합값";
+    sheet.mergeCells("A1:B1");
+    const xlsxBuf = await workbook.xlsx.writeBuffer();
+    const fixturePath = join(ctx.cwd, "merged.xlsx");
+    await writeFile(fixturePath, new Uint8Array(xlsxBuf as unknown as ArrayBuffer));
+
+    const result = await proposeSheetEditTool.propose!({
+      input: {
+        path: "merged.xlsx",
+        updates: [{ sheet: "Sheet1", cell: "B1", value: "새값" }],
+        summary: "병합 슬레이브 셀 편집",
+      },
+      ctx,
+    });
+
+    expect(typeof result).not.toBe("string");
+    const outcome = result as {
+      proposal: import("@kodocagent/shared").Proposal;
+      commit: () => Promise<string>;
+    };
+    // 병합 경고 + 대표 셀(A1) 명시
+    expect(outcome.proposal.warnings.some((w) => w.includes("병합") && w.includes("A1"))).toBe(
+      true,
+    );
+  }, 20000);
 });
 
 // ─────────────────────────────────────────────────────────

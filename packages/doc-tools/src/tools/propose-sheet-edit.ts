@@ -91,6 +91,7 @@ export const proposeSheetEditTool: ToolDefinition<ProposeSheetEditInput> = {
 
     // 각 업데이트 적용
     const diffRows: string[] = ["| 시트!셀 | 이전 값 | 새 값 |", "| --- | --- | --- |"];
+    const warnings: string[] = [];
 
     for (const update of input.updates) {
       const worksheet = workbook.getWorksheet(update.sheet);
@@ -103,14 +104,44 @@ export const proposeSheetEditTool: ToolDefinition<ProposeSheetEditInput> = {
       }
 
       const cell = worksheet.getCell(update.cell);
-      const oldValue =
-        cell.value !== null && cell.value !== undefined ? String(cell.value) : "(빈 셀)";
+
+      // ⑩ 병합 셀의 슬레이브(대표가 아닌) 주소를 지정하면 ExcelJS가 대표(좌상단) 셀의 값을
+      // 바꾼다. 표시 주소와 실제 편집 셀이 달라 혼란스러우므로 경고하고 diff에도 명시한다.
+      const isMergedSlave =
+        cell.isMerged && cell.master !== undefined && cell.master.address !== cell.address;
+      if (isMergedSlave) {
+        warnings.push(
+          `${update.sheet}!${update.cell}은(는) 병합된 셀의 일부입니다. ` +
+            `실제로는 병합 영역의 대표 셀 ${update.sheet}!${cell.master.address}의 값이 변경됩니다.`,
+        );
+      }
+
+      // ④ 수식 셀을 편집하면 수식이 정적 값으로 대체되어 영구 소실된다. 이전 값을
+      // '[object Object]'가 아니라 실제 수식으로 표시하고, 수식 소실을 경고한다.
+      let oldValue: string;
+      if (cell.value === null || cell.value === undefined) {
+        oldValue = "(빈 셀)";
+      } else if (cell.type === ExcelJS.ValueType.Formula) {
+        const fv = cell.value as ExcelJS.CellFormulaValue;
+        const resultPart =
+          fv.result !== undefined && fv.result !== null ? ` (결과: ${String(fv.result)})` : "";
+        oldValue = `=${fv.formula}${resultPart}`;
+        warnings.push(
+          `${update.sheet}!${update.cell}에는 수식(=${fv.formula})이 있습니다. ` +
+            `값을 입력하면 수식이 사라지고 고정 값으로 대체됩니다.`,
+        );
+      } else {
+        oldValue = String(cell.value);
+      }
 
       // 셀 값 설정 (서식 보존을 위해 value만 변경)
       cell.value = update.value;
 
+      const targetAddr = isMergedSlave
+        ? `${update.sheet}!${update.cell} → ${cell.master.address}`
+        : `${update.sheet}!${update.cell}`;
       const newValueStr = String(update.value);
-      diffRows.push(`| ${update.sheet}!${update.cell} | ${oldValue} | ${newValueStr} |`);
+      diffRows.push(`| ${targetAddr} | ${oldValue} | ${newValueStr} |`);
     }
 
     const diff = diffRows.join("\n");
@@ -140,7 +171,7 @@ export const proposeSheetEditTool: ToolDefinition<ProposeSheetEditInput> = {
         stagedPath,
         summary: opSummary,
         diff,
-        warnings: [],
+        warnings,
         willConvertFormat,
         sourcePath: safePath,
       },
