@@ -9,6 +9,7 @@
   - **개인정보**(redact-pii): 정직성 배너 + 유형·건수·마스킹 결과 칩(원문 값 미표시).
   - **텍스트**(edit·find-replace·sheet-edit·table-structure·export·restore): 컬러 유니파이드 diff(+초록/−빨강/@@ 헤더). 포맷 변환·경고 배너 + 안전 문구.
   - dev 전용 `?demoApproval=<kind>` 승인 미리보기(프로덕션 빌드에서 제거). 실 Electron `capturePage`로 kind별 렌더 육안 확인.
+- G2 되돌리기 타임라인: 좌측 패널에 백업 히스토리 표시(시각·파일명), 클릭 → 자연어 복원 요청(restore_backup 승인 플로우 재사용). 새 IPC `backups.list`, agent-bridge `listBackups()`(`~/.kodocagent/backups` 파싱, 최신 20).
 
 ## 0.2.0
 

@@ -8,7 +8,12 @@
  */
 
 import { contextBridge, ipcRenderer, webUtils } from "electron";
-import type { DocPreviewResult, FileEntry, SerializedAgentEvent } from "../main/agent-bridge.js";
+import type {
+  BackupEntry,
+  DocPreviewResult,
+  FileEntry,
+  SerializedAgentEvent,
+} from "../main/agent-bridge.js";
 
 export interface KodocApi {
   chat: {
@@ -50,6 +55,10 @@ export interface KodocApi {
     preview: (path: string) => Promise<DocPreviewResult>;
     /** 드롭된 파일의 절대 경로 (sandbox-safe) */
     pathForFile: (file: File) => string;
+  };
+  backups: {
+    /** 되돌리기 타임라인 */
+    list: () => Promise<BackupEntry[]>;
   };
 }
 
@@ -98,6 +107,9 @@ const api: KodocApi = {
   doc: {
     preview: (path: string) => ipcRenderer.invoke("doc:preview", path),
     pathForFile: (file: File) => webUtils.getPathForFile(file),
+  },
+  backups: {
+    list: () => ipcRenderer.invoke("backups:list"),
   },
 };
 

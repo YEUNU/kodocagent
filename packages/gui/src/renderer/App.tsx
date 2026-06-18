@@ -7,6 +7,7 @@ import { FilePane } from "./components/FilePane.js";
 import { type QuickActionKey, QuickActions } from "./components/QuickActions.js";
 import { Topbar } from "./components/Topbar.js";
 import type {
+  BackupEntry,
   ChatMessage,
   DocPreviewResult,
   FileEntry,
@@ -41,6 +42,7 @@ export function App(): React.ReactElement {
   const [activeFile, setActiveFile] = useState<{ name: string; path: string } | null>(null);
   const [preview, setPreview] = useState<DocPreviewResult | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [backups, setBackups] = useState<BackupEntry[]>([]);
 
   const [cumulativeInput, setCumulativeInput] = useState(0);
   const [cumulativeOutput, setCumulativeOutput] = useState(0);
@@ -56,6 +58,14 @@ export function App(): React.ReactElement {
       .list()
       .then(setFiles)
       .catch(() => setFiles([]));
+  }, []);
+
+  const refreshBackups = useCallback(() => {
+    if (typeof window.kodoc === "undefined") return;
+    window.kodoc.backups
+      .list()
+      .then(setBackups)
+      .catch(() => setBackups([]));
   }, []);
 
   const loadPreview = useCallback((path: string) => {
@@ -134,10 +144,12 @@ export function App(): React.ReactElement {
       setActiveFile(null);
       setPreview(null);
       refreshFiles();
+      refreshBackups();
     });
     refreshFiles();
+    refreshBackups();
     return unsub;
-  }, [refreshFiles]);
+  }, [refreshFiles, refreshBackups]);
 
   // AgentEvent 구독
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount 시 1회 구독 (IPC 리스너 패턴)
@@ -255,6 +267,7 @@ export function App(): React.ReactElement {
           const af = activeFileRef.current;
           if (af) loadPreview(af.path);
           refreshFiles();
+          refreshBackups();
           break;
         }
 
@@ -271,7 +284,7 @@ export function App(): React.ReactElement {
           break;
       }
     },
-    [loadPreview, refreshFiles],
+    [loadPreview, refreshFiles, refreshBackups],
   );
 
   const handleSend = useCallback(
@@ -350,6 +363,14 @@ export function App(): React.ReactElement {
     [appState, activeFile, handleSend],
   );
 
+  const handleRestore = useCallback(
+    (entry: BackupEntry) => {
+      if (appState === "running") return;
+      handleSend(`백업 '${entry.time} · ${entry.name}'을(를) 그 시점으로 되돌려줘.`);
+    },
+    [appState, handleSend],
+  );
+
   const contextPct =
     lastInputTokens > 0
       ? Math.min(100, Math.round((lastInputTokens / CONTEXT_WINDOW) * 100))
@@ -392,6 +413,8 @@ export function App(): React.ReactElement {
           onSelect={handleSelectFile}
           onOpenDialog={handleSelectCwd}
           onDropFiles={handleDropFiles}
+          backups={backups}
+          onRestore={handleRestore}
         />
         <DocumentPreview
           activeName={activeFile?.name ?? null}

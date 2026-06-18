@@ -36,6 +36,16 @@ export type DocPreviewResult =
   | { ok: true; html: string; markdown: string }
   | { ok: false; error: string };
 
+/** 되돌리기 타임라인 항목 */
+export interface BackupEntry {
+  filename: string;
+  /** 원본 파일명 */
+  name: string;
+  /** 사람이 읽는 시각 "2026-06-16 23:18:42" */
+  time: string;
+  mtimeMs: number;
+}
+
 /** 툴콜 인자에서 핵심 경로 인자를 추출해 요약 문자열 생성 */
 export function formatToolCallSummary(toolName: string, args: unknown): string {
   const MAX_LEN = 50;
@@ -107,6 +117,10 @@ export interface KodocApi {
     preview: (path: string) => Promise<DocPreviewResult>;
     /** 드롭된 파일의 절대 경로 추출 (sandbox-safe, preload webUtils) */
     pathForFile: (file: File) => string;
+  };
+  backups: {
+    /** 되돌리기 타임라인 */
+    list: () => Promise<BackupEntry[]>;
   };
 }
 

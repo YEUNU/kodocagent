@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { FileEntry } from "../types.js";
+import type { BackupEntry, FileEntry } from "../types.js";
 
 interface FilePaneProps {
   files: FileEntry[];
@@ -7,10 +7,12 @@ interface FilePaneProps {
   onSelect: (path: string) => void;
   onOpenDialog: () => void;
   onDropFiles: (absPaths: string[]) => void;
+  backups: BackupEntry[];
+  onRestore: (entry: BackupEntry) => void;
 }
 
 export function FilePane(props: FilePaneProps): React.ReactElement {
-  const { files, activePath, onSelect, onOpenDialog, onDropFiles } = props;
+  const { files, activePath, onSelect, onOpenDialog, onDropFiles, backups, onRestore } = props;
   const [over, setOver] = useState(false);
 
   function handleDragOver(e: React.DragEvent<HTMLDivElement>): void {
@@ -95,6 +97,54 @@ export function FilePane(props: FilePaneProps): React.ReactElement {
             );
           })
         )}
+
+        {backups.length > 0 && (
+          <>
+            <div className="h-section row gap-4" style={{ margin: "16px 0 8px" }}>
+              <svg className="ico ico--sm" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 2.5-6.2" />
+                <path d="M3 4v4h4" />
+                <path d="M12 8v4l3 1.7" />
+              </svg>
+              되돌리기 타임라인
+            </div>
+            <ul className="timeline">
+              {backups.map((b) => (
+                <li key={b.filename}>
+                  <button
+                    type="button"
+                    className="timeline__item"
+                    style={{
+                      width: "100%",
+                      border: "none",
+                      background: "transparent",
+                      font: "inherit",
+                      textAlign: "left",
+                    }}
+                    onClick={() => onRestore(b)}
+                    title={`${b.time} · ${b.name} 시점으로 되돌리기`}
+                  >
+                    <span className="timeline__time">{b.time.slice(11, 16)}</span>
+                    <span
+                      className="grow"
+                      style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    >
+                      {b.name}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        <div className="safe-note" style={{ marginTop: "16px" }}>
+          <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="5" y="11" width="14" height="9" rx="2" />
+            <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+          </svg>
+          원본은 승인 전까지 안 바뀝니다
+        </div>
       </div>
     </aside>
   );

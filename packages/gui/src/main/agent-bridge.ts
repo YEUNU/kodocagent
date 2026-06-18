@@ -8,8 +8,8 @@
  * 보안 원칙: API 키·키 파일 내용을 렌더러/IPC로 전달 금지 (boolean만).
  */
 
-import { readdir } from "node:fs/promises";
-import { extname, isAbsolute } from "node:path";
+import { readdir, stat } from "node:fs/promises";
+import { extname, isAbsolute, join } from "node:path";
 import type { AgentEvent, AgentSessionOptions } from "@kodocagent/core";
 import {
   AgentSession,
@@ -29,7 +29,7 @@ import {
   SUPPORTED_WRITE_EXTENSIONS,
 } from "@kodocagent/doc-tools";
 import type { KodocConfig, Proposal } from "@kodocagent/shared";
-import { resolveApiKey } from "@kodocagent/shared";
+import { KODOC_PATHS, resolveApiKey } from "@kodocagent/shared";
 
 /** IPC로 전달 가능한 직렬화된 AgentEvent */
 export type SerializedAgentEvent = AgentEvent;
@@ -59,6 +59,26 @@ export type DocPreviewResult =
 
 const READ_EXTS: readonly string[] = SUPPORTED_READ_EXTENSIONS;
 const WRITE_EXTS: readonly string[] = SUPPORTED_WRITE_EXTENSIONS;
+
+/** 되돌리기 타임라인 항목 (IPC 직렬화) */
+export interface BackupEntry {
+  filename: string;
+  /** 원본 파일명 */
+  name: string;
+  /** 사람이 읽는 시각 "2026-06-16 23:18:42" */
+  time: string;
+  mtimeMs: number;
+}
+
+const BACKUP_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)-(.+)$/;
+function formatBackupTime(tsToken: string): string {
+  const restored = tsToken.replace(
+    /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/,
+    "$1T$2:$3:$4.$5Z",
+  );
+  const d = new Date(restored);
+  return Number.isNaN(d.getTime()) ? tsToken : d.toISOString().replace("T", " ").slice(0, 19);
+}
 
 type ApprovalResolver = (result: { approved: boolean; reason?: string }) => void;
 
@@ -201,6 +221,32 @@ export class AgentBridge {
       return { ok: true, html: renderHtml(result.markdown), markdown: result.markdown };
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  /**
+   * 되돌리기 타임라인: 백업 디렉터리 목록(최신순, 최대 20).
+   */
+  async listBackups(): Promise<BackupEntry[]> {
+    try {
+      const dir = KODOC_PATHS.backups;
+      const names = await readdir(dir);
+      const out: BackupEntry[] = [];
+      for (const filename of names) {
+        const m = filename.match(BACKUP_RE);
+        if (!m) continue;
+        let mtimeMs = 0;
+        try {
+          mtimeMs = (await stat(join(dir, filename))).mtimeMs;
+        } catch {
+          mtimeMs = 0;
+        }
+        out.push({ filename, name: m[2] ?? filename, time: formatBackupTime(m[1] ?? ""), mtimeMs });
+      }
+      out.sort((a, b) => b.mtimeMs - a.mtimeMs);
+      return out.slice(0, 20);
+    } catch {
+      return [];
     }
   }
 

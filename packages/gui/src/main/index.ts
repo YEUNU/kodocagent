@@ -141,6 +141,11 @@ function registerIpc(): void {
     );
   });
 
+  /** backups.list — 되돌리기 타임라인 */
+  ipcMain.handle("backups:list", async () => {
+    return (await bridge?.listBackups()) ?? [];
+  });
+
   /** cwd.select — 폴더 선택 다이얼로그 */
   ipcMain.handle("cwd:select", async () => {
     if (!mainWindow) return null;
