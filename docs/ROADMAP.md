@@ -34,6 +34,7 @@
 | R12 | **v0.6.1 발행 — 에이전트 편집 행동 규칙 강화**(정보부족→질문·날조금지 / 설명말고 실제 propose_* / 일괄 완결성·자가확인) **+ `.hwp` 구조편집 안내 가드** (의도충실도 검증 하네스로 실모델 e2e — claude 원문 6/6 안정, gpt-5.4 불안정) | OIDC 자동(2026-06-17) |
 | R13 | **v0.6.2 발행 — 능력·한계 grounding**(요청을 시스템 능력으로 판단 — 미지원 기능은 어설피 시도 말고 솔직히 flag; '가능' 목록은 도구 레지스트리에서 자동 도출·드리프트 방지) (실모델 e2e — 하드티어 능력 flag claude 3/3, 검증 하네스를 실 .hwpx XML 아티팩트+LLM-judge로 강화·EVAL_SPECS 9/9) | OIDC 자동(2026-06-17) |
 | R14 | **v0.6.3 발행 — kordoc '표입니다' 무성 텍스트 손실 수정 + 양식 채우기 견고화** (도형 대체텍스트 전역 스트립 정규식이 '목표/번호/발표입니다' 등 합성어 꼬리를 절단 — pnpm patch + 발행 번들 런타임 복원 가드(44키워드, 실 unpatched kordoc e2e 복원); `propose_form_fill`→`fillHwpx` 전환. **실 한컴 뷰어 열림 검증으로 포착·재확인**, 게이트 그린) | OIDC 자동(2026-06-18) |
+| R15 | **v0.7.0 발행 — kordoc API-우선 마이그레이션 + 자가검증 루프 + API 사용량 표시** (편집엔진 find_replace·redact_pii·cell_edit를 kordoc splice 프리미티브로 이전(서식 분리 텍스트 처리·병합셀 보존, cell_edit 전면 재작성 40테스트 보존)·포맷감지 위임·`extractFormSchema` 안내·신규 `export_document`(HTML); **AgentSession 자가검증 루프**(편집 후 재읽기·완결성 점검 — gpt 12→15/18, 실 수능지 한컴 무손상); **`/usage` API 사용량·추정 비용**; parse 가드 blocks 복원. 테스트 501·게이트 그린) | OIDC 자동(2026-06-18) |
 | 운영 | CI 그린(3 OS × Node 22/24), Actions v6, TS6 의존성 최신화 | `4b159d7` |
 | 검증 | 실키 E2E(2026-06-15): **OpenAI gpt-5.5 + Google gemini-3.5-flash + Anthropic claude-sonnet-4-6** 읽기·요약(툴콜)·쓰기 거절+원본 무변경; **법령 MCP(korean-law)** 연동으로 근로기준법 제60조 조회→취업규칙 위반 식별·인용 성공 | — |
 

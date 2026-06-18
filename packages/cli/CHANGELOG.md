@@ -1,15 +1,22 @@
 # kodocagent
 
-## [Unreleased] — kordoc API-우선 마이그레이션
+## 0.7.0
 
-> 원칙: kordoc이 제공하는 API를 1순위로 사용하고, kordoc이 없는 기능만 우리가 추가한다.
-> (버전 미정 — 발행 전 단계. 모든 게이트 그린 + 실제 한컴오피스 뷰어 무손상 검증 완료.)
+### Minor Changes (kordoc API-우선 · 자가검증 루프 · API 사용량 표시)
 
+- **에이전트 자가 검증 루프 — 모델이 약해도 요청을 끝까지 처리** — 문서를 변경한 응답 끝에 에이전트가 **변경 결과를 자동으로 다시 읽고 원래 요청을 항목별로 점검**해, 빠진 부분이 있으면 스스로 마저 수정합니다(없으면 "검증 완료"). "모든/전부" 같은 일괄 요청에서 일부만 처리하고 끝내는 문제를 구조적으로 보정합니다. (실측: gpt-5.4 코어 18스펙 12→15 통과, 날짜 일괄 통일 완결성 실패가 해소.)
+- **API 사용량·추정 비용 표시** — 응답 끝과 종료 시 **누적 입력·출력 토큰과 추정 비용**(USD)을 보여줍니다. `/usage`(=`/cost`) 명령으로 언제든 확인할 수 있습니다. (Claude opus/sonnet/haiku 정가 추정. 단가 미등록 모델은 토큰만 표시.)
 - **편집 엔진을 kordoc 무손실 프리미티브로 이전** — 찾기·바꾸기(`propose_find_replace`), 개인정보 마스킹(`propose_redact_pii`), 표 셀 편집(`propose_cell_edit`)이 자체 XML 정규식/토크나이저 대신 kordoc `scanSectionXml`(소스맵) + `buildRangeSplices`/`buildParagraphSplices`(run·서식 보존 범위 치환) + `applySplices`로 동작합니다. **부가 효과**: 텍스트가 여러 서식 런에 나뉘어 있어도(굵게 등 부분 서식) 찾기·바꾸기와 PII 마스킹이 경계를 가로질러 처리됩니다(기존엔 누락). 병합 셀(cellSpan/rowSpan) 구조는 그대로 보존됩니다.
+- **새 기능: 문서 내보내기(`export_document`)** — 문서를 HTML로 내보냅니다(kordoc `renderHtml`, 항상 가능). PDF는 puppeteer-core가 설치된 환경에서 가능하며, 없으면 친절히 안내합니다.
 - **양식 필드 안내 강화** — `propose_form_fill`이 kordoc `extractFormSchema`로 채울 수 있는 필드와 타입(텍스트·날짜·전화·금액 등)을 파악해, 라벨이 안 맞으면 실제 채울 수 있는 필드 목록을 알려줍니다.
 - **포맷 감지를 kordoc에 위임** — .hwp(OLE2)·.hwpx(ZIP) 매직바이트 판별을 자체 구현 대신 kordoc `isOldHwpFile`/`isZipFile`로 통일했습니다.
-- **새 기능: 문서 내보내기(`export_document`)** — 문서를 HTML로 내보냅니다(kordoc `renderHtml`, 항상 가능). PDF는 puppeteer-core가 설치된 환경에서 가능하며, 없으면 친절히 안내합니다.
-- **검증** — find-replace·cell-edit(좌표+라벨)·redact-pii 산출물을 실제 한컴오피스 뷰어로 열어 무손상 확인. 서식 분리 텍스트 처리·병합셀 보존 회귀 테스트 추가. 전체 테스트 486 통과.
+- **읽기 텍스트 손실 가드 확장** — 0.6.3의 '표입니다' 무성 손실 복원 가드를 마크다운뿐 아니라 **문서 구조(blocks)에도 적용** — 양식 필드 인식 등 blocks 기반 기능까지 일관되게 보호합니다.
+
+### 검증
+
+- 마이그레이션 산출물(find-replace·cell-edit 좌표+라벨·redact-pii)을 **실제 한컴오피스 뷰어로 열어 무손상 확인**. 서식 분리 텍스트·병합셀 보존 회귀 테스트 추가.
+- **실 한국 문서로 LLM 검증** — 실제 수능 사회·문화 문제지(.hwpx, 중첩표·이미지)를 LLM이 편집(○○신문→한국경제신문)하고 한컴에서 무손상 확인. 자가 검증 루프가 함께 동작.
+- 전체 테스트 501 통과(build·typecheck·lint 그린).
 
 ## 0.6.3
 
