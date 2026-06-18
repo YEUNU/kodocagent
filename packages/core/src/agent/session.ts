@@ -14,7 +14,7 @@ import type { SessionStore } from "../session/store.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import { compactMessages } from "./context.js";
 import type { AgentEvent } from "./events.js";
-import { buildSystemPrompt, SELF_VERIFY_PROMPT } from "./prompts.js";
+import { buildSystemPrompt, buildThrashNudge, SELF_VERIFY_PROMPT } from "./prompts.js";
 
 /**
  * 문서를 실제로 변경하는(승인 후 커밋되는) 편집 도구 집합.
@@ -36,6 +36,35 @@ const EDITING_TOOLS = new Set<string>([
 
 /** 자가 검증 라운드 최대 횟수(무한 루프 방지). 1회면 대부분의 완결성 누락을 잡는다. */
 const MAX_SELF_VERIFY_ROUNDS = 1;
+
+/**
+ * 같은 편집 도구를 이 횟수 이상 호출하면 thrash로 보고 전략 전환 nudge를 주입한다.
+ * nudge는 조언일 뿐 막지 않으므로(오탐도 무해), 정상적인 다중 편집을 방해하지 않는다.
+ */
+const THRASH_THRESHOLD = 5;
+
+/**
+ * 호출된 도구 이름 목록에서 임계치 이상 반복된 편집 도구를 찾는다(가장 많이 호출된 것).
+ * thrash 감지용 — 임계치 미만이면 null.
+ */
+export function findThrashingEditTool(
+  toolNames: string[],
+  threshold: number = THRASH_THRESHOLD,
+): { tool: string; count: number } | null {
+  const counts = new Map<string, number>();
+  for (const name of toolNames) {
+    if (EDITING_TOOLS.has(name)) counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  let worstTool = "";
+  let worstCount = 0;
+  for (const [t, c] of counts) {
+    if (c > worstCount) {
+      worstTool = t;
+      worstCount = c;
+    }
+  }
+  return worstCount >= threshold ? { tool: worstTool, count: worstCount } : null;
+}
 
 export interface AgentSessionOptions {
   config: KodocConfig;
@@ -164,6 +193,15 @@ export class AgentSession {
           tools: aiSdkTools,
           // 멀티스텝 정지 조건: maxSteps번 툴콜 후 중단 (AI SDK v6 실제 API)
           stopWhen: stepCountIs(config.maxSteps),
+          // thrash 감지 — 같은 편집 도구를 반복 호출하면 그 스텝 system에 전략 전환 nudge 주입
+          prepareStep: ({ steps }) => {
+            const names = steps.flatMap((s) => (s.toolCalls ?? []).map((tc) => tc.toolName));
+            const thrash = findThrashingEditTool(names);
+            if (thrash) {
+              return { system: `${system}\n\n${buildThrashNudge(thrash.tool, thrash.count)}` };
+            }
+            return {};
+          },
           abortSignal: signal,
           // 샘플링 파라미터 미설정 (SPEC §3, §5 불변 원칙)
           onError: () => {

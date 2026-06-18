@@ -90,10 +90,33 @@ export const proposeEditTool: ToolDefinition<ProposeEditInput> = {
         return `오류: 편집을 적용하지 못했습니다: ${patchResult.error ?? "알 수 없는 오류"}. read_document로 원본을 다시 확인하세요.`;
       }
       stagedData = patchResult.data;
-      for (const s of patchResult.skipped) {
-        warnings.push(
-          `일부 변경이 적용되지 않았습니다(${s.reason ?? "사유 미상"}). 표 구조 변경은 propose_table_structure, 셀 값은 propose_cell_edit을 사용하세요.`,
+
+      // 요청한 변경이 하나도 적용되지 않았으면(applied 0 + skip 있음) — 정직하게 오류 반환.
+      // (그렇지 않으면 무변경 제안이 '성공'처럼 보여 에이전트가 같은 시도를 반복한다.)
+      if (patchResult.applied === 0 && patchResult.skipped.length > 0) {
+        const reasons = [...new Set(patchResult.skipped.map((s) => s.reason ?? "사유 미상"))].join(
+          "; ",
         );
+        if (ext === ".hwp") {
+          return (
+            `오류: 요청한 변경이 적용되지 않았습니다(${reasons}). ` +
+            "`.hwp`(한/글 바이너리)는 표·병합/줄바꿈 셀 등 일부 편집을 지원하지 않습니다. " +
+            "한글에서 '다른 이름으로 저장 → HWPX(.hwpx)'로 변환하면 `propose_cell_edit`(셀 값)·`propose_table_structure`(표 구조)로 편집할 수 있습니다. " +
+            "추측해 반복하지 말고, 변환이 필요하다는 점을 사용자에게 안내하세요."
+          );
+        }
+        return (
+          `오류: 요청한 변경이 적용되지 않았습니다(${reasons}). ` +
+          "표 셀 값은 `propose_cell_edit`, 표 구조 변경은 `propose_table_structure`를 사용하세요."
+        );
+      }
+
+      const skipGuide =
+        ext === ".hwp"
+          ? "표·셀 편집이 필요하면 한글에서 .hwpx로 저장한 뒤 propose_cell_edit/propose_table_structure를 사용하세요."
+          : "표 구조 변경은 propose_table_structure, 셀 값은 propose_cell_edit을 사용하세요.";
+      for (const s of patchResult.skipped) {
+        warnings.push(`일부 변경이 적용되지 않았습니다(${s.reason ?? "사유 미상"}). ${skipGuide}`);
       }
     } else if (ext === ".docx") {
       // DOCX: md→docx 재생성 (서식 손실 경고)

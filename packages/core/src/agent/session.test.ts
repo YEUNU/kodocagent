@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { SessionStore } from "../session/store.js";
 import { ToolRegistry } from "../tools/registry.js";
-import { AgentSession } from "./session.js";
+import { AgentSession, findThrashingEditTool } from "./session.js";
 
 const { testSessionsDir } = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -379,6 +379,44 @@ describe("AgentSession — 자가 검증 루프", () => {
       if (prev === undefined) delete process.env.KODOC_SELF_VERIFY;
       else process.env.KODOC_SELF_VERIFY = prev;
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────
+// thrash 감지 (findThrashingEditTool)
+// ─────────────────────────────────────────────────────────
+
+describe("findThrashingEditTool", () => {
+  it("같은 편집 도구를 임계치(5) 이상 호출하면 감지한다", () => {
+    const names = Array(6).fill("propose_cell_edit");
+    expect(findThrashingEditTool(names)).toEqual({ tool: "propose_cell_edit", count: 6 });
+  });
+
+  it("임계치 미만이면 null", () => {
+    expect(findThrashingEditTool(Array(4).fill("propose_cell_edit"))).toBeNull();
+  });
+
+  it("편집 도구가 아닌 반복(read_document)은 무시한다", () => {
+    expect(findThrashingEditTool(Array(10).fill("read_document"))).toBeNull();
+  });
+
+  it("읽기 사이에 섞인 편집툴 호출도 누계로 센다", () => {
+    const names = [
+      "read_document",
+      "propose_find_replace",
+      "read_document",
+      "propose_find_replace",
+      "propose_find_replace",
+      "read_document",
+      "propose_find_replace",
+      "propose_find_replace",
+    ];
+    expect(findThrashingEditTool(names)).toEqual({ tool: "propose_find_replace", count: 5 });
+  });
+
+  it("가장 많이 반복된 편집 도구를 고른다", () => {
+    const names = [...Array(5).fill("propose_cell_edit"), ...Array(2).fill("propose_find_replace")];
+    expect(findThrashingEditTool(names)).toEqual({ tool: "propose_cell_edit", count: 5 });
   });
 });
 
