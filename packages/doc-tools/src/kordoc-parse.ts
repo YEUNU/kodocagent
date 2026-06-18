@@ -22,7 +22,7 @@
 
 import { readFile } from "node:fs/promises";
 import JSZip from "jszip";
-import type { ParseOptions, ParseResult } from "kordoc";
+import type { IRBlock, ParseOptions, ParseResult } from "kordoc";
 import { isZipFile, parse as kordocParse } from "kordoc";
 
 // kordoc 도형/이미지 대체텍스트 제거 정규식의 키워드 집합 — kordoc dist 의 실제 정규식
@@ -171,6 +171,74 @@ export function restoreOverStrippedShapeText(markdown: string, paragraphTexts: s
   return changed ? lines.join("\n") : markdown;
 }
 
+/** 블록 트리의 편집 가능한 텍스트 슬롯(문단/헤딩 text, 표 셀 text, 중첩 셀 blocks, children)을 문서 순서로 수집. */
+function collectBlockTextSlots(
+  blocks: IRBlock[],
+): Array<{ get: () => string; set: (v: string) => void }> {
+  const slots: Array<{ get: () => string; set: (v: string) => void }> = [];
+  const walk = (bs: IRBlock[]): void => {
+    for (const b of bs) {
+      if (typeof b.text === "string") {
+        slots.push({
+          get: () => b.text ?? "",
+          set: (v) => {
+            b.text = v;
+          },
+        });
+      }
+      if (b.table) {
+        for (const row of b.table.cells) {
+          for (const cell of row) {
+            slots.push({
+              get: () => cell.text,
+              set: (v) => {
+                cell.text = v;
+              },
+            });
+            if (cell.blocks) walk(cell.blocks);
+          }
+        }
+      }
+      if (b.children) walk(b.children);
+    }
+  };
+  walk(blocks);
+  return slots;
+}
+
+/**
+ * parse().blocks 의 과제거된 도형 키워드 꼬리를 원본 텍스트로 복원한다(제자리 변이).
+ * 마크다운 복원과 동일한 안전 규칙: 원본 XML 에 실재하는 텍스트만, 슬롯 텍스트가 buggy 와
+ * 정확히 일치할 때만 fixed 로 되돌린다(거짓 양성 억제 — used 집합으로 1:1 매칭).
+ *
+ * @returns 하나라도 복원했으면 true
+ */
+export function restoreOverStrippedBlocks(blocks: IRBlock[], paragraphTexts: string[]): boolean {
+  const slots = collectBlockTextSlots(blocks);
+  const used = new Set<number>();
+  let changed = false;
+
+  for (const raw of paragraphTexts) {
+    const buggy = applyStrip(raw, BUGGY_SHAPE_STRIP);
+    const fixed = applyStrip(raw, FIXED_SHAPE_STRIP);
+    if (buggy === fixed) continue;
+    if (!fixed || !buggy) continue;
+
+    for (let i = 0; i < slots.length; i++) {
+      if (used.has(i)) continue;
+      const cur = slots[i]?.get().trim() ?? "";
+      if (cur === buggy && cur !== fixed) {
+        slots[i]?.set(fixed);
+        used.add(i);
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  return changed;
+}
+
 function isZip(bytes: Uint8Array): boolean {
   // kordoc isZipFile 위임 (ArrayBuffer 입력 — subarray 풀 공유 회피용 복사)
   if (bytes.length < 4) return false;
@@ -212,6 +280,10 @@ export async function parse(
     const paragraphTexts = await extractHwpxParagraphTexts(bytes);
     if (paragraphTexts.length === 0) return result; // hwpx 아님(docx 등) → 통과
     const repaired = restoreOverStrippedShapeText(result.markdown, paragraphTexts);
+    // blocks 도 동일 규칙으로 제자리 복원(form 필드·blocksToMarkdown 등이 blocks 를 읽음).
+    if (Array.isArray(result.blocks)) {
+      restoreOverStrippedBlocks(result.blocks, paragraphTexts);
+    }
     if (repaired !== result.markdown) {
       return { ...result, markdown: repaired };
     }

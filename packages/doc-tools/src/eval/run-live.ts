@@ -258,6 +258,7 @@ export async function runSpec(
       ),
       originalBytes: fixture.bytes,
       fileName,
+      toolsCalled: [...toolsCalled],
     };
     const assertResult = spec.assert(markdown, extra);
     const { pass, detail } = assertResult instanceof Promise ? await assertResult : assertResult;

@@ -13,6 +13,7 @@ import {
   BUGGY_SHAPE_STRIP,
   extractHwpxParagraphTexts,
   parse,
+  restoreOverStrippedBlocks,
   restoreOverStrippedShapeText,
 } from "./kordoc-parse.js";
 
@@ -110,5 +111,51 @@ describe("kordoc 런타임 가드 — 도형 키워드 합성어 복원", () => 
     const res = await parse("그냥 평문 문자열 목표입니다");
     // 문자열 평문은 kordoc 이 그대로 처리 — 가드는 .hwpx 경로만 개입
     expect(res.success).toBeDefined();
+  });
+});
+
+describe("restoreOverStrippedBlocks — blocks 과제거 복원", () => {
+  it("문단·표 셀·중첩 셀 blocks의 과제거된 꼬리를 원본으로 복원한다", () => {
+    // kordoc 버그는 키워드(표·호·원)+입니다 를 잘라낸다:
+    //   "목표입니다"→"목"(표), "번호입니다"→"번"(호), "공원입니다"→"공"(원), "도표입니다"→"도"(표)
+    // biome-ignore lint/suspicious/noExplicitAny: 테스트용 최소 IRBlock 모형
+    const blocks: any[] = [
+      { type: "paragraph", text: "목" },
+      {
+        type: "table",
+        table: {
+          rows: 1,
+          cols: 2,
+          hasHeader: false,
+          cells: [
+            [
+              { text: "번", colSpan: 1, rowSpan: 1 },
+              {
+                text: "공",
+                colSpan: 1,
+                rowSpan: 1,
+                blocks: [{ type: "paragraph", text: "도" }],
+              },
+            ],
+          ],
+        },
+      },
+    ];
+    const paras = ["목표입니다", "번호입니다", "공원입니다", "도표입니다"];
+
+    const changed = restoreOverStrippedBlocks(blocks, paras);
+    expect(changed).toBe(true);
+    expect(blocks[0].text).toBe("목표입니다");
+    expect(blocks[1].table.cells[0][0].text).toBe("번호입니다");
+    expect(blocks[1].table.cells[0][1].text).toBe("공원입니다");
+    expect(blocks[1].table.cells[0][1].blocks[0].text).toBe("도표입니다");
+  });
+
+  it("과제거가 없으면 false를 반환하고 텍스트를 건드리지 않는다", () => {
+    // biome-ignore lint/suspicious/noExplicitAny: 테스트용 최소 IRBlock 모형
+    const blocks: any[] = [{ type: "paragraph", text: "평범한 문장입니다" }];
+    const changed = restoreOverStrippedBlocks(blocks, ["평범한 문장입니다"]);
+    expect(changed).toBe(false);
+    expect(blocks[0].text).toBe("평범한 문장입니다");
   });
 });

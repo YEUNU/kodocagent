@@ -28,6 +28,8 @@ export interface AssertExtra {
   originalBytes: Uint8Array;
   /** 작업 파일 이름 (예: "formobj.hwpx") */
   fileName: string;
+  /** 에이전트가 호출한 도구 이름 목록(호출 순서) — export 등 비편집 도구 검증용 */
+  toolsCalled?: string[];
 }
 
 export interface EvalSpec {
