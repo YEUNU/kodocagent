@@ -706,3 +706,88 @@ describe("proposeFindReplaceTool — 서식 분리(크로스런) 텍스트", () 
     }
   }, 15000);
 });
+
+// ─────────────────────────────────────────────────────────
+// ⑨ 찾기·바꾸기 동일 텍스트 조기 반환
+// ─────────────────────────────────────────────────────────
+
+describe("⑨ proposeFindReplaceTool — find===replace 조기 반환", () => {
+  it("caseSensitive=false: find와 replace가 동일하면 오류 반환", async () => {
+    const subDir = join(testDir, `same-text-${Date.now()}`);
+    await mkdir(subDir, { recursive: true });
+    const md = `# 테스트\n\n내용입니다.\n`;
+    const filePath = await saveHwpx(subDir, "same.hwpx", md);
+    const originalBuf = await readFile(filePath);
+
+    const ctx = makeCtx(subDir);
+    const result = await proposeFindReplaceTool.propose?.({
+      input: {
+        path: "same.hwpx",
+        find: "내용",
+        replace: "내용",
+        caseSensitive: false,
+        all: true,
+        summary: "동일 텍스트 치환 시도",
+      },
+      ctx,
+    });
+
+    expect(typeof result).toBe("string");
+    expect(result as string).toContain("동일");
+
+    // 파일 무수정
+    const afterBuf = await readFile(filePath);
+    expect(Buffer.from(afterBuf).equals(Buffer.from(originalBuf))).toBe(true);
+  }, 15000);
+
+  it("caseSensitive=false: 대소문자만 다른 변경은 차단하지 않는다(실제 변경)", async () => {
+    const subDir = join(testDir, `same-case-${Date.now()}`);
+    await mkdir(subDir, { recursive: true });
+    const md = `# 테스트\n\nHello World\n`;
+    await saveHwpx(subDir, "same-case.hwpx", md);
+
+    const ctx = makeCtx(subDir);
+    const result = await proposeFindReplaceTool.propose?.({
+      input: {
+        path: "same-case.hwpx",
+        find: "hello",
+        replace: "HELLO",
+        caseSensitive: false,
+        all: true,
+        summary: "대소문자 정규화 치환",
+      },
+      ctx,
+    });
+
+    // find와 replace의 raw 문자열이 다르므로 no-op 가드에 걸리지 않고 진행돼야 한다.
+    if (typeof result === "string") {
+      expect(result).not.toContain("동일");
+    }
+  }, 15000);
+
+  it("caseSensitive=true: 대소문자가 다르면 동일로 보지 않음(치환 진행)", async () => {
+    const subDir = join(testDir, `diff-case-${Date.now()}`);
+    await mkdir(subDir, { recursive: true });
+    const md = `# 테스트\n\nhello world\n`;
+    await saveHwpx(subDir, "diff-case.hwpx", md);
+
+    const ctx = makeCtx(subDir);
+    const result = await proposeFindReplaceTool.propose?.({
+      input: {
+        path: "diff-case.hwpx",
+        find: "hello",
+        replace: "HELLO",
+        caseSensitive: true,
+        all: true,
+        summary: "대소문자 구분 치환",
+      },
+      ctx,
+    });
+
+    // 조기반환 없이 정상 진행 (ProposeOutcome 또는 찾기실패 오류)
+    // "동일"이라는 오류 메시지가 아니어야 함
+    if (typeof result === "string") {
+      expect(result as string).not.toContain("동일합니다");
+    }
+  }, 15000);
+});

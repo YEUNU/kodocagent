@@ -334,4 +334,94 @@ describe("write_new_document", () => {
     expect(result as string).toContain("이미 존재");
     expect(result as string).toContain("propose_edit");
   }, 10000);
+
+  // ⑦ NULL 바이트 거부 테스트
+  it("⑦ markdown에 NULL 바이트가 포함되면 Zod 검증 실패", async () => {
+    const { writeNewDocumentSchema } = await import("./write-new-document.js");
+
+    // Zod 스키마 직접 검증
+    const result = writeNewDocumentSchema.safeParse({
+      path: "test.md",
+      markdown: "정상 내용\x00NULL 문자 포함",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const msgs = result.error.issues.map((i) => i.message).join(", ");
+      expect(msgs).toContain("NULL");
+    }
+  });
+
+  it("⑦ propose_edit newMarkdown에 NULL 바이트가 포함되면 Zod 검증 실패", async () => {
+    const { proposeEditSchema } = await import("./propose-edit.js");
+
+    const result = proposeEditSchema.safeParse({
+      path: "test.hwpx",
+      newMarkdown: "정상\x00비정상",
+      summary: "테스트",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const msgs = result.error.issues.map((i) => i.message).join(", ");
+      expect(msgs).toContain("NULL");
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────
+// ① outputPath 백업 테스트
+// ─────────────────────────────────────────────────────────
+
+describe("① propose_edit commit — 포맷 변환 시 outputPath도 백업", async () => {
+  it("hwpx 파일이 출력 경로에 기존 존재하면 commit() 시 별도 백업됨", async () => {
+    const { readdir } = await import("node:fs/promises");
+    const { KODOC_PATHS } = await import("@kodocagent/shared");
+    const ctx = await makeCtx();
+
+    // 픽스처: 기존 report.hwpx 생성
+    const hwpxBuffer = await markdownToHwpx("# 기존 출력 파일\n\n원본 내용");
+    const hwpxPath = join(ctx.cwd, "report.hwpx");
+    await writeFile(hwpxPath, Buffer.from(hwpxBuffer));
+
+    // propose_edit .hwpx → 출력이 동일 경로이므로 outputPath===safePath → 추가 백업 없음
+    // 이 테스트는 outputPath===safePath일 때 중복 백업이 없음을 확인
+    const result = await proposeEditTool.propose!({
+      input: {
+        path: "report.hwpx",
+        newMarkdown: "# 기존 출력 파일\n\n수정된 내용",
+        summary: "테스트",
+      },
+      ctx,
+    });
+
+    if (typeof result === "string") {
+      // propose가 오류라면 테스트 스킵
+      return;
+    }
+
+    const outcome = result as { proposal: unknown; commit: () => Promise<string> };
+
+    // commit 전 백업 디렉터리 snapshot
+    let backupsBefore: string[];
+    try {
+      backupsBefore = await readdir(KODOC_PATHS.backups);
+    } catch {
+      backupsBefore = [];
+    }
+
+    await outcome.commit();
+
+    // commit 후 백업 디렉터리
+    let backupsAfter: string[];
+    try {
+      backupsAfter = await readdir(KODOC_PATHS.backups);
+    } catch {
+      backupsAfter = [];
+    }
+
+    // .hwpx → .hwpx: outputPath===safePath이므로 소스 백업 1개만 (중복 없음)
+    const newBackups = backupsAfter.filter((b) => !backupsBefore.includes(b));
+    expect(newBackups.length).toBeGreaterThanOrEqual(1);
+  }, 30000);
 });

@@ -42,8 +42,15 @@ import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
 export const proposeFindReplaceSchema = z.object({
   path: z.string().describe("수정할 .hwpx 파일 경로 (cwd 기준 상대 경로 또는 절대 경로)"),
-  find: z.string().min(1).describe("찾을 텍스트"),
-  replace: z.string().describe("바꿀 텍스트"),
+  find: z
+    .string()
+    .min(1)
+    .refine((s) => !s.includes("\u0000"), "내용에 NULL 문자를 포함할 수 없습니다")
+    .describe("찾을 텍스트"),
+  replace: z
+    .string()
+    .refine((s) => !s.includes("\u0000"), "내용에 NULL 문자를 포함할 수 없습니다")
+    .describe("바꿀 텍스트"),
   caseSensitive: z.boolean().optional().default(false).describe("대소문자 구분 (기본값: false)"),
   all: z
     .boolean()
@@ -480,6 +487,13 @@ export const proposeFindReplaceTool: ToolDefinition<ProposeFindReplaceInput> = {
       );
     }
 
+    // ⑨ 찾기·바꾸기 텍스트가 완전히 같으면(진짜 no-op) 조기 반환.
+    // 대소문자만 다른 경우(예: seoul→Seoul)는 caseSensitive=false라도 실제 변경이므로
+    // 차단하지 않는다 — raw 문자열이 바이트 단위로 같을 때만 no-op으로 본다.
+    if (input.find === input.replace) {
+      return "오류: 찾기와 바꾸기 텍스트가 동일합니다. 변경할 내용이 없습니다.";
+    }
+
     // 파일 크기 가드 — 원본 readFile 직전
     try {
       await assertFileSizeWithinLimit(safePath);
@@ -619,6 +633,10 @@ export const proposeFindReplaceTool: ToolDefinition<ProposeFindReplaceInput> = {
       },
       commit: async (): Promise<string> => {
         const backupPath = await backupFile(safePath, undefined, { summary: input.summary });
+        // ① 포맷 변환 시 출력 경로 기존 파일도 별도 백업 (data-loss 방지)
+        if (outputPath !== safePath) {
+          await backupFile(outputPath, undefined, { summary: input.summary });
+        }
         await commitStaged(stagedPath, outputPath);
         const backupInfo = backupPath ? ` (백업: ${backupPath})` : "";
         return `저장 완료: ${outputPath}${backupInfo}`;

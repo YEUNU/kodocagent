@@ -214,6 +214,31 @@ export class ToolRegistry {
               }
             }
 
+            // targetPath(출력 경로)를 한 번만 stat 하여 ①·⑪ 두 검사를 함께 처리한다.
+            let targetBaselineMtimeMs: number | null = null;
+            const hasDistinctTarget =
+              proposal.targetPath &&
+              proposal.sourcePath &&
+              proposal.targetPath !== proposal.sourcePath;
+            if (proposal.targetPath) {
+              try {
+                const ts = await stat(proposal.targetPath);
+                // ① 포맷 변환 시 출력 파일의 동시 변경 감지용 베이스라인
+                if (hasDistinctTarget) {
+                  targetBaselineMtimeMs = ts.mtimeMs;
+                }
+                // ⑪ 하드링크: nlink > 1이면 rename 후 다른 이름의 파일은 옛 내용을 유지
+                const HARDLINK_WARN =
+                  "이 파일은 다른 이름과 연결(하드링크)되어 있습니다. " +
+                  "저장하면 연결이 끊겨 다른 이름의 파일은 옛 내용을 유지합니다.";
+                if (ts.nlink > 1 && !(proposal.warnings ?? []).includes(HARDLINK_WARN)) {
+                  proposal.warnings = [...(proposal.warnings ?? []), HARDLINK_WARN];
+                }
+              } catch {
+                // 파일이 없거나 접근 불가 → 베이스라인/경고 생략 (신규 파일 등)
+              }
+            }
+
             // approval-required 이벤트 발행 (UI용)
             getEventEmitter()?.(proposal);
 
@@ -248,6 +273,27 @@ export class ToolRegistry {
                   throw new KodocError(
                     "승인을 기다리는 동안 파일이 변경되어 저장하지 않았습니다.",
                     "read_document로 문서를 다시 읽고 변경을 다시 제안하세요. 다른 프로그램에서 편집 중이면 닫아 주세요.",
+                  );
+                }
+              }
+
+              // ① targetPath mtime 재확인 (포맷 변환 시 출력 경로 lost-update 방지)
+              if (targetBaselineMtimeMs !== null && hasDistinctTarget) {
+                let currentTargetMtimeMs: number;
+                try {
+                  const s = await stat(proposal.targetPath);
+                  currentTargetMtimeMs = s.mtimeMs;
+                } catch {
+                  // 파일 삭제됨 → 저장 중단
+                  throw new KodocError(
+                    "출력 파일이 승인을 기다리는 동안 변경되어 저장하지 않았습니다.",
+                    "기존 파일을 확인하고 다시 시도하세요.",
+                  );
+                }
+                if (Math.abs(currentTargetMtimeMs - targetBaselineMtimeMs) > 1) {
+                  throw new KodocError(
+                    "출력 파일이 승인을 기다리는 동안 변경되어 저장하지 않았습니다.",
+                    "기존 파일을 확인하고 다시 시도하세요.",
                   );
                 }
               }

@@ -12,7 +12,8 @@
  */
 
 import { stat } from "node:fs/promises";
-import { extname } from "node:path";
+import { basename, extname } from "node:path";
+import { KodocError } from "@kodocagent/shared";
 import { markdownToHwpx } from "kordoc";
 import { z } from "zod";
 import { markdownToDocx } from "../md-to-docx.js";
@@ -22,9 +23,35 @@ import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
 const MAX_PREVIEW_CHARS = 10_000;
 
+// ⑬ Windows 예약 파일명·경로 길이 검증 (Windows에서만 실행, 다른 플랫폼은 no-op)
+const WINDOWS_RESERVED_NAMES = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.[^.]*)?$/i;
+const WINDOWS_MAX_PATH = 259;
+
+/**
+ * Windows에서만 예약 파일명·경로 길이를 검증한다.
+ * macOS/Linux는 no-op.
+ * @throws KodocError — 예약명이거나 260자 초과 시
+ */
+function assertWindowsSafePath(absPath: string): void {
+  if (process.platform !== "win32") return;
+  const name = basename(absPath);
+  if (WINDOWS_RESERVED_NAMES.test(name)) {
+    throw new KodocError("Windows에서 사용할 수 없는 파일 이름입니다.", "다른 이름을 사용하세요.");
+  }
+  if (absPath.length > WINDOWS_MAX_PATH) {
+    throw new KodocError(
+      `경로가 너무 깁니다(Windows 260자 제한). 현재: ${absPath.length}자.`,
+      "더 짧은 경로나 파일 이름을 사용하세요.",
+    );
+  }
+}
+
 export const writeNewDocumentSchema = z.object({
   path: z.string().describe("생성할 문서 경로 (cwd 기준 상대 경로 또는 절대 경로)"),
-  markdown: z.string().describe("새 문서 내용 (마크다운 형식)"),
+  markdown: z
+    .string()
+    .refine((s) => !s.includes("\u0000"), "내용에 NULL 문자를 포함할 수 없습니다")
+    .describe("새 문서 내용 (마크다운 형식)"),
 });
 
 export type WriteNewDocumentInput = z.infer<typeof writeNewDocumentSchema>;
@@ -47,6 +74,14 @@ export const writeNewDocumentTool: ToolDefinition<WriteNewDocumentInput> = {
   }): Promise<ProposeOutcome | string> => {
     const safePath = await resolveSafePath(ctx.cwd, input.path);
     const ext = extname(safePath).toLowerCase();
+
+    // ⑬ Windows 예약 파일명·경로 길이 검증
+    try {
+      assertWindowsSafePath(safePath);
+    } catch (err) {
+      if (err instanceof KodocError) return `오류: ${err.message} ${err.hint ?? ""}`.trim();
+      throw err;
+    }
 
     // 타겟 파일이 이미 존재하는지 확인
     try {

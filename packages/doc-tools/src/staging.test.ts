@@ -100,6 +100,48 @@ describe("backupFile", () => {
     const content = await readFile(srcFile, "utf-8");
     expect(content).toBe("원본 유지");
   });
+
+  // ⑤ 회귀 테스트: 같은 ms 내 두 번 백업해도 서로 다른 두 파일 생성
+  it("⑤ 같은 ms에 동일 파일을 두 번 backupFile → 두 개의 서로 다른 백업 파일 생성", async () => {
+    const baseDir = await makeTmpDir("backups-collision");
+    const srcDir = await makeTmpDir("src-collision");
+    const srcFile = join(srcDir, "report.hwpx");
+    await writeFile(srcFile, "ms 충돌 테스트");
+
+    // Date.now()를 모킹하여 두 호출이 동일한 ms를 반환하도록 강제
+    const fixedMs = 1_700_000_000_000; // 임의 고정 타임스탬프
+    const origDateNow = Date.now;
+    Date.now = () => fixedMs;
+
+    try {
+      const path1 = await backupFile(srcFile, baseDir);
+      const path2 = await backupFile(srcFile, baseDir);
+
+      // 두 경로가 null이 아니고 서로 달라야 함
+      expect(path1).not.toBeNull();
+      expect(path2).not.toBeNull();
+      expect(path1).not.toBe(path2);
+
+      // 두 파일 모두 존재해야 함
+      const content1 = await readFile(path1!, "utf-8");
+      const content2 = await readFile(path2!, "utf-8");
+      expect(content1).toBe("ms 충돌 테스트");
+      expect(content2).toBe("ms 충돌 테스트");
+
+      // 파일명 포맷이 타임스탬프-basename 패턴을 유지하는지 확인
+      // (정규식은 변경하지 않았음을 검증)
+      const { readdir: readdirFn } = await import("node:fs/promises");
+      const entries = await readdirFn(baseDir);
+      const backupEntries = entries.filter((e) => e.endsWith("report.hwpx"));
+      expect(backupEntries).toHaveLength(2);
+      // 두 항목 모두 <ts>-report.hwpx 포맷이어야 함
+      for (const entry of backupEntries) {
+        expect(entry).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-report\.hwpx$/);
+      }
+    } finally {
+      Date.now = origDateNow;
+    }
+  });
 });
 
 describe("commitErrorMessage", () => {
@@ -170,9 +212,7 @@ describe("commitStaged", () => {
     const targetDir = await makeTmpDir("commit-err-target");
     await expect(
       commitStaged("/nonexistent/staged.hwpx", join(targetDir, "out.hwpx")),
-    ).rejects.toSatisfy(
-      (e: unknown) => e instanceof Error && !(e instanceof KodocError),
-    );
+    ).rejects.toSatisfy((e: unknown) => e instanceof Error && !(e instanceof KodocError));
   });
 });
 

@@ -11,6 +11,7 @@
  * 테스트 호환성: baseDir 파라미터로 KODOC_PATHS 우회 가능
  */
 
+import { constants } from "node:fs";
 import { copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { KODOC_PATHS, KodocError } from "@kodocagent/shared";
@@ -76,18 +77,35 @@ export async function backupFile(
   const backupsRoot = baseDir ?? KODOC_PATHS.backups;
   await mkdir(backupsRoot, { recursive: true });
 
-  // ISO 타임스탬프 (파일 이름에 안전한 문자로)
-  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  // ISO 타임스탬프 (파일 이름에 안전한 문자로).
+  // 같은 ms 내 연속 백업이 같은 파일명을 낼 수 있으므로 COPYFILE_EXCL(배타적 생성)으로
+  // 복사하고, 이미 존재하면(EEXIST) ms를 1씩 증가해 재시도한다 — access+copyFile 사이의
+  // TOCTOU 없이 원자적으로 충돌을 회피한다. 정규식(-<name> 포맷)은 절대 바꾸지 않는다.
   const name = basename(targetPath);
-  const backupPath = join(backupsRoot, `${ts}-${name}`);
-
-  await copyFile(targetPath, backupPath);
+  let ms = Date.now();
+  let backupPath: string;
+  for (;;) {
+    const ts = new Date(ms).toISOString().replace(/[:.]/g, "-");
+    backupPath = join(backupsRoot, `${ts}-${name}`);
+    try {
+      await copyFile(targetPath, backupPath, constants.COPYFILE_EXCL);
+      break;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+        ms++; // 이미 존재 → 다음 ms로 재시도
+        continue;
+      }
+      throw err; // 그 외 오류(권한·디스크 등)는 그대로 전파
+    }
+  }
 
   // 작업 메타데이터 사이드카(되돌리기 타임라인 표시용). 선행 점(.)으로 시작해
   // 백업 목록 정규식(^<ts>-<name>$)에 걸리지 않으므로 list_backups는 영향받지 않는다.
+  // backupPath에서 ts 토큰을 추출하여 사이드카도 동일한 유니크 타임스탬프를 사용한다.
   if (meta?.summary) {
+    const backupBasename = basename(backupPath);
     await writeFile(
-      join(backupsRoot, `.${ts}-${name}.meta.json`),
+      join(backupsRoot, `.${backupBasename}.meta.json`),
       JSON.stringify({ summary: meta.summary }),
       "utf-8",
     ).catch(() => undefined); // best-effort: 사이드카 실패가 백업을 깨지 않는다

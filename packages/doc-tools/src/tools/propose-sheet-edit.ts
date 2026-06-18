@@ -145,7 +145,12 @@ export const proposeSheetEditTool: ToolDefinition<ProposeSheetEditInput> = {
         sourcePath: safePath,
       },
       commit: async (): Promise<string> => {
-        const backupPath = await backupFile(outputPath, undefined, { summary: opSummary });
+        // 소스 백업 (원본 .xls/.xlsx 파일)
+        const backupPath = await backupFile(safePath, undefined, { summary: opSummary });
+        // ① 포맷 변환 시 출력 경로 기존 파일도 별도 백업 (data-loss 방지)
+        if (outputPath !== safePath) {
+          await backupFile(outputPath, undefined, { summary: opSummary });
+        }
         await commitStaged(stagedPath, outputPath);
         const backupInfo = backupPath ? ` (백업: ${backupPath})` : "";
         return `저장 완료: ${outputPath}${backupInfo}`;

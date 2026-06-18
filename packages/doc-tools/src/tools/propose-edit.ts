@@ -31,6 +31,7 @@ export const proposeEditSchema = z.object({
   path: z.string().describe("수정할 문서 경로 (cwd 기준 상대 경로 또는 절대 경로)"),
   newMarkdown: z
     .string()
+    .refine((s) => !s.includes("\u0000"), "내용에 NULL 문자를 포함할 수 없습니다")
     .describe("새 문서 내용 (마크다운 형식). read_document로 원본을 먼저 읽어야 함"),
   summary: z.string().describe("변경 요약 (한국어 1-2문장)"),
 });
@@ -185,6 +186,10 @@ export const proposeEditTool: ToolDefinition<ProposeEditInput> = {
       commit: async (): Promise<string> => {
         // 백업 (원본이 있을 때만)
         const backupPath = await backupFile(safePath, undefined, { summary: input.summary });
+        // ① 포맷 변환 시 출력 경로 기존 파일도 별도 백업 (data-loss 방지)
+        if (outputPath !== safePath) {
+          await backupFile(outputPath, undefined, { summary: input.summary });
+        }
         // 원자적 쓰기
         await commitStaged(stagedPath, outputPath);
         const backupInfo = backupPath ? ` (백업: ${backupPath})` : "";

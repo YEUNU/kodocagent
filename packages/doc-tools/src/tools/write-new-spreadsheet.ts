@@ -7,12 +7,31 @@
  */
 
 import { stat } from "node:fs/promises";
-import { extname } from "node:path";
+import { basename, extname } from "node:path";
+import { KodocError } from "@kodocagent/shared";
 import ExcelJS from "exceljs";
 import { z } from "zod";
 import { resolveSafePath } from "../security.js";
 import { commitStaged, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
+
+// ⑬ Windows 예약 파일명·경로 길이 검증 (Windows에서만 실행, 다른 플랫폼은 no-op)
+const WINDOWS_RESERVED_NAMES_SS = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.[^.]*)?$/i;
+const WINDOWS_MAX_PATH_SS = 259;
+
+function assertWindowsSafePathSS(absPath: string): void {
+  if (process.platform !== "win32") return;
+  const name = basename(absPath);
+  if (WINDOWS_RESERVED_NAMES_SS.test(name)) {
+    throw new KodocError("Windows에서 사용할 수 없는 파일 이름입니다.", "다른 이름을 사용하세요.");
+  }
+  if (absPath.length > WINDOWS_MAX_PATH_SS) {
+    throw new KodocError(
+      `경로가 너무 깁니다(Windows 260자 제한). 현재: ${absPath.length}자.`,
+      "더 짧은 경로나 파일 이름을 사용하세요.",
+    );
+  }
+}
 
 export const writeNewSpreadsheetSchema = z.object({
   path: z.string().describe("생성할 XLSX 파일 경로 (cwd 기준 상대 경로 또는 절대 경로)"),
@@ -50,6 +69,14 @@ export const writeNewSpreadsheetTool: ToolDefinition<WriteNewSpreadsheetInput> =
 
     if (ext !== ".xlsx") {
       return `오류: write_new_spreadsheet은 .xlsx 파일만 지원합니다. 현재 확장자: ${ext}.`;
+    }
+
+    // ⑬ Windows 예약 파일명·경로 길이 검증
+    try {
+      assertWindowsSafePathSS(safePath);
+    } catch (err) {
+      if (err instanceof KodocError) return `오류: ${err.message} ${err.hint ?? ""}`.trim();
+      throw err;
     }
 
     // 타겟 파일이 이미 존재하는지 확인

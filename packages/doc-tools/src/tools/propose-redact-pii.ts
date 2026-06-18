@@ -294,7 +294,12 @@ export const proposeRedactPiiTool: ToolDefinition<ProposeRedactPiiInput> = {
           sourcePath: safePath,
         },
         commit: async (): Promise<string> => {
-          const backupPath = await backupFile(outputPath, undefined, { summary: summaryText });
+          // 소스 백업 (원본 .hwp/.hwpx)
+          const backupPath = await backupFile(safePath, undefined, { summary: summaryText });
+          // ① 포맷 변환 시 출력 경로 기존 파일도 별도 백업 (data-loss 방지)
+          if (outputPath !== safePath) {
+            await backupFile(outputPath, undefined, { summary: summaryText });
+          }
           await commitStaged(stagedPath, outputPath);
           const backupInfo = backupPath ? ` (백업: ${backupPath})` : "";
           return `개인정보 비식별 완료: ${outputPath}${backupInfo}`;
@@ -335,7 +340,12 @@ export const proposeRedactPiiTool: ToolDefinition<ProposeRedactPiiInput> = {
         sourcePath: safePath,
       },
       commit: async (): Promise<string> => {
-        const backupPath = await backupFile(outputPath, undefined, { summary: summaryText });
+        // 소스 백업
+        const backupPath = await backupFile(safePath, undefined, { summary: summaryText });
+        // ① 포맷 변환 시 출력 경로 기존 파일도 별도 백업 (data-loss 방지)
+        if (outputPath !== safePath) {
+          await backupFile(outputPath, undefined, { summary: summaryText });
+        }
         await commitStaged(stagedPath, outputPath);
         const backupInfo = backupPath ? ` (백업: ${backupPath})` : "";
         return `개인정보 비식별 완료: ${outputPath}${backupInfo}`;
