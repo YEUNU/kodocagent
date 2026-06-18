@@ -1,0 +1,570 @@
+<!-- @dsCard group="States" name="정직성·빈 상태·안전 신호" subtitle="빈 상태 유도 / 미지원 정직 안내 / 원본 보호 신호" width="900" height="720" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 정직성·빈 상태·안전 신호</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  html, body { height: 100%; }
+
+  /* ── 전체 캔버스 ── */
+  .canvas {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 20px;
+    padding: 24px;
+    background: var(--chrome-bg);
+  }
+
+  /* ── 섹션 레이블 ── */
+  .section-label {
+    font-size: var(--t-xs);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+
+  /* ─── ① 빈 상태 카드 ─────────────────────────────────────── */
+  .empty-card {
+    grid-column: 1 / 2;
+    grid-row: 1 / 2;
+    background: var(--chrome-surface);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-lg);
+    display: flex;
+    flex-direction: column;
+    min-height: 300px;
+  }
+
+  .empty-card .pane__header {
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+  }
+
+  .empty-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 24px;
+    gap: 16px;
+  }
+
+  .drop-zone {
+    width: 100%;
+    max-width: 320px;
+    border: 2px dashed var(--chrome-border-strong);
+    border-radius: var(--r-lg);
+    padding: 36px 24px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    cursor: default;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .drop-zone__icon {
+    width: 52px;
+    height: 52px;
+    border-radius: var(--r-md);
+    background: var(--chrome-elevated);
+    border: 1px solid var(--chrome-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+  }
+
+  .drop-zone__title {
+    font-size: var(--t-md);
+    font-weight: 600;
+    color: var(--text-strong);
+  }
+
+  .drop-zone__hint {
+    font-size: var(--t-sm);
+    color: var(--text-faint);
+    line-height: 1.5;
+  }
+
+  .drop-zone__exts {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 4px;
+  }
+
+  .empty-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  /* ─── ② 미지원 정직 안내 카드 ──────────────────────────────── */
+  .honesty-card {
+    grid-column: 2 / 3;
+    grid-row: 1 / 2;
+    background: var(--chrome-surface);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-lg);
+    display: flex;
+    flex-direction: column;
+    min-height: 300px;
+  }
+
+  .honesty-card .pane__header {
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+  }
+
+  .honesty-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+  }
+
+  /* 주 honesty 항목 (활성 경고) */
+  .honesty-main {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: var(--chrome-inset);
+    border: 1px dashed var(--chrome-border-strong);
+    border-radius: var(--r-sm);
+    padding: 12px 14px;
+    color: var(--text-muted);
+    font-size: var(--t-sm);
+  }
+
+  .honesty-main__icon {
+    color: var(--warn);
+    flex: none;
+    margin-top: 1px;
+  }
+
+  .honesty-main__body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .honesty-main__title {
+    font-size: var(--t-base);
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .honesty-main__desc {
+    font-size: var(--t-sm);
+    color: var(--text-muted);
+    line-height: 1.55;
+  }
+
+  .honesty-main__actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  /* 미지원 목록 — is-disabled 적용 */
+  .unsupported-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .unsupported-item {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 8px 10px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--chrome-border);
+    background: var(--chrome-elevated);
+    font-size: var(--t-sm);
+  }
+
+  .unsupported-item__icon {
+    flex: none;
+    color: var(--text-faint);
+    margin-top: 1px;
+  }
+
+  .unsupported-item__body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .unsupported-item__name {
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .unsupported-item__reason {
+    color: var(--text-faint);
+    font-size: var(--t-xs);
+    margin-top: 2px;
+  }
+
+  /* ─── ③ 안전 신호 카드 ──────────────────────────────────────── */
+  .signals-card {
+    grid-column: 1 / 3;
+    grid-row: 2 / 3;
+    background: var(--chrome-surface);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-lg);
+  }
+
+  .signals-card .pane__header {
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+  }
+
+  .signals-body {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .signals-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+
+  .signal-cell {
+    background: var(--chrome-elevated);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-md);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .signal-cell__label {
+    font-size: var(--t-xs);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    font-weight: 600;
+  }
+
+  .signal-cell__content {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  /* verify 상태 두 가지 나란히 */
+  .verify-pair {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .verify-done {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--add);
+    font-size: var(--t-sm);
+  }
+
+  /* 파일 경로 칩 */
+  .file-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-xs);
+    padding: 3px 9px;
+    font-size: var(--t-sm);
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* 원본 잠금 표시 */
+  .lock-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--add-soft);
+    border: 1px solid var(--add-soft);
+    border-radius: var(--r-sm);
+    padding: 8px 12px;
+    font-size: var(--t-sm);
+    color: var(--add);
+  }
+
+  .lock-status__icon {
+    flex: none;
+  }
+
+  .lock-status__text {
+    line-height: 1.4;
+  }
+
+  .lock-status__sub {
+    font-size: var(--t-xs);
+    color: var(--add);
+    opacity: 0.75;
+  }
+
+  /* 하단 종합 안전 배너 */
+  .safety-footer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-sm);
+    flex-wrap: wrap;
+  }
+
+  .safety-footer__divider {
+    width: 1px;
+    height: 16px;
+    background: var(--chrome-border);
+    flex: none;
+  }
+</style>
+</head>
+<body>
+<div class="canvas">
+
+  <!-- ──────────────────────────────────────────────────────── -->
+  <!-- ① 빈 상태 카드                                          -->
+  <!-- ──────────────────────────────────────────────────────── -->
+  <div class="empty-card">
+    <div class="pane__header">
+      <span class="pane__title">문서 미리보기</span>
+      <div class="row gap-4">
+        <button class="btn btn--ghost btn--sm" disabled>
+          <svg class="ico" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg>
+          내보내기
+        </button>
+      </div>
+    </div>
+
+    <div class="empty-body">
+      <div class="drop-zone">
+        <div class="drop-zone__icon">
+          <svg class="ico ico--xl" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        </div>
+        <div class="drop-zone__title">문서를 여기에 끌어다 놓으세요</div>
+        <div class="drop-zone__hint">
+          파일을 선택하거나 드래그하면<br/>바로 대화를 시작할 수 있습니다
+        </div>
+        <div class="drop-zone__exts">
+          <span class="chip">.hwpx</span>
+          <span class="chip">.hwp</span>
+          <span class="chip">.docx</span>
+          <span class="chip">.xlsx</span>
+        </div>
+      </div>
+
+      <div class="empty-actions">
+        <button class="btn btn--primary btn--sm">파일 열기…</button>
+        <span class="t-muted t-sm">또는</span>
+        <button class="btn btn--ghost btn--sm">최근 파일</button>
+      </div>
+
+      <div class="safe-note" style="margin-top: 4px;">
+        <svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        원본 무변경 — 승인 전까지 파일은 바뀌지 않습니다
+      </div>
+    </div>
+  </div>
+
+  <!-- ──────────────────────────────────────────────────────── -->
+  <!-- ② 미지원 정직 안내 카드                                 -->
+  <!-- ──────────────────────────────────────────────────────── -->
+  <div class="honesty-card">
+    <div class="pane__header">
+      <span class="pane__title">지원 범위 안내</span>
+      <span class="chip chip--warn">계약서.hwp</span>
+    </div>
+
+    <div class="honesty-body">
+      <div class="section-label">현재 파일에서 지원되지 않는 기능</div>
+
+      <!-- 주 honesty 항목 -->
+      <div class="honesty-main">
+        <span class="honesty-main__icon">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4M12 17h.01"/></svg>
+        </span>
+        <div class="honesty-main__body">
+          <div class="honesty-main__title">.hwp 표 셀 직접 편집은 지원되지 않습니다</div>
+          <div class="honesty-main__desc">
+            <b style="color: var(--text);">계약서.hwp</b>의 표 셀을 편집하려면
+            .hwpx 형식으로 저장한 뒤 진행해야 합니다.
+            변환해도 내용·서식은 그대로 유지됩니다.
+          </div>
+          <div class="honesty-main__actions">
+            <button class="btn btn--secondary btn--sm">.hwpx로 저장…</button>
+            <span class="verify-note">
+              <span class="t-xs t-faint">변환 후 원본은 별도 보관됩니다</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 미지원 목록 (회색 처리) -->
+      <div class="section-label" style="margin-top: 4px;">추가 미지원 항목 (.hwp 공통)</div>
+      <div class="unsupported-list">
+
+        <div class="unsupported-item is-disabled">
+          <span class="unsupported-item__icon">
+            <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </span>
+          <div class="unsupported-item__body">
+            <div class="unsupported-item__name">머리말 / 꼬리말 편집</div>
+            <div class="unsupported-item__reason">.hwp 바이너리 구조상 직접 접근 불가 — .hwpx 변환 필요</div>
+          </div>
+        </div>
+
+        <div class="unsupported-item is-disabled">
+          <span class="unsupported-item__icon">
+            <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </span>
+          <div class="unsupported-item__body">
+            <div class="unsupported-item__name">각주 / 미주 편집</div>
+            <div class="unsupported-item__reason">각주 섹션은 현재 읽기만 가능 — 쓰기 미지원</div>
+          </div>
+        </div>
+
+        <div class="unsupported-item is-disabled">
+          <span class="unsupported-item__icon">
+            <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </span>
+          <div class="unsupported-item__body">
+            <div class="unsupported-item__name">중첩 표 셀 편집</div>
+            <div class="unsupported-item__reason">표 안의 표(중첩 구조) 셀은 경로 해석 한계로 미지원</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ──────────────────────────────────────────────────────── -->
+  <!-- ③ 안전 신호 카드                                        -->
+  <!-- ──────────────────────────────────────────────────────── -->
+  <div class="signals-card">
+    <div class="pane__header">
+      <span class="pane__title">안전 신호</span>
+      <span class="t-sm t-muted">비전문가 안심 표시 모음</span>
+    </div>
+
+    <div class="signals-body">
+      <div class="signals-row">
+
+        <!-- 셀 1: 원본 무변경 -->
+        <div class="signal-cell">
+          <div class="signal-cell__label">원본 잠금</div>
+          <div class="signal-cell__content">
+            <div class="lock-status">
+              <span class="lock-status__icon">
+                <svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+              </span>
+              <div class="lock-status__text">
+                <div>원본 무변경</div>
+                <div class="lock-status__sub">승인 전까지 파일은 바뀌지 않습니다</div>
+              </div>
+            </div>
+            <div class="file-chip">예산보고서.hwpx</div>
+          </div>
+        </div>
+
+        <!-- 셀 2: 검증 상태 두 가지 -->
+        <div class="signal-cell">
+          <div class="signal-cell__label">검증 상태</div>
+          <div class="signal-cell__content">
+            <div class="section-label" style="margin-bottom: 2px;">진행 중</div>
+            <div class="verify-pair">
+              <div class="verify-note">
+                <span class="spin"></span>
+                검증 중… 변경 내용 확인하는 중
+              </div>
+            </div>
+            <hr class="divider" style="margin: 6px 0;" />
+            <div class="section-label" style="margin-bottom: 2px;">완료</div>
+            <div class="verify-pair">
+              <div class="verify-done">
+                <svg class="ico" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg>
+                검증 완료 — 변경 2곳, 누락 없음
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 셀 3: 안전 신호 칩 조합 -->
+        <div class="signal-cell">
+          <div class="signal-cell__label">제안 승인 흐름</div>
+          <div class="signal-cell__content">
+            <div class="col gap-4">
+              <div class="safe-note">
+                <svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+                원본 무변경
+              </div>
+              <div class="banner banner--warn">
+                <svg class="ico" viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4M12 17h.01"/></svg>
+                <span>포맷 변환 시 원본은 별도 보관됩니다</span>
+              </div>
+              <div class="banner banner--info">
+                <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                <span>승인 후 되돌리기 타임라인에 기록됩니다</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 종합 안전 배너 -->
+      <div class="safety-footer">
+        <span class="safe-note">
+          <svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          원본 무변경
+        </span>
+        <span class="safety-footer__divider"></span>
+        <span class="chip chip--ok">
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg>
+          자가검증 루프 활성
+        </span>
+        <span class="safety-footer__divider"></span>
+        <span class="chip chip--warn">
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4M12 17h.01"/></svg>
+          .hwp 표셀 편집 불가
+        </span>
+        <span class="safety-footer__divider"></span>
+        <span class="t-sm t-faint" style="margin-left: auto;">
+          승인 전까지 원본은 바뀌지 않습니다
+        </span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

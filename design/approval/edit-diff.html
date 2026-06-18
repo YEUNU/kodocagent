@@ -1,0 +1,254 @@
+<!-- @dsCard group="Approval" name="승인 — 텍스트 편집(edit)" subtitle="propose_edit 승인 모달 — 유니파이드 diff" width="820" height="720" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 승인: 텍스트 편집</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  /* screen-specific layout only — all colors/atoms from ds.css */
+  html, body { height: 100%; }
+
+  /* header meta row */
+  .modal-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  /* diff container — scrollable area */
+  .diff-wrap {
+    max-height: 280px;
+    overflow-y: auto;
+    border-radius: var(--r-sm);
+  }
+
+  /* diff line numbers */
+  .diff__ln {
+    display: inline-block;
+    width: 36px;
+    text-align: right;
+    margin-right: 10px;
+    color: var(--text-faint);
+    font-size: var(--t-xs);
+    user-select: none;
+    flex: none;
+  }
+
+  /* diff line with line-number prefix */
+  .diff__line {
+    display: flex;
+    align-items: baseline;
+    padding: 1px 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .diff__prefix {
+    display: inline-block;
+    width: 14px;
+    flex: none;
+    color: inherit;
+    font-size: var(--t-sm);
+    user-select: none;
+  }
+
+  .diff__text {
+    font-family: var(--font-mono);
+    font-size: var(--t-sm);
+    line-height: 1.6;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* stat chips row */
+  .diff-stat {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    background: var(--chrome-elevated);
+    border-bottom: 1px solid var(--chrome-border);
+    font-size: var(--t-xs);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    border-radius: var(--r-sm) var(--r-sm) 0 0;
+  }
+
+  .stat-add { color: var(--add); }
+  .stat-remove { color: var(--remove); }
+
+  /* reject reason area */
+  .reject-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+    margin-top: 4px;
+  }
+
+  /* footer left side */
+  .footer-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="modal-scrim">
+  <div class="modal">
+
+    <!-- ── Header ── -->
+    <div class="modal__header">
+      <div class="row between">
+        <span class="modal__title">텍스트 수정 제안</span>
+        <span class="badge badge--accent">propose_edit</span>
+      </div>
+
+      <!-- meta: target file + summary -->
+      <div class="modal-meta">
+        <span class="chip chip--tool">
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg>
+          계약서.hwpx
+        </span>
+        <span class="t-muted t-sm">·</span>
+        <span class="t-sm" style="color:var(--text)">계약 일자 및 계약 금액 문구 수정 (2곳)</span>
+      </div>
+    </div>
+
+    <!-- ── Body ── -->
+    <div class="modal__body">
+
+      <!-- unified diff -->
+      <div>
+        <div class="h-section" style="margin-bottom:6px">변경 내용 (유니파이드 diff)</div>
+        <div class="diff-wrap">
+          <div class="diff">
+
+            <!-- diff stat bar -->
+            <div class="diff-stat">
+              <span>계약서.hwpx</span>
+              <span class="stat-add">+2</span>
+              <span class="stat-remove">−2</span>
+            </div>
+
+            <!-- hunk 1 — 계약 일자 -->
+            <span class="diff__line diff__line--hunk">
+              <span class="diff__prefix"> </span>
+              <span class="diff__ln"></span>
+              <span class="diff__text">@@ -12,6 +12,6 @@ 제1조 (계약 기간)</span>
+            </span>
+            <span class="diff__line diff__line--ctx">
+              <span class="diff__prefix"> </span>
+              <span class="diff__ln">10</span>
+              <span class="diff__text">본 계약은 갑과 을이 서명·날인한 날로부터 효력을 발생한다.</span>
+            </span>
+            <span class="diff__line diff__line--ctx">
+              <span class="diff__prefix"> </span>
+              <span class="diff__ln">11</span>
+              <span class="diff__text"> </span>
+            </span>
+            <span class="diff__line diff__line--remove">
+              <span class="diff__prefix">−</span>
+              <span class="diff__ln">12</span>
+              <span class="diff__text">계약 기간: 2025년 1월 1일부터 2025년 12월 31일까지 (1년)</span>
+            </span>
+            <span class="diff__line diff__line--add">
+              <span class="diff__prefix">+</span>
+              <span class="diff__ln">12</span>
+              <span class="diff__text">계약 기간: 2026년 1월 1일부터 2026년 12월 31일까지 (1년)</span>
+            </span>
+            <span class="diff__line diff__line--ctx">
+              <span class="diff__prefix"> </span>
+              <span class="diff__ln">13</span>
+              <span class="diff__text"> </span>
+            </span>
+            <span class="diff__line diff__line--ctx">
+              <span class="diff__prefix"> </span>
+              <span class="diff__ln">14</span>
+              <span class="diff__text">단, 양 당사자의 서면 합의에 의해 연장할 수 있다.</span>
+            </span>
+
+            <!-- hunk 2 — 계약 금액 -->
+            <span class="diff__line diff__line--hunk">
+              <span class="diff__prefix"> </span>
+              <span class="diff__ln"></span>
+              <span class="diff__text">@@ -27,6 +27,6 @@ 제3조 (계약 금액)</span>
+            </span>
+            <span class="diff__line diff__line--ctx">
+              <span class="diff__prefix"> </span>
+              <span class="diff__ln">25</span>
+              <span class="diff__text">을은 아래 금액을 갑에게 지급하여야 한다.</span>
+            </span>
+            <span class="diff__line diff__line--ctx">
+              <span class="diff__prefix"> </span>
+              <span class="diff__ln">26</span>
+              <span class="diff__text"> </span>
+            </span>
+            <span class="diff__line diff__line--remove">
+              <span class="diff__prefix">−</span>
+              <span class="diff__ln">27</span>
+              <span class="diff__text">계약 금액: 금 삼천만원정 (₩30,000,000)</span>
+            </span>
+            <span class="diff__line diff__line--add">
+              <span class="diff__prefix">+</span>
+              <span class="diff__ln">27</span>
+              <span class="diff__text">계약 금액: 금 사천오백만원정 (₩45,000,000)</span>
+            </span>
+            <span class="diff__line diff__line--ctx">
+              <span class="diff__prefix"> </span>
+              <span class="diff__ln">28</span>
+              <span class="diff__text"> </span>
+            </span>
+            <span class="diff__line diff__line--ctx">
+              <span class="diff__prefix"> </span>
+              <span class="diff__ln">29</span>
+              <span class="diff__text">부가가치세는 별도이며, 세금계산서 발행 시 적용한다.</span>
+            </span>
+
+          </div><!-- /.diff -->
+        </div><!-- /.diff-wrap -->
+      </div>
+
+      <!-- safe-note -->
+      <div>
+        <span class="safe-note">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/></svg>
+          승인 전까지 원본은 바뀌지 않습니다
+        </span>
+      </div>
+
+      <!-- reject hint (subtle) -->
+      <div class="reject-hint">
+        <svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+        거절 시 사유를 입력하면 대화로 이어집니다
+      </div>
+
+    </div><!-- /.modal__body -->
+
+    <!-- ── Footer ── -->
+    <div class="modal__footer">
+      <div class="footer-left">
+        <span class="t-faint t-xs">변경 2곳 · 줄 12, 27</span>
+      </div>
+      <div class="modal__footer-actions">
+        <button class="btn btn--ghost" style="color:var(--remove);border-color:var(--remove-soft)">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          거절
+        </button>
+        <button class="btn btn--approve">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg>
+          승인
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /.modal -->
+</div><!-- /.modal-scrim -->
+</body>
+</html>

@@ -1,0 +1,292 @@
+<!-- @dsCard group="Approval" name="승인 — 개인정보 가리기(redact-pii)" subtitle="scan_pii→propose_redact_pii 승인 모달" width="820" height="760" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 개인정보 가리기 승인</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  /* screen-specific layout only — all colors/atoms come from ds.css */
+  html, body { height: 100%; }
+
+  /* Modal sizing override for this viewport */
+  .modal {
+    width: min(780px, 100%);
+  }
+
+  /* Modal header meta row */
+  .meta-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+
+  /* PII chips summary strip */
+  .pii-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-sm);
+  }
+  .pii-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: var(--t-sm);
+    font-weight: 700;
+    color: var(--pii);
+  }
+  .pii-count__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--pii);
+    flex: none;
+  }
+
+  /* Honesty banner — custom PII variant */
+  .banner--pii {
+    background: var(--pii-soft);
+    color: var(--pii);
+    border: 1px solid var(--pii-soft);
+  }
+
+  /* Paper section label */
+  .section-label {
+    font-size: var(--t-xs);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  /* Masked document: paper container */
+  .paper-scroll {
+    max-height: 260px;
+    overflow: auto;
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-sm);
+  }
+
+  /* Location annotation next to masked spans */
+  .loc-tag {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--pii);
+    opacity: 0.75;
+    margin-left: 2px;
+    vertical-align: super;
+  }
+
+  /* PII item table in the detail list */
+  .pii-item-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .pii-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-xs);
+    font-size: var(--t-sm);
+  }
+  .pii-item__idx {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--pii-soft);
+    color: var(--pii);
+    font-size: var(--t-xs);
+    font-weight: 700;
+    font-family: var(--font-mono);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+  }
+  .pii-item__type {
+    color: var(--pii);
+    font-weight: 700;
+    min-width: 64px;
+  }
+  .pii-item__loc {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+    margin-left: auto;
+  }
+  .pii-item__mask {
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    background: var(--chrome-elevated);
+    border-radius: var(--r-xs);
+    padding: 1px 6px;
+    font-size: var(--t-xs);
+  }
+
+  /* Safe note — override to fit inline */
+  .safe-note--inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: var(--t-sm);
+    color: var(--add);
+    background: var(--add-soft);
+    border-radius: var(--r-sm);
+    padding: 5px 10px;
+    border: 1px solid var(--add-soft);
+  }
+</style>
+</head>
+<body>
+<div class="modal-scrim">
+
+  <div class="modal">
+
+    <!-- ── Modal Header ── -->
+    <div class="modal__header">
+      <div class="row between">
+        <div class="row" style="gap:10px">
+          <svg class="ico" viewBox="0 0 24 24" style="color:var(--pii)"><path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/></svg>
+          <span class="modal__title">개인정보 가리기</span>
+          <span class="badge badge--pii">redact-pii</span>
+        </div>
+        <span class="chip t-mono" style="font-size:var(--t-xs); color:var(--text-faint)">scan_pii → propose_redact_pii</span>
+      </div>
+      <div class="meta-row">
+        <span class="chip chip--tool"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg> 채용지원서_홍길동.hwpx</span>
+        <span class="chip chip--pii">PII 4건 발견</span>
+        <span class="chip chip--ok">원본 보존됨</span>
+      </div>
+    </div>
+
+    <!-- ── Modal Body ── -->
+    <div class="modal__body">
+
+      <!-- 1. 정직성 경고 배너 -->
+      <div class="banner banner--pii">
+        <svg class="ico" viewBox="0 0 24 24" style="flex:none"><path d="M3 3l18 18"/><path d="M10.6 10.7a2 2 0 0 0 2.7 2.7"/><path d="M9.3 5.3A9.7 9.7 0 0 1 12 5c5 0 9 5 9 7a13 13 0 0 1-2.2 2.9M6.1 6.2C3.8 7.7 3 11 3 12c1 2 3 5 7 6"/></svg>
+        <div>
+          <strong>원문 값은 화면에 표시하지 않습니다 (정직성)</strong> — 개인정보 원본을 AI가 기억하거나 재노출할 수 없도록, 유형과 위치만 표시합니다. 마스킹 적용 전 실제 값은 문서 파일에만 남아있습니다.
+        </div>
+      </div>
+
+      <!-- 2. PII 발견 요약 칩 -->
+      <div>
+        <div class="section-label">발견된 개인정보 유형</div>
+        <div class="pii-summary">
+          <div class="pii-count">
+            <span class="pii-count__dot"></span>이름 <span style="color:var(--text-muted);font-weight:400">2건</span>
+          </div>
+          <span style="color:var(--chrome-border-strong)">·</span>
+          <div class="pii-count">
+            <span class="pii-count__dot"></span>전화번호 <span style="color:var(--text-muted);font-weight:400">1건</span>
+          </div>
+          <span style="color:var(--chrome-border-strong)">·</span>
+          <div class="pii-count">
+            <span class="pii-count__dot"></span>주민등록번호 <span style="color:var(--text-muted);font-weight:400">1건</span>
+          </div>
+          <div class="row" style="margin-left:auto; gap:6px">
+            <span class="chip chip--pii" style="font-weight:700">총 4건</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. 항목별 상세 목록 (원문값 없음, 타입+위치+마스킹 결과만) -->
+      <div>
+        <div class="section-label">항목별 마스킹 계획</div>
+        <div class="pii-item-list">
+          <div class="pii-item">
+            <span class="pii-item__idx">1</span>
+            <span class="pii-item__type">이름</span>
+            <span style="color:var(--text-muted)">마스킹 결과:</span>
+            <code class="pii-item__mask">홍**</code>
+            <span class="pii-item__loc">단락 2, 5번째 줄</span>
+          </div>
+          <div class="pii-item">
+            <span class="pii-item__idx">2</span>
+            <span class="pii-item__type">이름</span>
+            <span style="color:var(--text-muted)">마스킹 결과:</span>
+            <code class="pii-item__mask">김**</code>
+            <span class="pii-item__loc">단락 4, 2번째 줄</span>
+          </div>
+          <div class="pii-item">
+            <span class="pii-item__idx">3</span>
+            <span class="pii-item__type">전화번호</span>
+            <span style="color:var(--text-muted)">마스킹 결과:</span>
+            <code class="pii-item__mask">010-****-1234</code>
+            <span class="pii-item__loc">단락 2, 7번째 줄</span>
+          </div>
+          <div class="pii-item">
+            <span class="pii-item__idx">4</span>
+            <span class="pii-item__type">주민번호</span>
+            <span style="color:var(--text-muted)">마스킹 결과:</span>
+            <code class="pii-item__mask">******-*******</code>
+            <span class="pii-item__loc">단락 3, 1번째 줄</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. 문서 미리보기 (마스킹 후 상태 — 원문값 없이) -->
+      <div>
+        <div class="section-label">문서 미리보기 — 마스킹 적용 후</div>
+        <div class="paper-scroll">
+          <div class="paper" style="border-radius:0; box-shadow:none; padding:20px 24px">
+
+            <h1 style="font-size:16px; margin-bottom:12px">채용지원서</h1>
+
+            <p>지원자 성명: <span class="mark-pii">홍**</span><span class="loc-tag">①</span> &nbsp;&nbsp; 지원 직무: 콘텐츠 기획</p>
+            <p>생년월일: <span class="mark-pii">______년 __월 __일</span> &nbsp;&nbsp;
+              주민등록번호: <span class="mark-pii">******-*******</span><span class="loc-tag">④</span></p>
+            <p>연락처: <span class="mark-pii">010-****-1234</span><span class="loc-tag">③</span> &nbsp;&nbsp; 이메일: hong@example.com</p>
+
+            <hr style="border:none; border-top:1px solid var(--paper-rule); margin:12px 0" />
+
+            <p style="color:var(--paper-ink-muted); font-size:var(--t-sm)">보증인: <span class="mark-pii">김**</span><span class="loc-tag">②</span> (지인)</p>
+
+            <p style="font-size:var(--t-sm); color:var(--paper-ink-muted)">
+              위 내용은 사실과 다름없음을 확인하며, 본 서류를 제출합니다.
+            </p>
+
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:var(--t-xs); color:var(--text-faint)">
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+          <span>
+            <span class="mark-pii" style="font-size:var(--t-xs)">보라 배경</span>
+            은 마스킹된 위치를 나타냅니다. 원문 값은 표시되지 않습니다.
+          </span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Modal Footer ── -->
+    <div class="modal__footer">
+      <div class="safe-note--inline">
+        <svg class="ico ico--sm" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> 승인 전까지 원본은 바뀌지 않습니다
+      </div>
+      <div class="modal__footer-actions">
+        <button class="btn btn--ghost">거절</button>
+        <button class="btn btn--approve btn--lg">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/></svg> 가리기 승인
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /.modal -->
+
+</div><!-- /.scrim -->
+</body>
+</html>

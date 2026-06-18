@@ -1,0 +1,247 @@
+<!-- @dsCard group="Approval" name="승인 — 표 셀 편집(cell-edit)" subtitle="propose_cell_edit 승인 모달 · 좌표/라벨 매칭 모드" width="820" height="720" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 승인: 표 셀 편집</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  /* Screen-specific layout only — no color definitions, only var(--…) allowed */
+  html, body { height: 100%; display: flex; align-items: center; justify-content: center; }
+
+  /* ── Modal sizing ── */
+  .modal {
+    width: min(780px, 100%);
+    max-height: 86vh;
+  }
+
+  /* ── Header meta row ── */
+  .modal__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .file-path {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-mono);
+    font-size: var(--t-sm);
+    color: var(--text-muted);
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-xs);
+    padding: 2px 8px;
+  }
+
+  /* ── Section label within body ── */
+  .section-head {
+    font-size: var(--t-xs);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  /* ── Paper preview wrapper ── */
+  .paper-wrap {
+    background: var(--chrome-bg);
+    border-radius: var(--r-sm);
+    padding: 16px;
+  }
+
+  /* ── Table in paper: tighter for modal ── */
+  .paper .doc-table td,
+  .paper .doc-table th {
+    vertical-align: middle;
+  }
+
+  /* Cell diff: before→after stack inside cell */
+  .cell-diff {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .cell-diff__before {
+    font-size: var(--t-xs);
+    color: var(--p-remove-ink);
+    text-decoration: line-through;
+    opacity: 0.75;
+  }
+  .cell-diff__after {
+    font-size: var(--t-md);
+    font-weight: 700;
+    color: var(--p-add-ink);
+  }
+
+  /* ── Coord info box ── */
+  .info-box {
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-sm);
+    padding: 10px 14px;
+    font-size: var(--t-sm);
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+  .info-box strong {
+    color: var(--text);
+  }
+  .info-box code {
+    font-family: var(--font-mono);
+    background: var(--chrome-elevated);
+    border-radius: var(--r-xs);
+    padding: 1px 5px;
+    font-size: var(--t-xs);
+    color: var(--accent);
+  }
+
+  /* ── Footer safe note wrapper (layout only — .safe-note pill comes from ds.css) ── */
+  .footer__left {
+    flex: 1;
+  }
+</style>
+</head>
+<body>
+
+<!-- Scrim + modal -->
+<div class="modal-scrim">
+  <div class="modal">
+
+    <!-- ── Header ── -->
+    <div class="modal__header">
+      <div class="row between">
+        <div class="row gap-12">
+          <span class="modal__title">표 셀 수정</span>
+          <span class="chip chip--tool">propose_cell_edit</span>
+        </div>
+        <!-- mode chip: coord or label -->
+        <div class="row gap-8">
+          <span class="chip chip--coord"><svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg> 좌표 r2,c2</span>
+          <span class="chip chip--ok">셀 3개</span>
+        </div>
+      </div>
+
+      <!-- Meta: file + chips -->
+      <div class="modal__meta">
+        <span class="file-path"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg> 예산보고서.hwpx</span>
+        <span class="badge badge--accent">표 1 / 1페이지</span>
+        <span class="chip">r2–r4 · c2</span>
+      </div>
+    </div>
+
+    <!-- ── Body ── -->
+    <div class="modal__body">
+
+      <!-- Paper preview with changed cells -->
+      <div>
+        <div class="section-head">미리보기 — 바뀌는 셀</div>
+        <div class="paper-wrap">
+          <div class="paper" style="padding: 20px 24px;">
+            <table class="doc-table" style="min-width: 420px;">
+              <thead>
+                <tr>
+                  <th style="width: 44px; color: var(--paper-ink-muted); font-size: var(--t-xs); text-align: center;">#</th>
+                  <th>항목</th>
+                  <th>금액 (원)</th>
+                  <th>비고</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Row 1 — unchanged -->
+                <tr>
+                  <td style="color: var(--paper-ink-muted); font-size: var(--t-xs); font-family: var(--font-mono); text-align: center;">r1</td>
+                  <td>제작비</td>
+                  <td>1500000</td>
+                  <td>외주 제작</td>
+                </tr>
+                <!-- Row 2 — changed (r2,c2) -->
+                <tr>
+                  <td style="color: var(--paper-ink-muted); font-size: var(--t-xs); font-family: var(--font-mono); text-align: center;">r2</td>
+                  <td>인쇄비</td>
+                  <td class="cell--changed">
+                    <div class="cell-diff">
+                      <span class="cell-diff__before">820000</span>
+                      <span class="cell-diff__after">820,000</span>
+                    </div>
+                  </td>
+                  <td>리플릿 500부</td>
+                </tr>
+                <!-- Row 3 — changed (r3,c2) -->
+                <tr>
+                  <td style="color: var(--paper-ink-muted); font-size: var(--t-xs); font-family: var(--font-mono); text-align: center;">r3</td>
+                  <td>홍보비</td>
+                  <td class="cell--changed">
+                    <div class="cell-diff">
+                      <span class="cell-diff__before">3200000</span>
+                      <span class="cell-diff__after">3,200,000</span>
+                    </div>
+                  </td>
+                  <td>SNS 광고</td>
+                </tr>
+                <!-- Row 4 — changed (r4,c2) -->
+                <tr>
+                  <td style="color: var(--paper-ink-muted); font-size: var(--t-xs); font-family: var(--font-mono); text-align: center;">r4</td>
+                  <td>예비비</td>
+                  <td class="cell--changed">
+                    <div class="cell-diff">
+                      <span class="cell-diff__before">500000</span>
+                      <span class="cell-diff__after">500,000</span>
+                    </div>
+                  </td>
+                  <td></td>
+                </tr>
+                <!-- Row 5 — unchanged -->
+                <tr>
+                  <td style="color: var(--paper-ink-muted); font-size: var(--t-xs); font-family: var(--font-mono); text-align: center;">r5</td>
+                  <td style="font-weight: 600;">합계</td>
+                  <td>5020000</td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Coord/label info -->
+      <div>
+        <div class="section-head">셀 매칭 방식</div>
+        <div class="info-box">
+          <strong>좌표 모드</strong> — 에이전트가 <code>r행,c열</code> 좌표로 대상 셀을 지정합니다.
+          이번 작업: <code>r2,c2</code> · <code>r3,c2</code> · <code>r4,c2</code> (금액 열, 3행).
+          <br />
+          라벨 모드(헤더 텍스트 기준)를 쓰면 표 구조가 바뀌어도 더 안전하게 찾을 수 있습니다.
+          단, 병합 셀이 있는 경우 좌표 모드만 지원됩니다.
+        </div>
+      </div>
+
+      <!-- Warning banner for .hwpx -->
+      <div class="banner banner--info">
+        <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+        <span><strong>.hwpx 파일</strong>은 셀 직접 패치를 지원합니다 — 병합 셀·서식이 그대로 유지됩니다.</span>
+      </div>
+
+    </div><!-- /modal__body -->
+
+    <!-- ── Footer ── -->
+    <div class="modal__footer">
+      <div class="footer__left">
+        <span class="safe-note"><svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> 승인 전까지 원본은 바뀌지 않습니다</span>
+      </div>
+      <div class="modal__footer-actions">
+        <button class="btn btn--danger btn--lg">거절</button>
+        <button class="btn btn--approve btn--lg">승인</button>
+      </div>
+    </div>
+
+  </div><!-- /modal -->
+</div><!-- /scrim -->
+
+</body>
+</html>

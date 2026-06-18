@@ -1,0 +1,451 @@
+<!-- @dsCard group="States" name="문서 비교 — 신구대조표" subtitle="compare_documents 결과 · 2열 신구대조" width="980" height="720" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 문서 비교 · 신구대조표</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  html, body { height: 100%; }
+
+  /* ── 전체 레이아웃 ── */
+  .compare-root {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: var(--chrome-bg);
+  }
+
+  /* ── 상단 툴바 ── */
+  .cmp-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 16px;
+    height: var(--status-h);
+    background: var(--chrome-surface);
+    border-bottom: 1px solid var(--chrome-border);
+    flex: none;
+  }
+  .cmp-toolbar__left { display: flex; align-items: center; gap: 10px; }
+  .cmp-toolbar__right { display: flex; align-items: center; gap: 8px; }
+
+  /* 파일 칩 (구/신) */
+  .file-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--chrome-elevated);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-sm);
+    padding: 4px 10px;
+    font-size: var(--t-sm);
+    color: var(--text);
+  }
+  .file-chip__label {
+    font-size: var(--t-xs);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 1px 5px;
+    border-radius: var(--r-xs);
+  }
+  .file-chip__label--old {
+    background: var(--remove-soft);
+    color: var(--remove);
+  }
+  .file-chip__label--new {
+    background: var(--add-soft);
+    color: var(--add);
+  }
+  .file-chip__name { color: var(--text-strong); font-weight: 500; }
+  .file-chip__arrow {
+    color: var(--text-faint);
+    font-size: var(--t-lg);
+    padding: 0 2px;
+  }
+
+  /* ── 요약 배지 줄 ── */
+  .cmp-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    background: var(--chrome-surface);
+    border-bottom: 1px solid var(--chrome-border);
+    flex: none;
+  }
+  .cmp-summary__title {
+    font-size: var(--t-xs);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-right: 4px;
+  }
+  .cmp-summary__sep {
+    color: var(--chrome-border-strong);
+    font-size: var(--t-sm);
+  }
+
+  /* diff 토글 칩 */
+  .toggle-group {
+    display: inline-flex;
+    gap: 3px;
+    background: var(--chrome-inset);
+    border-radius: var(--r-sm);
+    padding: 3px;
+    margin-left: auto;
+  }
+  .toggle-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: var(--t-xs);
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: var(--r-xs);
+    cursor: pointer;
+    letter-spacing: 0.03em;
+  }
+  .toggle-btn--active { background: var(--accent); color: var(--accent-ink); }
+  .toggle-btn:hover:not(.toggle-btn--active) { color: var(--text-strong); }
+
+  /* ── split 본문 ── */
+  .cmp-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .cmp-col {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .cmp-col + .cmp-col {
+    border-left: 2px solid var(--chrome-border);
+  }
+  .cmp-col__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 16px;
+    background: var(--chrome-surface);
+    border-bottom: 1px solid var(--chrome-border);
+    flex: none;
+  }
+  .cmp-col__label {
+    font-size: var(--t-xs);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .cmp-col__label--old { color: var(--remove); }
+  .cmp-col__label--new { color: var(--add); }
+  .cmp-col__filename { font-size: var(--t-sm); color: var(--text-muted); }
+  .cmp-col__scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 14px;
+    background: var(--chrome-bg);
+  }
+
+  /* ── 문서 본문 구조 ── */
+  .paper { max-width: 100%; }
+
+  /* 단락 단위 diff 블록 */
+  .para-row {
+    margin-bottom: 8px;
+  }
+  .para-row--changed-old .paper-para {
+    background: var(--p-remove-bg);
+    border-left: 3px solid var(--remove);
+    padding-left: 9px;
+    border-radius: 0 var(--r-xs) var(--r-xs) 0;
+  }
+  .para-row--changed-new .paper-para {
+    background: var(--p-add-bg);
+    border-left: 3px solid var(--add);
+    padding-left: 9px;
+    border-radius: 0 var(--r-xs) var(--r-xs) 0;
+  }
+  .para-row--added-new .paper-para {
+    background: var(--p-add-bg);
+    border-left: 3px solid var(--add);
+    padding-left: 9px;
+    border-radius: 0 var(--r-xs) var(--r-xs) 0;
+  }
+  .paper-para {
+    padding: 6px 8px 6px 0;
+    font-size: var(--t-base);
+    line-height: 1.75;
+    color: var(--paper-ink);
+    background: var(--paper);
+    border-radius: var(--r-xs);
+  }
+  /* 삭제된 쪽 빈 자리표시 (신 쪽에서 구 쪽에 없는 줄) */
+  .paper-para--phantom {
+    background: repeating-linear-gradient(
+      45deg,
+      var(--paper-rail),
+      var(--paper-rail) 5px,
+      var(--paper-sunken) 5px,
+      var(--paper-sunken) 10px
+    );
+    min-height: 36px;
+    border-left: 3px solid var(--chrome-border);
+    padding-left: 9px;
+    border-radius: 0 var(--r-xs) var(--r-xs) 0;
+  }
+
+  /* section 제목 */
+  .cmp-section-title {
+    font-size: var(--t-md);
+    font-weight: 700;
+    color: var(--paper-ink);
+    margin: 14px 0 6px;
+  }
+
+  /* 표 래퍼 */
+  .cmp-table-wrap {
+    margin: 10px 0;
+    border-radius: var(--r-sm);
+    overflow: hidden;
+    border: 1px solid var(--paper-border);
+  }
+
+  /* 줄 번호 거터 (선택적 장식) */
+  .gutter {
+    display: inline-block;
+    min-width: 22px;
+    font-size: var(--t-xs);
+    font-family: var(--font-mono);
+    color: var(--text-faint);
+    user-select: none;
+    margin-right: 6px;
+    text-align: right;
+  }
+
+  /* 하단 안심 바 */
+  .cmp-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 16px;
+    background: var(--chrome-surface);
+    border-top: 1px solid var(--chrome-border);
+    flex: none;
+  }
+</style>
+</head>
+<body>
+<div class="compare-root">
+
+  <!-- ── 상단 툴바 ── -->
+  <header class="cmp-toolbar">
+    <div class="cmp-toolbar__left">
+      <span class="t-strong" style="font-weight:700;font-size:var(--t-sm);">문서 비교</span>
+      <!-- 구 파일 칩 -->
+      <div class="file-chip">
+        <span class="file-chip__label file-chip__label--old">구</span>
+        <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg>
+        <span class="file-chip__name">계약서_v1.hwpx</span>
+      </div>
+      <svg class="ico ico--sm t-faint" viewBox="0 0 24 24"><path d="M5 12h13M12.5 5.5 19 12l-6.5 6.5"/></svg>
+      <!-- 신 파일 칩 -->
+      <div class="file-chip">
+        <span class="file-chip__label file-chip__label--new">신</span>
+        <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg>
+        <span class="file-chip__name">계약서_v2.hwpx</span>
+      </div>
+    </div>
+    <div class="cmp-toolbar__right">
+      <button class="btn btn--ghost btn--sm"><svg class="ico" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg> 내보내기</button>
+      <button class="btn btn--secondary btn--sm">닫기</button>
+    </div>
+  </header>
+
+  <!-- ── 요약 배지 줄 ── -->
+  <div class="cmp-summary">
+    <span class="cmp-summary__title">변경 요약</span>
+    <span class="badge badge--add">+ 추가 2</span>
+    <span class="cmp-summary__sep">·</span>
+    <span class="badge" style="background:var(--remove-soft);color:var(--remove);">− 삭제 1</span>
+    <span class="cmp-summary__sep">·</span>
+    <span class="badge badge--accent">~ 수정 3</span>
+
+    <!-- diff 토글 -->
+    <div class="toggle-group">
+      <button class="toggle-btn toggle-btn--active">신구대조</button>
+      <button class="toggle-btn">단일 diff</button>
+      <button class="toggle-btn">변경만 보기</button>
+    </div>
+  </div>
+
+  <!-- ── 2열 본문 ── -->
+  <div class="cmp-body">
+
+    <!-- 좌: 구(v1) -->
+    <div class="cmp-col">
+      <div class="cmp-col__head">
+        <span class="cmp-col__label cmp-col__label--old">구 버전</span>
+        <span class="cmp-col__filename">계약서_v1.hwpx</span>
+      </div>
+      <div class="cmp-col__scroll">
+        <div class="paper" style="padding:20px 16px;background:var(--paper);border-radius:var(--r-sm);box-shadow:var(--shadow-paper);">
+
+          <!-- 제목 -->
+          <h1 class="paper" style="font-size:var(--t-lg);font-weight:700;margin-bottom:12px;color:var(--paper-ink);background:transparent;padding:0;box-shadow:none;">소프트웨어 개발 용역 계약서</h1>
+
+          <!-- 1조 — 변경 없음 -->
+          <div class="cmp-section-title">제1조 (목적)</div>
+          <div class="para-row">
+            <p class="paper-para">본 계약은 (주)코드팩토리(이하 "갑")와 개발사 비트스튜디오(이하 "을") 간 소프트웨어 개발 용역에 관한 권리·의무를 정함을 목적으로 한다.</p>
+          </div>
+
+          <!-- 2조 — 수정됨 (구) -->
+          <div class="cmp-section-title">제2조 (계약 금액)</div>
+          <div class="para-row para-row--changed-old">
+            <p class="paper-para">계약 금액은 금 <span class="mark-remove">오천만 원정(₩50,000,000)</span>으로 하며, 부가세를 포함한다.</p>
+          </div>
+
+          <!-- 3조 — 수정됨 (구) -->
+          <div class="cmp-section-title">제3조 (납기일)</div>
+          <div class="para-row para-row--changed-old">
+            <p class="paper-para">최종 납기일은 <span class="mark-remove">2026년 8월 31일</span>로 한다. 납기 지연 시 지연 일수에 따른 지체상금을 부과한다.</p>
+          </div>
+
+          <!-- 4조 — 표 포함, 일부 셀 수정 -->
+          <div class="cmp-section-title">제4조 (지급 일정)</div>
+          <div class="cmp-table-wrap">
+            <table class="doc-table">
+              <thead>
+                <tr><th>차수</th><th>지급 조건</th><th>지급액</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>1차</td><td>계약 체결 시</td><td class="cell--removed">15,000,000</td></tr>
+                <tr><td>2차</td><td>중간 검수 완료</td><td>20,000,000</td></tr>
+                <tr><td>3차</td><td>최종 납품 완료</td><td>15,000,000</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 5조 — 삭제된 단락 (구에 있고 신에는 없음) -->
+          <div class="cmp-section-title">제5조 (하자 보수)</div>
+          <div class="para-row para-row--changed-old">
+            <p class="paper-para"><span class="mark-remove">하자 보수 기간은 납품일로부터 3개월로 한다.</span></p>
+          </div>
+
+          <!-- 6조 — 변경 없음 -->
+          <div class="cmp-section-title">제6조 (비밀 유지)</div>
+          <div class="para-row">
+            <p class="paper-para">을은 계약 이행 과정에서 취득한 갑의 영업상 비밀을 계약 종료 후 5년간 제3자에게 누설하지 아니한다.</p>
+          </div>
+
+        </div><!-- /paper -->
+      </div><!-- /scroll -->
+    </div><!-- /cmp-col old -->
+
+    <!-- 우: 신(v2) -->
+    <div class="cmp-col">
+      <div class="cmp-col__head">
+        <span class="cmp-col__label cmp-col__label--new">신 버전</span>
+        <span class="cmp-col__filename">계약서_v2.hwpx</span>
+      </div>
+      <div class="cmp-col__scroll">
+        <div class="paper" style="padding:20px 16px;background:var(--paper);border-radius:var(--r-sm);box-shadow:var(--shadow-paper);">
+
+          <!-- 제목 -->
+          <h1 class="paper" style="font-size:var(--t-lg);font-weight:700;margin-bottom:12px;color:var(--paper-ink);background:transparent;padding:0;box-shadow:none;">소프트웨어 개발 용역 계약서</h1>
+
+          <!-- 1조 — 변경 없음 -->
+          <div class="cmp-section-title">제1조 (목적)</div>
+          <div class="para-row">
+            <p class="paper-para">본 계약은 (주)코드팩토리(이하 "갑")와 개발사 비트스튜디오(이하 "을") 간 소프트웨어 개발 용역에 관한 권리·의무를 정함을 목적으로 한다.</p>
+          </div>
+
+          <!-- 2조 — 수정됨 (신) -->
+          <div class="cmp-section-title">제2조 (계약 금액)</div>
+          <div class="para-row para-row--changed-new">
+            <p class="paper-para">계약 금액은 금 <span class="mark-add">육천만 원정(₩60,000,000)</span>으로 하며, 부가세를 포함한다.</p>
+          </div>
+
+          <!-- 3조 — 수정됨 (신) -->
+          <div class="cmp-section-title">제3조 (납기일)</div>
+          <div class="para-row para-row--changed-new">
+            <p class="paper-para">최종 납기일은 <span class="mark-add">2026년 10월 15일</span>로 한다. 납기 지연 시 지연 일수에 따른 지체상금을 부과한다.</p>
+          </div>
+
+          <!-- 4조 — 표 포함, 일부 셀 수정 -->
+          <div class="cmp-section-title">제4조 (지급 일정)</div>
+          <div class="cmp-table-wrap">
+            <table class="doc-table">
+              <thead>
+                <tr><th>차수</th><th>지급 조건</th><th>지급액</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>1차</td><td>계약 체결 시</td><td class="cell--changed">20,000,000</td></tr>
+                <tr><td>2차</td><td>중간 검수 완료</td><td>20,000,000</td></tr>
+                <tr><td>3차</td><td>최종 납품 완료</td><td>20,000,000</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 5조 (구) 자리 — 빈 자리 (삭제됨) -->
+          <div class="cmp-section-title" style="color:var(--paper-ink-muted);text-decoration:line-through;opacity:0.45;">제5조 (하자 보수)</div>
+          <div class="para-row">
+            <div class="paper-para paper-para--phantom" title="이 단락은 신 버전에서 삭제되었습니다"></div>
+          </div>
+
+          <!-- 5조 (신) — 추가된 단락 -->
+          <div class="cmp-section-title">제5조 (하자 보수 및 유지보수)</div>
+          <div class="para-row para-row--added-new">
+            <p class="paper-para"><span class="mark-add">하자 보수 기간은 납품일로부터 6개월로 하며, 유지보수 계약 체결 시 추가 12개월을 연장할 수 있다.</span></p>
+          </div>
+
+          <!-- 5-2조 — 신규 추가 단락 -->
+          <div class="cmp-section-title">제5조의2 (소스코드 임치)</div>
+          <div class="para-row para-row--added-new">
+            <p class="paper-para"><span class="mark-add">을은 최종 납품 시 소스코드를 갑이 지정하는 임치 기관에 예탁하여야 한다.</span></p>
+          </div>
+
+          <!-- 6조 — 변경 없음 -->
+          <div class="cmp-section-title">제6조 (비밀 유지)</div>
+          <div class="para-row">
+            <p class="paper-para">을은 계약 이행 과정에서 취득한 갑의 영업상 비밀을 계약 종료 후 5년간 제3자에게 누설하지 아니한다.</p>
+          </div>
+
+        </div><!-- /paper -->
+      </div><!-- /scroll -->
+    </div><!-- /cmp-col new -->
+
+  </div><!-- /cmp-body -->
+
+  <!-- ── 하단 안심 바 ── -->
+  <footer class="cmp-footer">
+    <div class="row gap-12">
+      <span class="safe-note"><svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> 원본은 승인 전까지 바뀌지 않습니다</span>
+      <span class="chip chip--tool">compare_documents</span>
+      <span class="badge badge--neutral">v1 <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M5 12h13M12.5 5.5 19 12l-6.5 6.5"/></svg> v2 · 총 6개 차이</span>
+    </div>
+    <div class="row gap-12">
+      <span class="verify-note">
+        <span style="width:9px;height:9px;border-radius:50%;background:var(--add);display:inline-block;flex:none;"></span>
+        비교 완료 · HTML 미리보기는 근사입니다
+      </span>
+      <button class="btn btn--ghost btn--sm"><svg class="ico" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.5-6.2"/><path d="M3 4v4h4"/></svg> 되돌리기</button>
+      <button class="btn btn--primary btn--sm">v2 열기</button>
+    </div>
+  </footer>
+
+</div><!-- /compare-root -->
+</body>
+</html>

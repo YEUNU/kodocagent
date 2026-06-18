@@ -1,0 +1,319 @@
+<!-- @dsCard group="Shell" name="상단바 (모델 선택 열림)" subtitle="브랜드·폴더 / 토큰 사용량·컨텍스트 게이지 / 모델 드롭다운" width="1100" height="360" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 상단바</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  /* screen-specific layout only */
+  html, body { height: 100%; }
+
+  /* card wrapper: center the topbar with a faint app-bg surroundings */
+  .scene {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 40px 32px;
+    min-height: 100vh;
+    background: var(--chrome-bg);
+  }
+
+  /* ── Top bar ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    height: var(--status-h);
+    padding: 0 16px;
+    background: var(--chrome-surface);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-md);
+    position: relative;  /* anchor for dropdown */
+  }
+
+  /* left side */
+  .topbar__brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: var(--t-md);
+    color: var(--text-strong);
+    flex: none;
+  }
+  .topbar__sep {
+    width: 1px;
+    height: 18px;
+    background: var(--chrome-border);
+    flex: none;
+  }
+  .topbar__folder {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: var(--t-sm);
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 340px;
+  }
+  .topbar__folder b { color: var(--text); font-weight: 500; }
+  .folder-icon { color: var(--text-faint); }
+
+  /* right side */
+  .topbar__right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: none;
+  }
+
+  /* token usage */
+  .usage {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: var(--t-xs);
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .usage__label { letter-spacing: 0.02em; }
+  .usage__val {
+    /* font-family provided by .t-mono ds.css utility class on the element */
+    font-size: var(--t-xs);
+    color: var(--text);
+  }
+  .usage__divider {
+    color: var(--text-faint);
+    margin: 0 1px;
+  }
+
+  /* model button (active/open state) */
+  .model-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--chrome-elevated);
+    border: 1px solid var(--accent-line);
+    border-radius: var(--r-sm);
+    padding: 5px 11px;
+    font-size: var(--t-sm);
+    font-weight: 600;
+    color: var(--text-strong);
+    cursor: pointer;
+    position: relative;
+    white-space: nowrap;
+  }
+  .model-btn__caret {
+    color: var(--text-muted);
+    /* rotate 180deg when open */
+    transform: rotate(180deg);
+    display: inline-flex;
+    align-items: center;
+  }
+  .model-btn__provider {
+    font-size: var(--t-xs);
+    color: var(--accent);
+    font-weight: 400;
+    font-family: var(--font-mono);
+    letter-spacing: 0.02em;
+  }
+
+  /* ── Dropdown — positional overrides only; colors/bg/border come from .card in ds.css ── */
+  .model-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    width: 270px;
+    box-shadow: var(--shadow-2);
+    overflow: hidden;
+    z-index: 100;
+    /* reset .card padding so inner header/list control their own spacing */
+    padding: 0;
+  }
+  .model-dropdown__header {
+    padding: 9px 14px 7px;
+    border-bottom: 1px solid var(--chrome-border);
+    font-size: var(--t-xs);
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .model-list {
+    list-style: none;
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .model-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px 10px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+  }
+  .model-item:hover {
+    background: var(--chrome-inset);
+  }
+  .model-item--active {
+    background: var(--accent-soft);
+  }
+  .model-item__left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .model-item__name {
+    font-size: var(--t-sm);
+    font-weight: 600;
+    color: var(--text-strong);
+    font-family: var(--font-mono);
+    letter-spacing: -0.01em;
+  }
+  .model-item__provider {
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+    letter-spacing: 0.03em;
+  }
+  .model-item__check {
+    color: var(--accent);
+    flex: none;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+  }
+  /* divider between providers */
+  .model-list__sep {
+    height: 1px;
+    background: var(--chrome-border);
+    margin: 3px 6px;
+  }
+
+  /* wrapper for button + dropdown positioning */
+  .model-wrap {
+    position: relative;
+  }
+
+  /* caption below the card */
+  .caption {
+    margin-top: 16px;
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+    letter-spacing: 0.04em;
+    text-align: center;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div class="scene">
+
+  <p class="ds-card__caption">Shell · 상단바 — 모델 선택 드롭다운 열림 상태</p>
+
+  <!-- ── Top bar ── -->
+  <header class="topbar">
+
+    <!-- Left: brand + folder path -->
+    <div class="row gap-12">
+      <span class="topbar__brand">
+        <span class="brand-mark">k</span>
+        kodocagent
+      </span>
+      <span class="topbar__sep"></span>
+      <span class="topbar__folder">
+        <svg class="ico folder-icon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        작업 폴더:
+        <b>~/문서/2026_계약서류</b>
+      </span>
+    </div>
+
+    <!-- Right: usage + gauge + model -->
+    <div class="topbar__right">
+
+      <!-- Token usage — values use .t-mono ds.css utility class -->
+      <div class="usage">
+        <span class="usage__label">입력</span>
+        <span class="usage__val t-mono">18,240</span>
+        <span class="usage__divider">·</span>
+        <span class="usage__label">출력</span>
+        <span class="usage__val t-mono">4,891</span>
+        <span class="usage__label">토큰</span>
+      </div>
+
+      <!-- Context gauge -->
+      <span class="gauge" title="현재 컨텍스트 창 사용량">
+        컨텍스트
+        <span class="gauge__track">
+          <span class="gauge__fill" style="width:38%"></span>
+        </span>
+        38%
+      </span>
+
+      <!-- Model select button + open dropdown -->
+      <div class="model-wrap">
+        <button class="model-btn" aria-haspopup="listbox" aria-expanded="true">
+          <span class="model-btn__provider">Anthropic</span>
+          claude-opus-4-8
+          <span class="model-btn__caret"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="m6 9.5 6 6 6-6"/></svg></span>
+        </button>
+
+        <!-- Dropdown (open state) — .card gives chrome-elevated bg + border from ds.css -->
+        <div class="model-dropdown card" role="listbox">
+          <div class="model-dropdown__header">모델 선택</div>
+          <ul class="model-list">
+
+            <!-- Anthropic -->
+            <li class="model-item model-item--active" role="option" aria-selected="true">
+              <div class="model-item__left">
+                <span class="model-item__name">claude-opus-4-8</span>
+                <span class="model-item__provider">Anthropic · 최고 성능</span>
+              </div>
+              <span class="model-item__check t-accent"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg></span>
+            </li>
+            <li class="model-item" role="option" aria-selected="false">
+              <div class="model-item__left">
+                <span class="model-item__name">claude-sonnet-4-6</span>
+                <span class="model-item__provider">Anthropic · 균형</span>
+              </div>
+            </li>
+
+            <li class="model-list__sep" role="none"></li>
+
+            <!-- OpenAI -->
+            <li class="model-item" role="option" aria-selected="false">
+              <div class="model-item__left">
+                <span class="model-item__name">gpt-5.4</span>
+                <span class="model-item__provider">OpenAI · 플래그십</span>
+              </div>
+            </li>
+
+            <li class="model-list__sep" role="none"></li>
+
+            <!-- Google -->
+            <li class="model-item" role="option" aria-selected="false">
+              <div class="model-item__left">
+                <span class="model-item__name">gemini-2.x</span>
+                <span class="model-item__provider">Google · 멀티모달</span>
+              </div>
+            </li>
+
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </header>
+
+  <p class="caption">드롭다운은 var(--chrome-elevated) + shadow-2 / 현재 선택 항목에 accent-soft 배경 + check 아이콘</p>
+</div>
+</body>
+</html>

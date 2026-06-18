@@ -1,0 +1,519 @@
+<!-- @dsCard group="Shell" name="앱 상태 (대기/실행/설정필요)" subtitle="세 가지 런타임 상태 — Idle · Running · Setup Required" width="1000" height="760" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 앱 상태</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  /* screen-specific layout only — all colors/atoms come from ds.css */
+  html, body { height: 100%; }
+
+  .ds-card {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 24px;
+    min-height: 100vh;
+  }
+
+  .ds-card__caption {
+    margin-bottom: 8px;
+  }
+
+  /* Each frame is a mini app shell */
+  .ds-card__frame {
+    flex: 1;
+    min-height: 200px;
+    overflow: hidden;
+  }
+
+  /* App shell grid: status bar + panes + composer */
+  .app-shell {
+    display: grid;
+    grid-template-rows: var(--status-h) 1fr var(--composer-h);
+    height: 100%;
+    min-height: 200px;
+  }
+
+  /* Top bar */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 14px;
+    background: var(--chrome-surface);
+    border-bottom: 1px solid var(--chrome-border);
+    flex: none;
+  }
+  .topbar__brand {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-weight: 700;
+    color: var(--text-strong);
+    font-size: var(--t-base);
+  }
+  .topbar__brand--off .brand-mark {
+    background: var(--chrome-border-strong);
+  }
+  .topbar__status {
+    font-size: var(--t-sm);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* 2-pane layout inside each frame (doc preview + chat) */
+  .mini-panes {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    min-height: 0;
+  }
+  .mini-panes > .pane + .pane {
+    border-left: 1px solid var(--chrome-border);
+  }
+
+  /* Composer */
+  .composer {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 12px 14px;
+    background: var(--chrome-surface);
+    border-top: 1px solid var(--chrome-border);
+    flex: none;
+  }
+  .composer .field {
+    resize: none;
+    height: 52px;
+    font-size: var(--t-sm);
+  }
+
+  /* Center: empty/setup state overlay */
+  .center-overlay {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: 16px;
+    padding: 28px 20px;
+    background: var(--chrome-bg);
+  }
+  .setup-card {
+    background: var(--chrome-elevated);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-lg);
+    padding: 28px 32px;
+    max-width: 360px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow: var(--shadow-2);
+  }
+  .setup-card__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--r-md);
+    background: var(--warn-soft);
+    border: 1px solid var(--warn-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--warn);
+  }
+  .setup-card__title {
+    font-size: var(--t-lg);
+    font-weight: 700;
+    color: var(--text-strong);
+  }
+  .setup-card__desc {
+    font-size: var(--t-sm);
+    color: var(--text-muted);
+    line-height: 1.55;
+  }
+  .setup-card__key-hint {
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-sm);
+    padding: 7px 10px;
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+    letter-spacing: 0.03em;
+  }
+
+  /* Doc canvas (mini) */
+  .doc-canvas {
+    background: var(--chrome-bg);
+    padding: 16px;
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .mini-paper {
+    background: var(--paper);
+    color: var(--paper-ink);
+    border-radius: var(--r-sm);
+    box-shadow: var(--shadow-paper);
+    padding: 16px 20px;
+    flex: 1;
+    overflow: hidden;
+    font-size: var(--t-sm);
+    line-height: 1.6;
+  }
+  .mini-paper h1 {
+    font-size: var(--t-md);
+    margin-bottom: 8px;
+    color: var(--paper-ink);
+  }
+  .mini-paper p {
+    margin-bottom: 6px;
+    color: var(--paper-ink);
+    font-size: var(--t-xs);
+  }
+
+  /* Running state: dimmed doc overlay */
+  .doc-canvas--running {
+    position: relative;
+  }
+  .running-veil {
+    position: absolute;
+    inset: 16px;
+    background: color-mix(in srgb, var(--chrome-inset) 38%, transparent);
+    border-radius: var(--r-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .running-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--chrome-surface);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-pill);
+    padding: 6px 14px;
+    font-size: var(--t-sm);
+    color: var(--warn);
+    box-shadow: var(--shadow-2);
+  }
+
+  /* Chat pane inner */
+  .chat-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 12px 8px;
+  }
+  .bubble-user--sm {
+    align-self: flex-end;
+    background: var(--chrome-elevated);
+    border-radius: var(--r-md) var(--r-md) 2px var(--r-md);
+    padding: 7px 11px;
+    max-width: 90%;
+    font-size: var(--t-sm);
+    color: var(--text-strong);
+  }
+  .bubble-assistant--sm {
+    align-self: flex-start;
+    max-width: 96%;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: var(--t-sm);
+  }
+
+  /* Stop button row */
+  .stop-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px 0;
+  }
+</style>
+</head>
+<body>
+<div class="ds-card">
+
+  <!-- ── (A) 설정 필요 ── -->
+  <div>
+    <div class="ds-card__caption">A — 설정 필요 (Setup Required)</div>
+    <div class="ds-card__frame">
+      <div class="app-shell">
+
+        <!-- topbar -->
+        <header class="topbar">
+          <div class="row gap-12">
+            <span class="topbar__brand topbar__brand--off">
+              <span class="brand-mark">k</span>
+              kodocagent
+            </span>
+          </div>
+          <div class="row gap-12">
+            <span class="badge badge--warn">
+              <span class="dot dot--warn"></span>
+              설정 필요
+            </span>
+            <button class="btn btn--ghost btn--sm">
+              <svg class="ico ico--sm" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg>
+              설정
+            </button>
+          </div>
+        </header>
+
+        <!-- body: no panes, centered card -->
+        <div class="center-overlay">
+          <div class="setup-card">
+            <div class="setup-card__icon">
+              <svg class="ico ico--lg" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg>
+            </div>
+            <div class="setup-card__title">설정이 필요합니다</div>
+            <div class="setup-card__desc">
+              Anthropic API 키가 없어서 kodocagent를 시작할 수 없습니다.<br />
+              설정 화면에서 API 키를 입력하면 바로 사용할 수 있습니다.
+            </div>
+            <div class="setup-card__key-hint">ANTHROPIC_API_KEY = sk-ant-•••••••••••••••••••••</div>
+            <div class="banner banner--info" style="font-size:var(--t-xs)">
+              <svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+              API 키는 이 기기에만 저장되며 외부로 전송되지 않습니다.
+            </div>
+            <button class="btn btn--primary btn--block">설정 열기</button>
+          </div>
+        </div>
+
+        <!-- composer: disabled -->
+        <footer class="composer">
+          <textarea class="field is-disabled" placeholder="설정을 완료해야 사용할 수 있습니다" disabled></textarea>
+          <button class="btn btn--primary btn--lg is-disabled" disabled>전송</button>
+        </footer>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── (B) 실행 중 ── -->
+  <div>
+    <div class="ds-card__caption">B — 실행 중 (Running)</div>
+    <div class="ds-card__frame">
+      <div class="app-shell">
+
+        <!-- topbar -->
+        <header class="topbar">
+          <div class="row gap-12">
+            <span class="topbar__brand">
+              <span class="brand-mark">k</span>
+              kodocagent
+            </span>
+            <span class="topbar__folder t-sm" style="color:var(--text-muted)">작업 폴더: <b style="color:var(--text)">~/문서/계약</b></span>
+          </div>
+          <div class="row gap-12">
+            <span class="topbar__status" style="color:var(--warn)">
+              <span class="verify-note"><span class="spin"></span></span>
+              작업 중…
+            </span>
+            <span class="gauge" title="컨텍스트 사용량">컨텍스트
+              <span class="gauge__track"><span class="gauge__fill gauge__fill--warn" style="width:71%"></span></span>
+              71%
+            </span>
+          </div>
+        </header>
+
+        <!-- body: 2-pane -->
+        <div class="mini-panes">
+
+          <!-- CENTER: doc preview (dimmed) -->
+          <main class="pane">
+            <div class="pane__header">
+              <div class="tabs">
+                <button class="tab">원본</button>
+                <button class="tab tab--active">변경본</button>
+                <button class="tab">diff</button>
+              </div>
+              <span class="chip chip--warn">
+                <span class="dot dot--warn"></span>
+                분석 중
+              </span>
+            </div>
+            <div class="doc-canvas doc-canvas--running" style="position:relative">
+              <div class="mini-paper">
+                <h1>계약서 — 소프트웨어 개발 용역</h1>
+                <p>제1조 (목적) 이 계약은 발주사와 수탁사 간 소프트웨어 개발 용역에 관한 사항을 규정함을 목적으로 한다.</p>
+                <p>제2조 (계약 기간) 계약 기간은 2026년 1월 1일부터 2026년 12월 31일까지로 한다.</p>
+                <table class="doc-table" style="margin-top:8px">
+                  <thead><tr><th>항목</th><th>금액</th></tr></thead>
+                  <tbody>
+                    <tr><td>개발비</td><td>50,000,000원</td></tr>
+                    <tr><td>유지보수</td><td class="cell--changed">12,000,000원</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <!-- dim overlay -->
+              <div class="running-veil">
+                <div class="running-pill">
+                  <span class="verify-note"><span class="spin"></span></span>
+                  문서 분석 중…
+                </div>
+              </div>
+            </div>
+          </main>
+
+          <!-- RIGHT: chat -->
+          <section class="pane">
+            <div class="pane__header">
+              <span class="pane__title">대화</span>
+            </div>
+            <div class="pane__body" style="padding:0">
+              <div class="chat-inner">
+                <div class="bubble-user--sm">계약서에서 개인정보 항목을 모두 가려줘</div>
+                <div class="bubble-assistant--sm">
+                  <div class="tool-row tool-row--done">
+                    <svg class="ico ico--sm tool-row__icon" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg>
+                    read_document(계약서.hwp)
+                  </div>
+                  <div class="tool-row">
+                    <span class="spin tool-row__icon" style="color:var(--warn)"></span>
+                    scan_section_xml · §3~§7
+                  </div>
+                  <div class="verify-note" style="padding-left:2px">
+                    <span class="spin"></span>
+                    PII 식별 중…
+                  </div>
+                </div>
+              </div>
+              <div class="stop-row">
+                <div class="safe-note" style="font-size:var(--t-xs)">
+                  <svg class="ico ico--sm" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+                  승인 전까지 원본은 바뀌지 않습니다
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- composer: stop available -->
+        <footer class="composer">
+          <textarea class="field is-disabled" placeholder="에이전트가 응답하는 중…" disabled></textarea>
+          <button class="btn btn--danger btn--lg"><svg class="ico" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg> 중단</button>
+        </footer>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── (C) 대기 (Idle) ── -->
+  <div>
+    <div class="ds-card__caption">C — 대기 (Idle)</div>
+    <div class="ds-card__frame">
+      <div class="app-shell">
+
+        <!-- topbar -->
+        <header class="topbar">
+          <div class="row gap-12">
+            <span class="topbar__brand">
+              <span class="brand-mark">k</span>
+              kodocagent
+            </span>
+            <span class="topbar__folder t-sm" style="color:var(--text-muted)">작업 폴더: <b style="color:var(--text)">~/문서/보도</b></span>
+          </div>
+          <div class="row gap-12">
+            <span class="badge badge--add">
+              <span class="dot dot--add"></span>
+              준비됨
+            </span>
+            <span class="gauge" title="컨텍스트 사용량">컨텍스트
+              <span class="gauge__track"><span class="gauge__fill" style="width:22%"></span></span>
+              22%
+            </span>
+            <span class="t-faint t-mono" style="font-size:var(--t-xs)">입력 4.2k · 출력 0.9k tok</span>
+          </div>
+        </header>
+
+        <!-- body: 2-pane -->
+        <div class="mini-panes">
+
+          <!-- CENTER: doc preview -->
+          <main class="pane">
+            <div class="pane__header">
+              <div class="tabs">
+                <button class="tab tab--active">원본</button>
+                <button class="tab">변경본</button>
+                <button class="tab">diff</button>
+              </div>
+              <div class="row gap-4">
+                <span class="chip chip--clickable">
+                  <svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-3.4-3.4"/></svg>
+                  찾기
+                </span>
+                <button class="btn btn--ghost btn--sm">
+                  <svg class="ico" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg>
+                  내보내기
+                </button>
+              </div>
+            </div>
+            <div class="doc-canvas">
+              <div class="mini-paper">
+                <h1>보도자료 — 신제품 출시 안내</h1>
+                <p>당사는 2026년 6월 18일(수) 차세대 문서 AI 솔루션 <b>kodocagent 1.0</b>을 공식 출시합니다.</p>
+                <p>이번 솔루션은 한글(.hwp/.hwpx) 및 오피스 형식을 완전 지원하며, 원본 파일의 무결성을 보장합니다.</p>
+                <div class="safe-note" style="margin-top:10px;font-size:var(--t-xs)">
+                  <svg class="ico ico--sm" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+                  원본은 승인 전까지 안 바뀝니다
+                </div>
+              </div>
+            </div>
+          </main>
+
+          <!-- RIGHT: chat -->
+          <section class="pane">
+            <div class="pane__header">
+              <span class="pane__title">대화</span>
+              <button class="btn btn--ghost btn--sm">새 세션</button>
+            </div>
+            <div class="pane__body" style="padding:0">
+              <div class="chat-inner">
+                <div class="bubble-user--sm">보도자료 마지막 문단 좀 더 간결하게 다듬어줘</div>
+                <div class="bubble-assistant--sm">
+                  <div class="tool-row tool-row--done">
+                    <svg class="ico ico--sm tool-row__icon" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg>
+                    read_document(보도자료.hwpx)
+                  </div>
+                  <div class="tool-row tool-row--done">
+                    <svg class="ico ico--sm tool-row__icon" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg>
+                    propose_edit · §마지막 문단
+                  </div>
+                  <span style="color:var(--text)">마지막 문단을 두 문장으로 줄여 제안했습니다. 미리보기에서 변경 내용을 확인하신 후 승인해 주세요.</span>
+                  <div class="safe-note" style="font-size:var(--t-xs)">
+                    <svg class="ico ico--sm" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+                    승인 전까지 원본은 바뀌지 않습니다
+                  </div>
+                </div>
+              </div>
+              <div style="padding:8px 12px;border-top:1px solid var(--chrome-border);display:flex;flex-wrap:wrap;gap:5px;background:var(--chrome-surface)">
+                <button class="btn btn--secondary btn--sm">요약</button>
+                <button class="btn btn--secondary btn--sm">맞춤법 검사</button>
+                <button class="btn btn--secondary btn--sm">내보내기</button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- composer: normal idle -->
+        <footer class="composer">
+          <textarea class="field" placeholder="예: 3페이지 표 합계를 다시 계산해줘  ·  개인정보 가려줘"></textarea>
+          <button class="btn btn--primary btn--lg">전송</button>
+        </footer>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,297 @@
+<!-- @dsCard group="Approval" name="승인 — 찾기·바꾸기(find-replace)" subtitle="propose_find_replace 승인 모달 · 매치 미리보기 3건" width="820" height="720" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 승인: 찾기·바꾸기</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  /* screen-specific layout only */
+  html, body { height: 100%; }
+
+  /* center the modal in a scrim */
+  .preview-stage {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--chrome-bg);
+    padding: 24px;
+  }
+
+  /* modal sizing — fits the 820×720 card frame */
+  .modal {
+    width: min(780px, 100%);
+    max-height: calc(100vh - 48px);
+  }
+
+  /* header meta row: file chip + scope chips */
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  /* match counter inline */
+  .modal__title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* find/replace summary pair */
+  .fr-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-sm);
+    padding: 8px 14px;
+    font-family: var(--font-mono);
+    font-size: var(--t-sm);
+  }
+  .fr-summary__arrow {
+    color: var(--text-faint);
+    font-size: var(--t-xs);
+  }
+  .fr-summary__find {
+    background: var(--p-remove-bg);
+    color: var(--p-remove-ink);
+    border-radius: 3px;
+    padding: 2px 7px;
+    font-weight: 600;
+  }
+  .fr-summary__replace {
+    background: var(--p-add-bg);
+    color: var(--p-add-ink);
+    border-radius: 3px;
+    padding: 2px 7px;
+    font-weight: 600;
+  }
+
+  /* match preview card — extends .card (ds.css base) */
+  .match-card {
+    padding: 0;
+    overflow: hidden;
+  }
+  .match-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--chrome-border);
+    background: var(--chrome-surface);
+  }
+  .match-card__index {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+    flex: none;
+  }
+  .match-card__body {
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  /* diff line pair inside paper-style block */
+  .match-paper {
+    background: var(--paper);
+    border-radius: var(--r-xs);
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    border: 1px solid var(--paper-border);
+    font-size: var(--t-base);
+    line-height: 1.65;
+    color: var(--paper-ink);
+  }
+  .match-paper__line {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .match-paper__sigil {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    width: 12px;
+    flex: none;
+    color: var(--text-faint);
+  }
+  .match-paper__sigil--remove { color: var(--remove); }
+  .match-paper__sigil--add    { color: var(--add); }
+
+  /* footer safe note */
+  .footer-safe {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+    font-size: var(--t-sm);
+  }
+  .footer-safe__lock {
+    color: var(--add);
+  }
+</style>
+</head>
+<body>
+<div class="preview-stage">
+
+  <!-- ── Approval modal ── -->
+  <div class="modal">
+
+    <!-- Header -->
+    <div class="modal__header">
+      <div class="modal__title-row">
+        <span class="modal__title">찾기·바꾸기 승인</span>
+        <span class="badge badge--accent">
+          <span class="dot dot--accent"></span>
+          3곳 변경
+        </span>
+      </div>
+
+      <!-- find → replace summary -->
+      <div class="fr-summary" style="margin-top:10px">
+        <span class="fr-summary__find">제출 기한</span>
+        <svg class="ico fr-summary__arrow" viewBox="0 0 24 24"><path d="M5 12h13M12.5 5.5 19 12l-6.5 6.5"/></svg>
+        <span class="fr-summary__replace">제출 기한(마감일)</span>
+        <span style="margin-left:8px; color:var(--text-faint); font-size:var(--t-xs)">· 대소문자 무관 · 전체 단어</span>
+      </div>
+
+      <!-- meta: target file + scope chips -->
+      <div class="meta-row">
+        <span class="chip">
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg> 보도자료_최종.hwpx
+        </span>
+        <span class="chip chip--coord">문단 3건</span>
+        <span class="chip">전체 문서</span>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="modal__body">
+
+      <!-- info banner -->
+      <div class="banner banner--info">
+        <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+        <span>서식이 분리된 텍스트(예: 굵기·색이 따로 지정된 일부 글자)도 함께 처리됩니다.
+          서식 자체는 변경되지 않으며, 텍스트 내용만 바뀝니다.</span>
+      </div>
+
+      <!-- Match 1 — plain paragraph -->
+      <div class="card match-card">
+        <div class="match-card__header">
+          <div class="row gap-12">
+            <span class="match-card__index">#1</span>
+            <span class="chip chip--coord">§ 2문단</span>
+            <span class="t-sm t-muted">본문 두 번째 문단</span>
+          </div>
+          <span class="chip chip--ok">텍스트 단순 치환</span>
+        </div>
+        <div class="match-card__body">
+          <div class="match-paper">
+            <div class="match-paper__line">
+              <span class="match-paper__sigil match-paper__sigil--remove">−</span>
+              <span>행사 참가 신청서는 <span class="mark-remove">제출 기한</span> 내에 이메일로 보내주시기 바랍니다.</span>
+            </div>
+            <div class="match-paper__line">
+              <span class="match-paper__sigil match-paper__sigil--add">+</span>
+              <span>행사 참가 신청서는 <span class="mark-add">제출 기한(마감일)</span> 내에 이메일로 보내주시기 바랍니다.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Match 2 — inside table cell -->
+      <div class="card match-card">
+        <div class="match-card__header">
+          <div class="row gap-12">
+            <span class="match-card__index">#2</span>
+            <span class="chip chip--coord">표[1] 행3 열2</span>
+            <span class="t-sm t-muted">일정 표 · '비고' 열</span>
+          </div>
+          <span class="chip chip--ok">표 셀 텍스트 치환</span>
+        </div>
+        <div class="match-card__body">
+          <!-- mini table preview inside paper -->
+          <div class="match-paper" style="padding:0; overflow:hidden;">
+            <table class="doc-table" style="font-size:var(--t-sm)">
+              <thead>
+                <tr>
+                  <th style="width:30%">구분</th>
+                  <th style="width:35%">날짜</th>
+                  <th>비고</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1차 심사</td>
+                  <td>2026-07-10</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td>최종 발표</td>
+                  <td>2026-07-25</td>
+                  <td>
+                    <span class="mark-remove">제출 기한</span>
+                    <svg class="ico ico--sm" viewBox="0 0 24 24" style="margin:0 4px;color:var(--paper-ink-muted)"><path d="M5 12h13M12.5 5.5 19 12l-6.5 6.5"/></svg>
+                    <span class="mark-add">제출 기한(마감일)</span>
+                    <span style="color:var(--paper-ink-muted);font-size:var(--t-xs);margin-left:4px">으로 수정</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Match 3 — paragraph near document end -->
+      <div class="card match-card">
+        <div class="match-card__header">
+          <div class="row gap-12">
+            <span class="match-card__index">#3</span>
+            <span class="chip chip--coord">§ 7문단</span>
+            <span class="t-sm t-muted">문의 및 안내 섹션</span>
+          </div>
+          <span class="chip chip--ok">텍스트 단순 치환</span>
+        </div>
+        <div class="match-card__body">
+          <div class="match-paper">
+            <div class="match-paper__line">
+              <span class="match-paper__sigil match-paper__sigil--remove">−</span>
+              <span>자세한 사항 및 <span class="mark-remove">제출 기한</span>은 공식 홈페이지를 참조하십시오.</span>
+            </div>
+            <div class="match-paper__line">
+              <span class="match-paper__sigil match-paper__sigil--add">+</span>
+              <span>자세한 사항 및 <span class="mark-add">제출 기한(마감일)</span>은 공식 홈페이지를 참조하십시오.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.modal__body -->
+
+    <!-- Footer -->
+    <div class="modal__footer">
+      <div class="footer-safe">
+        <svg class="ico footer-safe__lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        <span>승인 전까지 원본은 바뀌지 않습니다</span>
+      </div>
+      <div class="modal__footer-actions">
+        <button class="btn btn--danger">거절</button>
+        <button class="btn btn--approve">승인 · 3곳 변경</button>
+      </div>
+    </div>
+
+  </div><!-- /.modal -->
+
+</div><!-- /.preview-stage -->
+</body>
+</html>

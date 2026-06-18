@@ -1,0 +1,157 @@
+<!-- @dsCard group="Shell" name="3-pane 워크스페이스 (히어로)" subtitle="파일·타임라인 / 문서 미리보기 / 대화" width="1280" height="800" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 워크스페이스</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  /* screen-specific layout only — all colors/atoms/icons come from ds.css */
+  html, body { height: 100%; }
+  .ws { display: grid; grid-template-rows: var(--status-h) 1fr var(--composer-h); height: 100vh; }
+
+  /* top bar */
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; background: var(--chrome-surface); border-bottom: 1px solid var(--chrome-border); }
+  .topbar__brand { display: flex; align-items: center; gap: 9px; font-weight: 700; color: var(--text-strong); }
+  .topbar__folder { color: var(--text-muted); font-size: var(--t-sm); }
+  .topbar__folder b { color: var(--text); font-weight: 500; }
+  .model-pick { display: inline-flex; align-items: center; gap: 6px; background: var(--chrome-inset); border: 1px solid var(--chrome-border); border-radius: var(--r-sm); padding: 4px 10px; font-size: var(--t-sm); color: var(--text); cursor: pointer; }
+
+  /* 3-pane grid */
+  .panes { display: grid; grid-template-columns: 232px 1fr 340px; min-height: 0; }
+  .panes > .pane + .pane { border-left: 1px solid var(--chrome-border); }
+
+  /* left: files + timeline */
+  .file { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: var(--r-sm); cursor: pointer; color: var(--text); }
+  .file--active { background: var(--accent-soft); color: var(--text-strong); }
+  .file:hover:not(.file--active) { background: var(--chrome-elevated); }
+  .file .ico { color: var(--text-muted); }
+  .file__name { font-size: var(--t-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dropzone { display: flex; flex-direction: column; align-items: center; gap: 6px; border: 1px dashed var(--chrome-border-strong); border-radius: var(--r-md); padding: 16px; text-align: center; color: var(--text-faint); font-size: var(--t-sm); margin-bottom: 12px; }
+  .dropzone .ico { width: 20px; height: 20px; }
+  .timeline { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+  .timeline__item { display: flex; gap: 8px; padding: 5px 8px; border-radius: var(--r-sm); cursor: pointer; font-size: var(--t-sm); color: var(--text-muted); }
+  .timeline__item:hover { background: var(--chrome-elevated); color: var(--text); }
+  .timeline__time { font-family: var(--font-mono); color: var(--text-faint); flex: none; }
+
+  /* center: document */
+  .doc-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .doc-canvas { background: var(--chrome-bg); padding: 22px; flex: 1; overflow: auto; }
+  .approx { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-xs); color: var(--paper-ink-muted); margin-top: 14px; }
+
+  /* right: chat */
+  .chat { display: flex; flex-direction: column; gap: 12px; }
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--chrome-border); background: var(--chrome-surface); }
+
+  /* composer */
+  .composer { display: flex; align-items: flex-end; gap: 10px; padding: 14px 16px; background: var(--chrome-surface); border-top: 1px solid var(--chrome-border); }
+  .composer .field { resize: none; height: 64px; }
+</style>
+</head>
+<body>
+<div class="ws">
+
+  <!-- ── Top bar ── -->
+  <header class="topbar">
+    <div class="row gap-16">
+      <span class="topbar__brand"><span class="brand-mark">k</span> kodocagent</span>
+      <span class="topbar__folder">작업 폴더: <b>~/문서/계약</b></span>
+    </div>
+    <div class="row gap-12">
+      <span class="topbar__folder">누적 <b class="t-mono">입력 12.4k · 출력 3.1k</b> 토큰</span>
+      <span class="gauge" title="컨텍스트 사용량">컨텍스트
+        <span class="gauge__track"><span class="gauge__fill" style="width:38%"></span></span> 38%</span>
+      <button class="model-pick">claude-opus-4-8
+        <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="m6 9.5 6 6 6-6"/></svg></button>
+    </div>
+  </header>
+
+  <!-- ── 3-pane ── -->
+  <div class="panes">
+
+    <!-- LEFT: files + undo timeline -->
+    <aside class="pane">
+      <div class="pane__header"><span class="pane__title">파일 · 되돌리기</span>
+        <button class="btn btn--ghost btn--sm"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> 열기</button></div>
+      <div class="pane__body">
+        <div class="dropzone">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          파일을 끌어다 놓으세요<span class="t-xs">.hwp · .hwpx · .xlsx</span></div>
+        <div class="col gap-4" style="margin-bottom:16px">
+          <div class="file file--active"><svg class="ico" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg><span class="file__name">예산보고서.hwpx</span></div>
+          <div class="file"><svg class="ico" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg><span class="file__name">계약서.hwp</span></div>
+          <div class="file"><svg class="ico" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M4 15h16M10 4v16"/></svg><span class="file__name">실적.xlsx</span></div>
+        </div>
+        <div class="h-section row gap-4" style="margin-bottom:8px"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.5-6.2"/><path d="M3 4v4h4"/><path d="M12 8v4l3 1.7"/></svg> 되돌리기 타임라인</div>
+        <ul class="timeline">
+          <li class="timeline__item"><span class="timeline__time">14:02</span><span>표 금액 콤마 적용</span></li>
+          <li class="timeline__item"><span class="timeline__time">13:51</span><span>개인정보 가리기</span></li>
+          <li class="timeline__item"><span class="timeline__time">13:40</span><span>원본 (시작)</span></li>
+        </ul>
+        <div class="safe-note" style="margin-top:16px"><svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> 원본은 승인 전까지 안 바뀝니다</div>
+      </div>
+    </aside>
+
+    <!-- CENTER: document preview -->
+    <main class="pane">
+      <div class="pane__header doc-toolbar">
+        <div class="tabs">
+          <button class="tab">원본</button>
+          <button class="tab tab--active">변경본</button>
+          <button class="tab">diff</button>
+        </div>
+        <div class="row gap-4">
+          <span class="chip chip--clickable"><svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-3.4-3.4"/></svg> 찾기</span>
+          <button class="btn btn--ghost btn--sm"><svg class="ico" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg> 내보내기</button>
+        </div>
+      </div>
+      <div class="doc-canvas">
+        <div class="paper" style="max-width:680px;margin:0 auto">
+          <h1>2026년 예산·실적 보고서</h1>
+          <p>아래 표는 2026년도 항목별 집행 예산을 정리한 것입니다. 금액 단위는 원이며, 천 단위 구분 기호를 적용했습니다.</p>
+          <table class="doc-table">
+            <thead><tr><th>항목</th><th>금액</th><th>비고</th></tr></thead>
+            <tbody>
+              <tr><td>제작비</td><td class="cell--changed">1,500,000</td><td>콤마 적용됨</td></tr>
+              <tr><td>인쇄비</td><td class="cell--changed">820,000</td><td>콤마 적용됨</td></tr>
+              <tr><td>예비비</td><td>300,000</td><td></td></tr>
+            </tbody>
+          </table>
+          <div class="approx"><svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg> HTML 미리보기는 <b>근사</b>입니다 — 픽셀 정확도는 한글에서 확인하세요.</div>
+        </div>
+      </div>
+    </main>
+
+    <!-- RIGHT: conversation -->
+    <section class="pane">
+      <div class="pane__header"><span class="pane__title">대화</span><button class="btn btn--ghost btn--sm">새 세션</button></div>
+      <div class="pane__body">
+        <div class="chat">
+          <div class="bubble-user">표 금액에 천 단위 콤마 넣어줘</div>
+          <div class="bubble-assistant">
+            <div class="tool-row tool-row--done"><svg class="ico ico--sm tool-row__icon" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg> read_document · 예산보고서.hwpx</div>
+            <div class="tool-row tool-row--done"><svg class="ico ico--sm tool-row__icon" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg> propose_cell_edit · 2곳</div>
+            <span style="color:var(--text)">제작비·인쇄비 셀에 천 단위 콤마를 넣는 변경을 제안했어요. 가운데 미리보기에서 바뀐 셀이 강조됩니다.</span>
+            <div class="verify-note"><span class="spin"></span> 자가검증 중…</div>
+          </div>
+        </div>
+      </div>
+      <div class="quick">
+        <button class="btn btn--secondary btn--sm">요약</button>
+        <button class="btn btn--secondary btn--sm">검토(법령)</button>
+        <button class="btn btn--secondary btn--sm">개인정보 가리기</button>
+        <button class="btn btn--secondary btn--sm">내보내기</button>
+        <button class="btn btn--secondary btn--sm">되돌리기</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- ── Composer ── -->
+  <footer class="composer">
+    <textarea class="field" placeholder="예: 이 표의 합계를 다시 계산해줘  ·  계약서에서 개인정보 가려줘"></textarea>
+    <button class="btn btn--primary btn--lg">전송</button>
+  </footer>
+</div>
+</body>
+</html>

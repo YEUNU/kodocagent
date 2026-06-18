@@ -1,0 +1,291 @@
+<!-- @dsCard group="States" name="새 문서·스프레드시트 만들기" subtitle="write_new_document / write_new_spreadsheet 플로우" width="760" height="700" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 새로 만들기</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  html, body { height: 100%; display: flex; align-items: center; justify-content: center; }
+
+  .dialog-wrap {
+    width: 680px;
+    max-width: 100%;
+    background: var(--chrome-surface);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Header */
+  .dialog-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 20px 14px;
+    border-bottom: 1px solid var(--chrome-border);
+  }
+  .dialog-title {
+    font-size: var(--t-lg);
+    font-weight: 700;
+    color: var(--text-strong);
+  }
+
+  /* Body */
+  .dialog-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  /* Type selector cards */
+  .type-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .type-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px;
+    background: var(--chrome-elevated);
+    border: 2px solid var(--chrome-border);
+    border-radius: var(--r-md);
+    cursor: pointer;
+    transition: border-color 0.14s, background 0.14s;
+  }
+  .type-card:hover:not(.type-card--selected) {
+    border-color: var(--chrome-border-strong);
+  }
+  .type-card--selected {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .type-card__icon-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .type-card__ico-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--r-sm);
+    background: var(--chrome-inset);
+    flex: none;
+  }
+  .type-card--selected .type-card__ico-wrap {
+    background: var(--accent-soft);
+  }
+  .type-card__name {
+    font-size: var(--t-md);
+    font-weight: 600;
+    color: var(--text-strong);
+  }
+  .type-card__ext {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+    margin-top: 1px;
+  }
+  .type-card__desc {
+    font-size: var(--t-sm);
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .type-card--selected .type-card__name { color: var(--accent); }
+
+  /* Selected indicator */
+  .type-card__check {
+    margin-left: auto;
+    color: var(--accent);
+  }
+
+  /* Form section */
+  .form-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* Location row */
+  .loc-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .loc-label {
+    font-size: var(--t-sm);
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex: none;
+  }
+
+  /* Paper preview */
+  .preview-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .preview-label {
+    font-size: var(--t-xs);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  .paper--mini {
+    background: var(--paper);
+    color: var(--paper-ink);
+    border-radius: var(--r-sm);
+    box-shadow: var(--shadow-paper);
+    padding: 16px 20px;
+    font-size: var(--t-sm);
+    line-height: 1.65;
+  }
+  .paper--mini h1 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--paper-ink);
+    margin-bottom: 8px;
+  }
+  .paper--mini p {
+    color: var(--paper-ink-muted);
+    margin-bottom: 6px;
+    font-size: var(--t-sm);
+  }
+  .paper--mini .draft-tag {
+    display: inline-block;
+    font-size: var(--t-xs);
+    color: var(--paper-ink-muted);
+    border: 1px dashed var(--paper-border);
+    border-radius: var(--r-xs);
+    padding: 1px 7px;
+    margin-bottom: 8px;
+  }
+
+  /* Info note */
+  .info-note {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+    border-radius: var(--r-sm);
+    padding: 7px 12px;
+    font-size: var(--t-sm);
+    color: var(--accent);
+  }
+
+  /* Footer */
+  .dialog-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--chrome-border);
+  }
+</style>
+</head>
+<body>
+<div class="dialog-wrap">
+
+  <!-- Header -->
+  <header class="dialog-header">
+    <span class="brand-mark">k</span>
+    <span class="dialog-title">새로 만들기</span>
+  </header>
+
+  <!-- Body -->
+  <div class="dialog-body">
+
+    <!-- 1. Type selection -->
+    <div class="type-grid">
+      <!-- HWP card — selected -->
+      <div class="type-card type-card--selected">
+        <div class="type-card__icon-row">
+          <div class="type-card__ico-wrap">
+            <svg class="ico ico--lg t-accent" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg>
+          </div>
+          <div>
+            <div class="type-card__name">한글 문서</div>
+            <div class="type-card__ext">.hwpx</div>
+          </div>
+          <span class="type-card__check">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg>
+          </span>
+        </div>
+        <div class="type-card__desc">한컴오피스 한글 문서. 서식·표·단락 구조를 그대로 유지합니다.</div>
+      </div>
+
+      <!-- Spreadsheet card -->
+      <div class="type-card">
+        <div class="type-card__icon-row">
+          <div class="type-card__ico-wrap">
+            <svg class="ico ico--lg" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M4 15h16M10 4v16"/></svg>
+          </div>
+          <div>
+            <div class="type-card__name">스프레드시트</div>
+            <div class="type-card__ext">.xlsx</div>
+          </div>
+        </div>
+        <div class="type-card__desc">Excel 호환 시트. 수식·셀 편집·표 작성에 적합합니다.</div>
+      </div>
+    </div>
+
+    <!-- 2. Title + location -->
+    <div class="form-section">
+      <div class="field-row" style="margin-bottom:0">
+        <label class="field-label" for="doc-title">제목<span class="req">*</span></label>
+        <input id="doc-title" class="field" type="text" value="2026년 사업계획서" />
+      </div>
+      <div class="loc-row">
+        <span class="loc-label">저장 위치</span>
+        <span class="chip chip--clickable">
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          ~/문서/계약
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="m6 9.5 6 6 6-6"/></svg>
+        </span>
+      </div>
+    </div>
+
+    <!-- 3. Content preview -->
+    <div class="preview-section">
+      <span class="preview-label">생성될 내용 초안</span>
+      <div class="paper--mini">
+        <span class="draft-tag">초안</span>
+        <h1>2026년 사업계획서</h1>
+        <p>본 문서는 2026년도 사업 전략 및 추진 계획을 정리한 것입니다.</p>
+        <p style="color:var(--paper-border);font-size:var(--t-xs);font-style:italic">본문 내용은 생성 후 에이전트가 채웁니다. 지금은 제목과 기본 구조만 생성됩니다.</p>
+      </div>
+    </div>
+
+    <!-- 4. Info note -->
+    <div class="info-note">
+      <svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+      생성 후 바로 편집·승인 플로우로 이어집니다
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <footer class="dialog-footer">
+    <button class="btn btn--ghost">취소</button>
+    <button class="btn btn--primary">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 12v5M9.5 14.5h5"/></svg>
+      만들기
+    </button>
+  </footer>
+
+</div>
+</body>
+</html>

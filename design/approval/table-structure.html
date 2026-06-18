@@ -1,0 +1,308 @@
+<!-- @dsCard group="Approval" name="승인 — 표 구조(행/열 추가·삭제)" subtitle="propose_table_structure 고스트 행/열 미리보기" width="820" height="700" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 승인: 표 구조 변경</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  /* ── screen layout only — all colors/atoms from ds.css ── */
+  html, body { height: 100%; }
+
+  /* modal size override for this card */
+  .modal {
+    width: min(780px, 100%);
+  }
+
+  /* meta row: file path + badges */
+  .meta-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* file path chip styling */
+  .path-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-xs);
+    padding: 3px 9px;
+    font-family: var(--font-mono);
+    font-size: var(--t-sm);
+    color: var(--text);
+  }
+  .path-chip__icon { color: var(--text-faint); }
+
+  /* change summary badges row */
+  .summary-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  /* paper scroll area */
+  .paper-scroll {
+    overflow: auto;
+    background: var(--chrome-bg);
+    border-radius: var(--r-sm);
+    padding: 16px;
+    border: 1px solid var(--chrome-border);
+  }
+
+  /* table layout helpers */
+  .table-wrap {
+    overflow-x: auto;
+  }
+
+  /* ghost row/col label in margin */
+  .row-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: var(--t-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .row-label--add { color: var(--add); }
+  .row-label--remove { color: var(--remove); }
+
+  /* ghost col header marker — inherits bg from ds.css .cell--ghost */
+  .col-ghost-head {
+    color: var(--p-add-ink);
+    font-style: italic;
+    font-size: var(--t-xs);
+    letter-spacing: 0.04em;
+  }
+
+  /* side annotation column (for row labels outside the table) */
+  .annotated-table {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .annotation-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding-top: 1px; /* align with table border */
+    flex: none;
+    width: 64px;
+  }
+  .ann-cell {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 7px 6px 7px 0;
+    border-top: 1px solid transparent;
+    font-size: var(--t-xs);
+    white-space: nowrap;
+    /* match row height of doc-table cells */
+    min-height: 36px;
+  }
+  .ann-cell--ghost { color: var(--p-add-ink); font-weight: 600; }
+  .ann-cell--removed { color: var(--p-remove-ink); font-weight: 600; }
+  .ann-cell--spacer { color: transparent; }
+
+  /* ghost cell italic hint text */
+  .cell-hint {
+    font-style: italic;
+    font-size: var(--t-xs);
+    opacity: 0.7;
+  }
+
+  /* legend */
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .legend__item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: var(--t-xs);
+    color: var(--text-muted);
+  }
+  .legend__swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: var(--r-xs);
+    flex: none;
+    border: 1px solid var(--paper-border);
+  }
+  /* same pattern as ds.css .cell--ghost — use tokens only */
+  .swatch--ghost {
+    background: repeating-linear-gradient(
+      45deg,
+      var(--paper),
+      var(--paper) 4px,
+      var(--p-add-bg) 4px,
+      var(--p-add-bg) 8px
+    );
+  }
+  .swatch--removed {
+    background: var(--p-remove-bg);
+  }
+</style>
+</head>
+<body>
+<div class="modal-scrim">
+  <div class="modal">
+
+    <!-- ── Modal header ── -->
+    <div class="modal__header">
+      <div class="row between" style="margin-bottom:10px">
+        <div class="modal__title">표 구조 변경 — 승인 요청</div>
+        <div class="summary-badges">
+          <span class="badge badge--add">
+            <span class="dot dot--add"></span>
+            행 +1
+          </span>
+          <span class="badge badge--add">
+            <span class="dot dot--add"></span>
+            열 +1
+          </span>
+          <span class="badge badge--neutral">propose_table_structure</span>
+        </div>
+      </div>
+      <div class="meta-row">
+        <span class="path-chip">
+          <svg class="ico path-chip__icon" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg>
+          예산보고서.hwpx
+        </span>
+        <span class="chip">표 1 · 4행 3열 → 5행 4열</span>
+      </div>
+    </div>
+
+    <!-- ── Modal body ── -->
+    <div class="modal__body">
+
+      <!-- change description -->
+      <div class="card" style="padding:12px 14px">
+        <div class="h-section" style="margin-bottom:8px">변경 내용</div>
+        <div class="col" style="gap:6px">
+          <div class="row gap-4">
+            <span class="t-add"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+            <span class="t-strong" style="font-size:var(--t-md)">합계 행 1개 추가</span>
+            <span class="t-muted" style="font-size:var(--t-sm)">— 표 맨 아래에 삽입, 셀은 빈 상태로 생성</span>
+          </div>
+          <div class="row gap-4">
+            <span class="t-add"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+            <span class="t-strong" style="font-size:var(--t-md)">비고 열 1개 추가</span>
+            <span class="t-muted" style="font-size:var(--t-sm)">— 맨 오른쪽에 삽입, 빈 셀로 구성</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- table preview -->
+      <div>
+        <div class="row between" style="margin-bottom:8px">
+          <div class="h-section">미리보기</div>
+          <div class="legend">
+            <div class="legend__item">
+              <div class="legend__swatch swatch--ghost"></div>
+              추가될 행/열
+            </div>
+            <div class="legend__item">
+              <div class="legend__swatch swatch--removed"></div>
+              삭제될 행/열
+            </div>
+          </div>
+        </div>
+
+        <div class="paper-scroll">
+          <div class="paper" style="padding:20px 24px">
+            <div class="annotated-table">
+
+              <!-- annotation labels aligned to each row -->
+              <div class="annotation-col">
+                <!-- header row -->
+                <div class="ann-cell ann-cell--spacer" style="font-weight:600">·</div>
+                <!-- data rows 1-3 -->
+                <div class="ann-cell ann-cell--spacer">·</div>
+                <div class="ann-cell ann-cell--spacer">·</div>
+                <div class="ann-cell ann-cell--spacer">·</div>
+                <!-- ghost row -->
+                <div class="ann-cell ann-cell--ghost"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> 합계 행</div>
+              </div>
+
+              <!-- table -->
+              <div class="table-wrap grow">
+                <table class="doc-table">
+                  <thead>
+                    <tr>
+                      <th>항목</th>
+                      <th>예산(원)</th>
+                      <th>집행(원)</th>
+                      <th class="col-ghost-head cell--ghost">비고 <span class="cell-hint">새 열</span></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>제작비</td>
+                      <td>1,500,000</td>
+                      <td>1,380,000</td>
+                      <td class="cell--ghost"><span class="cell-hint">비어 있음</span></td>
+                    </tr>
+                    <tr>
+                      <td>인쇄비</td>
+                      <td>820,000</td>
+                      <td>810,000</td>
+                      <td class="cell--ghost"><span class="cell-hint">비어 있음</span></td>
+                    </tr>
+                    <tr>
+                      <td>예비비</td>
+                      <td>300,000</td>
+                      <td>0</td>
+                      <td class="cell--ghost"><span class="cell-hint">비어 있음</span></td>
+                    </tr>
+                    <!-- ghost row: to be added -->
+                    <tr>
+                      <td class="cell--ghost"><strong>합계</strong> <span class="cell-hint">새 행</span></td>
+                      <td class="cell--ghost"><span class="cell-hint">비어 있음</span></td>
+                      <td class="cell--ghost"><span class="cell-hint">비어 있음</span></td>
+                      <td class="cell--ghost"><span class="cell-hint">비어 있음</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+            <div class="approx" style="display:inline-flex;align-items:center;gap:6px;font-size:var(--t-xs);color:var(--paper-ink-muted);margin-top:12px">
+              <svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg> HTML 미리보기는 <b>근사</b>입니다 — 픽셀 정확도는 한글에서 확인하세요.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- safety note -->
+      <div class="safe-note">
+        <svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> 승인 전까지 원본은 바뀌지 않습니다
+      </div>
+
+    </div>
+
+    <!-- ── Modal footer ── -->
+    <div class="modal__footer">
+      <div class="row gap-4" style="color:var(--text-muted);font-size:var(--t-sm)">
+        <span>셀 내용 편집은 별도 승인에서 진행됩니다</span>
+      </div>
+      <div class="modal__footer-actions">
+        <button class="btn btn--secondary">거절</button>
+        <button class="btn btn--approve">승인</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

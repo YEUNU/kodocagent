@@ -1,0 +1,424 @@
+<!-- @dsCard group="States" name="첫 실행 설정 마법사" subtitle="API 키 입력 · 작업 폴더 · 완료" width="720" height="720" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 첫 실행 설정</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  html, body { height: 100%; display: flex; align-items: center; justify-content: center; }
+
+  /* ── Wizard modal ── */
+  .wizard {
+    width: 560px;
+    background: var(--chrome-surface);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  .wizard__header {
+    padding: 22px 24px 16px;
+    border-bottom: 1px solid var(--chrome-border);
+  }
+  .wizard__brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .wizard__brand-name {
+    font-size: var(--t-lg);
+    font-weight: 700;
+    color: var(--text-strong);
+  }
+
+  /* ── Step indicator ── */
+  .steps {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+  .step:last-child { flex: none; }
+  .step__dot {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--t-xs);
+    font-weight: 700;
+    flex: none;
+    border: 2px solid var(--chrome-border);
+    color: var(--text-faint);
+    background: var(--chrome-inset);
+  }
+  .step--active .step__dot {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+  .step--done .step__dot {
+    background: var(--add-soft);
+    border-color: var(--add);
+    color: var(--add);
+  }
+  .step__label {
+    font-size: var(--t-sm);
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+  .step--active .step__label { color: var(--text-strong); font-weight: 600; }
+  .step--done .step__label { color: var(--add); }
+  .step__line {
+    flex: 1;
+    height: 1px;
+    background: var(--chrome-border);
+    margin: 0 8px;
+  }
+  .step--done .step__line { background: var(--add); opacity: 0.4; }
+
+  /* ── Body ── */
+  .wizard__body {
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow: auto;
+  }
+
+  /* ── Section heading ── */
+  .section-head {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .section-head__title {
+    font-size: var(--t-md);
+    font-weight: 700;
+    color: var(--text-strong);
+  }
+  .section-head__sub {
+    font-size: var(--t-sm);
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  /* ── API key groups ── */
+  .api-group {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .api-entry {
+    background: var(--chrome-elevated);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-md);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .api-entry--required {
+    border-color: var(--accent-line);
+  }
+  .api-entry__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .api-entry__name {
+    font-size: var(--t-md);
+    font-weight: 600;
+    color: var(--text-strong);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .api-entry__desc {
+    font-size: var(--t-sm);
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+
+  /* masked input wrapper */
+  .field-mask-wrap {
+    position: relative;
+  }
+  .field-mask-wrap .field {
+    padding-right: 40px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.08em;
+  }
+  .field-mask-wrap__eye {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-faint);
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+  }
+
+  /* ── Legal OC tip card ── */
+  .tip-card {
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-md);
+    padding: 12px 14px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .tip-card__icon {
+    flex: none;
+    margin-top: 1px;
+    color: var(--text-muted);
+  }
+  .tip-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+  }
+  .tip-card__title {
+    font-size: var(--t-sm);
+    font-weight: 600;
+    color: var(--text);
+  }
+  .tip-card__text {
+    font-size: var(--t-sm);
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .tip-card__link {
+    font-size: var(--t-sm);
+    color: var(--accent);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  /* ── CLI note ── */
+  .cli-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+    line-height: 1.55;
+  }
+  .cli-code {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    color: var(--text-muted);
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-xs);
+    padding: 1px 5px;
+  }
+
+  /* ── Footer ── */
+  .wizard__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-top: 1px solid var(--chrome-border);
+    flex: none;
+  }
+  .wizard__safe {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+  }
+  .wizard__footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div class="wizard">
+
+  <!-- ── Header: brand + step indicator ── -->
+  <div class="wizard__header">
+    <div class="wizard__brand">
+      <span class="brand-mark">k</span>
+      <span class="wizard__brand-name">kodocagent 시작하기</span>
+    </div>
+
+    <div class="steps">
+      <!-- Step 1: active -->
+      <div class="step step--active">
+        <div class="step__dot">1</div>
+        <span class="step__label">API 키</span>
+        <div class="step__line"></div>
+      </div>
+
+      <!-- Step 2: pending -->
+      <div class="step">
+        <div class="step__dot">2</div>
+        <span class="step__label">작업 폴더</span>
+        <div class="step__line"></div>
+      </div>
+
+      <!-- Step 3: pending -->
+      <div class="step">
+        <div class="step__dot">3</div>
+        <span class="step__label">완료</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Body: Step 1 — API key entry ── -->
+  <div class="wizard__body">
+
+    <div class="section-head">
+      <span class="section-head__title">AI 제공자 API 키 설정</span>
+      <span class="section-head__sub">
+        키는 로컬 설정 파일에만 저장되며, 어디에도 전송되지 않습니다.
+        Claude 키만 있으면 기본 기능을 모두 사용할 수 있습니다.
+      </span>
+    </div>
+
+    <!-- API key cards -->
+    <div class="api-group">
+
+      <!-- Claude (required) -->
+      <div class="api-entry api-entry--required">
+        <div class="api-entry__head">
+          <div>
+            <div class="api-entry__name">
+              Claude
+              <span class="badge badge--accent">필수</span>
+            </div>
+            <div class="api-entry__desc">문서 편집·요약·검토 핵심 엔진</div>
+          </div>
+          <span class="chip chip--ok t-xs">연결됨</span>
+        </div>
+        <div class="field-row" style="margin-bottom:0">
+          <label class="field-label">Anthropic API 키<span class="req">*</span></label>
+          <div class="field-mask-wrap">
+            <input class="field" type="password" value="sk-ant-api03-••••••••••••••••••••••••" readonly />
+            <span class="field-mask-wrap__eye">
+              <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 10.7a2 2 0 0 0 2.7 2.7"/><path d="M9.3 5.3A9.7 9.7 0 0 1 12 5c5 0 9 5 9 7a13 13 0 0 1-2.2 2.9M6.1 6.2C3.8 7.7 3 11 3 12c1 2 3 5 7 6"/></svg>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- OpenAI (optional) -->
+      <div class="api-entry">
+        <div class="api-entry__head">
+          <div>
+            <div class="api-entry__name">
+              OpenAI
+              <span class="badge badge--neutral">선택</span>
+            </div>
+            <div class="api-entry__desc">GPT 모델 대안 사용 시 (비교·검증)</div>
+          </div>
+        </div>
+        <div class="field-row" style="margin-bottom:0">
+          <label class="field-label">OpenAI API 키</label>
+          <div class="field-mask-wrap">
+            <input class="field" type="password" placeholder="sk-…  (비워 두면 사용 안 함)" />
+            <span class="field-mask-wrap__eye">
+              <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 10.7a2 2 0 0 0 2.7 2.7"/><path d="M9.3 5.3A9.7 9.7 0 0 1 12 5c5 0 9 5 9 7a13 13 0 0 1-2.2 2.9M6.1 6.2C3.8 7.7 3 11 3 12c1 2 3 5 7 6"/></svg>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gemini (optional) -->
+      <div class="api-entry">
+        <div class="api-entry__head">
+          <div>
+            <div class="api-entry__name">
+              Gemini
+              <span class="badge badge--neutral">선택</span>
+            </div>
+            <div class="api-entry__desc">Google AI 모델 대안 사용 시</div>
+          </div>
+        </div>
+        <div class="field-row" style="margin-bottom:0">
+          <label class="field-label">Google AI API 키</label>
+          <div class="field-mask-wrap">
+            <input class="field" type="password" placeholder="AIza…  (비워 두면 사용 안 함)" />
+            <span class="field-mask-wrap__eye">
+              <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 10.7a2 2 0 0 0 2.7 2.7"/><path d="M9.3 5.3A9.7 9.7 0 0 1 12 5c5 0 9 5 9 7a13 13 0 0 1-2.2 2.9M6.1 6.2C3.8 7.7 3 11 3 12c1 2 3 5 7 6"/></svg>
+            </span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Legal OC tip card -->
+    <div class="tip-card">
+      <span class="tip-card__icon">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M12 4v16M7 20h10M5 8h14M5 8l-2.6 5.2a3 3 0 0 0 5.2 0L5 8zM19 8l-2.6 5.2a3 3 0 0 0 5.2 0L19 8z"/></svg>
+      </span>
+      <div class="tip-card__body">
+        <span class="tip-card__title">한국 법령·판례 검색 (선택)</span>
+        <span class="tip-card__text">
+          국가법령정보 OpenAPI 키를 등록하면 계약서·보도자료 검토 시
+          관련 법령을 자동으로 참조합니다. 무료 발급 가능.
+        </span>
+        <a class="tip-card__link" href="#">
+          발급 안내 보기
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M5 12h13M12.5 5.5 19 12l-6.5 6.5"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- CLI equivalence note -->
+    <div class="cli-note">
+      <svg class="ico ico--sm" style="flex:none;margin-top:1px" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+      <span>
+        이 설정은 <span class="cli-code">kordoc config set ANTHROPIC_API_KEY …</span> 명령과 동일합니다.
+        CLI 환경 변수(<span class="cli-code">.env</span>)로도 지정할 수 있습니다.
+      </span>
+    </div>
+
+  </div>
+
+  <!-- ── Footer ── -->
+  <div class="wizard__footer">
+    <span class="wizard__safe">
+      <svg class="ico ico--sm" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+      키는 이 기기에만 저장됩니다
+    </span>
+    <div class="wizard__footer-actions">
+      <button class="btn btn--ghost">건너뛰기</button>
+      <button class="btn btn--primary btn--lg">다음
+        <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M5 12h13M12.5 5.5 19 12l-6.5 6.5"/></svg>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

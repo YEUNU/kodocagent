@@ -1,0 +1,520 @@
+<!-- @dsCard group="Foundations" name="파운데이션 스타일가이드" subtitle="색 팔레트 · 타이포 스케일 · 아톰 갤러리" width="1000" height="1100" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 파운데이션 스타일가이드</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  /* ── 화면 고유 레이아웃 ── */
+  html, body { min-height: 100%; }
+
+  .guide-root {
+    padding: 32px 36px 48px;
+    max-width: 960px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  /* 페이지 헤더 */
+  .guide-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--chrome-border);
+    padding-bottom: 16px;
+  }
+  .guide-header__title {
+    font-size: var(--t-xl);
+    font-weight: 700;
+    color: var(--text-strong);
+    letter-spacing: -0.01em;
+  }
+  .guide-header__meta {
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+  }
+
+  /* 섹션 */
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .section__head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section__head hr {
+    flex: 1;
+    border: 0;
+    height: 1px;
+    background: var(--chrome-border);
+  }
+
+  /* ── 색 팔레트 ── */
+  .palette-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .palette-group__label {
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .swatch {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 92px;
+  }
+  .swatch__box {
+    width: 92px;
+    height: 48px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--chrome-border);
+    flex-shrink: 0;
+  }
+  .swatch__name {
+    font-size: var(--t-xs);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    line-height: 1.3;
+  }
+  .swatch__hex {
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+  }
+
+  /* 팔레트 그룹 3열 */
+  .palette-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+  }
+
+  /* ── 타이포 스케일 ── */
+  .type-scale {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .type-row {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--chrome-border);
+  }
+  .type-row:last-child { border-bottom: none; }
+  .type-row__label {
+    width: 70px;
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+  }
+  .type-row__px {
+    width: 38px;
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+    text-align: right;
+  }
+  .type-row__sample {
+    color: var(--text-strong);
+    line-height: 1.4;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* ── 아톰 갤러리 ── */
+  .atom-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .atom-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .atom-group__label {
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .atom-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* field 데모 */
+  .field-demo {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .field-demo__item {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 200px;
+  }
+</style>
+</head>
+<body>
+<div class="guide-root">
+
+  <!-- 페이지 헤더 -->
+  <header class="guide-header">
+    <div class="row gap-12" style="align-items:center">
+      <span class="brand-mark">k</span>
+      <span class="guide-header__title">파운데이션 스타일가이드</span>
+    </div>
+    <span class="guide-header__meta">ds.css · kodocagent · v0.7.x</span>
+  </header>
+
+  <!-- ════════════════════════════════════════════════════════
+       ① 색 팔레트
+  ═══════════════════════════════════════════════════════════ -->
+  <section class="section">
+    <div class="section__head">
+      <span class="h-section">① 색 팔레트</span>
+      <hr />
+    </div>
+
+    <div class="palette-cols">
+
+      <!-- 크롬 -->
+      <div class="palette-group">
+        <div class="palette-group__label">크롬 (Chrome)</div>
+        <div class="swatches">
+          <div class="swatch">
+            <div class="swatch__box" style="background:var(--chrome-bg);border-color:var(--chrome-border-strong)"></div>
+            <span class="swatch__name">--chrome-bg</span>
+            <span class="swatch__hex">#15171e</span>
+          </div>
+          <div class="swatch">
+            <div class="swatch__box" style="background:var(--chrome-surface)"></div>
+            <span class="swatch__name">--chrome-surface</span>
+            <span class="swatch__hex">#1c1f28</span>
+          </div>
+          <div class="swatch">
+            <div class="swatch__box" style="background:var(--chrome-elevated)"></div>
+            <span class="swatch__name">--chrome-elevated</span>
+            <span class="swatch__hex">#242834</span>
+          </div>
+          <div class="swatch">
+            <div class="swatch__box" style="background:var(--chrome-inset)"></div>
+            <span class="swatch__name">--chrome-inset</span>
+            <span class="swatch__hex">#0f1115</span>
+          </div>
+          <div class="swatch">
+            <div class="swatch__box" style="background:var(--chrome-border);height:24px;align-self:center"></div>
+            <span class="swatch__name">--chrome-border</span>
+            <span class="swatch__hex">#2b303c</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 페이퍼 -->
+      <div class="palette-group">
+        <div class="palette-group__label">페이퍼 (Paper)</div>
+        <div class="swatches">
+          <div class="swatch">
+            <div class="swatch__box" style="background:var(--paper);border-color:var(--paper-border)"></div>
+            <span class="swatch__name">--paper</span>
+            <span class="swatch__hex">#ffffff</span>
+          </div>
+          <div class="swatch">
+            <div class="swatch__box" style="background:var(--paper-sunken);border-color:var(--paper-border)"></div>
+            <span class="swatch__name">--paper-sunken</span>
+            <span class="swatch__hex">#f5f6f8</span>
+          </div>
+          <div class="swatch">
+            <div class="swatch__box" style="background:var(--paper-rail);border-color:var(--paper-border)"></div>
+            <span class="swatch__name">--paper-rail</span>
+            <span class="swatch__hex">#eef2f7</span>
+          </div>
+          <div class="swatch">
+            <div class="swatch__box" style="background:var(--paper-ink);border-color:var(--chrome-border)"></div>
+            <span class="swatch__name">--paper-ink</span>
+            <span class="swatch__hex">#1a1d24</span>
+          </div>
+          <div class="swatch">
+            <div class="swatch__box" style="background:var(--paper-border);border-color:var(--chrome-border);height:24px"></div>
+            <span class="swatch__name">--paper-border</span>
+            <span class="swatch__hex">#e2e5ea</span>
+          </div>
+          <div class="swatch">
+            <div class="swatch__box" style="background:var(--paper-rule);border-color:var(--chrome-border);height:24px"></div>
+            <span class="swatch__name">--paper-rule</span>
+            <span class="swatch__hex">#eceef2</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 시맨틱 -->
+      <div class="palette-group">
+        <div class="palette-group__label">시맨틱 (Semantic)</div>
+        <div class="swatches">
+          <div class="swatch">
+            <div class="swatch__box" style="background:var(--accent)"></div>
+            <span class="swatch__name">--accent</span>
+            <span class="swatch__hex">#4d84cf</span>
+          </div>
+          <div class="swatch">
+            <div class="swatch__box" style="background:var(--add)"></div>
+            <span class="swatch__name">--add</span>
+            <span class="swatch__hex">#4fa386</span>
+          </div>
+          <div class="swatch">
+            <div class="swatch__box" style="background:var(--remove)"></div>
+            <span class="swatch__name">--remove</span>
+            <span class="swatch__hex">#d96b6b</span>
+          </div>
+          <div class="swatch">
+            <div class="swatch__box" style="background:var(--warn)"></div>
+            <span class="swatch__name">--warn</span>
+            <span class="swatch__hex">#d3a142</span>
+          </div>
+          <div class="swatch">
+            <div class="swatch__box" style="background:var(--pii)"></div>
+            <span class="swatch__name">--pii</span>
+            <span class="swatch__hex">#a07bc4</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       ② 타이포 스케일
+  ═══════════════════════════════════════════════════════════ -->
+  <section class="section">
+    <div class="section__head">
+      <span class="h-section">② 타이포 스케일</span>
+      <hr />
+    </div>
+
+    <div class="card">
+      <div class="type-scale">
+        <div class="type-row">
+          <span class="type-row__label">t-2xl</span>
+          <span class="type-row__px">26px</span>
+          <span class="type-row__sample" style="font-size:var(--t-2xl);font-weight:700">계약서 승인 전 원본은 바뀌지 않습니다</span>
+        </div>
+        <div class="type-row">
+          <span class="type-row__label">t-xl</span>
+          <span class="type-row__px">20px</span>
+          <span class="type-row__sample" style="font-size:var(--t-xl);font-weight:600">예산보고서.hwpx — 편집 제안</span>
+        </div>
+        <div class="type-row">
+          <span class="type-row__label">t-lg</span>
+          <span class="type-row__px">16px</span>
+          <span class="type-row__sample" style="font-size:var(--t-lg)">표 금액에 천 단위 콤마를 일괄 적용합니다</span>
+        </div>
+        <div class="type-row">
+          <span class="type-row__label">t-md</span>
+          <span class="type-row__px">14px</span>
+          <span class="type-row__sample" style="font-size:var(--t-md)">2026년도 1분기 실적 현황 — 보도자료 초안</span>
+        </div>
+        <div class="type-row">
+          <span class="type-row__label">t-base</span>
+          <span class="type-row__px">13px</span>
+          <span class="type-row__sample" style="font-size:var(--t-base)">제작비·인쇄비·홍보비 세 항목의 금액 셀에 변경이 적용됩니다</span>
+        </div>
+        <div class="type-row">
+          <span class="type-row__label">t-sm</span>
+          <span class="type-row__px">12px</span>
+          <span class="type-row__sample" style="font-size:var(--t-sm)">자가검증 완료 — 목적 달성 여부를 재확인했습니다</span>
+        </div>
+        <div class="type-row">
+          <span class="type-row__label">t-xs</span>
+          <span class="type-row__px">11px</span>
+          <span class="type-row__sample" style="font-size:var(--t-xs)">PROPOSAL · CELL-EDIT · 계약서.hwp · 3행 2열</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       ③ 아톰 갤러리
+  ═══════════════════════════════════════════════════════════ -->
+  <section class="section">
+    <div class="section__head">
+      <span class="h-section">③ 아톰 갤러리</span>
+      <hr />
+    </div>
+
+    <div class="atom-grid">
+
+      <!-- .btn -->
+      <div class="card atom-group">
+        <div class="atom-group__label">.btn — 변형 · 크기</div>
+        <div class="atom-row">
+          <button class="btn btn--primary">승인</button>
+          <button class="btn btn--secondary">거절</button>
+          <button class="btn btn--ghost">취소</button>
+          <button class="btn btn--approve">변경 확정</button>
+          <button class="btn btn--danger">삭제</button>
+        </div>
+        <div class="atom-row">
+          <button class="btn btn--primary btn--sm">저장 (sm)</button>
+          <button class="btn btn--secondary btn--sm">닫기 (sm)</button>
+          <button class="btn btn--ghost btn--sm">미리보기 (sm)</button>
+          <button class="btn btn--approve btn--sm">승인 (sm)</button>
+          <button class="btn btn--danger btn--sm">거절 (sm)</button>
+        </div>
+        <div class="atom-row">
+          <button class="btn btn--primary btn--lg">대형 전송 (lg)</button>
+          <button class="btn btn--secondary btn--lg">내보내기 (lg)</button>
+          <button class="btn btn--primary" disabled>비활성</button>
+        </div>
+      </div>
+
+      <!-- .chip -->
+      <div class="card atom-group">
+        <div class="atom-group__label">.chip — 변형</div>
+        <div class="atom-row">
+          <span class="chip chip--tool">propose_cell_edit</span>
+          <span class="chip chip--tool">read_document</span>
+          <span class="chip chip--coord">B3</span>
+          <span class="chip chip--coord">C5:C8</span>
+          <span class="chip chip--ok">검증 완료</span>
+          <span class="chip chip--warn">.hwp → .hwpx 변환 필요</span>
+          <span class="chip chip--pii">주민번호</span>
+          <span class="chip chip--clickable">클릭 가능</span>
+        </div>
+      </div>
+
+      <!-- .badge -->
+      <div class="card atom-group">
+        <div class="atom-group__label">.badge — 변형</div>
+        <div class="atom-row">
+          <span class="badge badge--accent"><span class="dot dot--accent"></span>편집</span>
+          <span class="badge badge--add"><span class="dot dot--add"></span>삽입</span>
+          <span class="badge badge--warn"><span class="dot dot--warn"></span>주의</span>
+          <span class="badge badge--pii">PII</span>
+          <span class="badge badge--neutral">중립</span>
+        </div>
+      </div>
+
+      <!-- .field + label -->
+      <div class="card atom-group">
+        <div class="atom-group__label">.field + field-label</div>
+        <div class="field-demo">
+          <div class="field-demo__item field-row">
+            <label class="field-label">파일 경로</label>
+            <input class="field" type="text" value="예산보고서.hwpx" />
+          </div>
+          <div class="field-demo__item field-row">
+            <label class="field-label">찾을 텍스트 <span class="req">*</span></label>
+            <input class="field" type="text" placeholder="검색어 입력" />
+          </div>
+          <div class="field-demo__item field-row">
+            <label class="field-label">메모 (포커스)</label>
+            <input class="field" type="text" value="2026 Q1" style="border-color:var(--accent)" />
+          </div>
+        </div>
+      </div>
+
+      <!-- .tabs -->
+      <div class="card atom-group">
+        <div class="atom-group__label">.tabs</div>
+        <div class="atom-row">
+          <div class="tabs">
+            <button class="tab">원본</button>
+            <button class="tab tab--active">변경본</button>
+            <button class="tab">diff</button>
+          </div>
+          <div class="tabs" style="margin-left:8px">
+            <button class="tab tab--active">대화</button>
+            <button class="tab">도구 로그</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- .gauge -->
+      <div class="card atom-group">
+        <div class="atom-group__label">.gauge — 컨텍스트 사용량</div>
+        <div class="atom-row">
+          <span class="gauge">컨텍스트
+            <span class="gauge__track"><span class="gauge__fill" style="width:38%"></span></span>
+            38%
+          </span>
+          <span class="gauge">컨텍스트
+            <span class="gauge__track"><span class="gauge__fill" style="width:72%"></span></span>
+            72%
+          </span>
+          <span class="gauge">컨텍스트
+            <span class="gauge__track"><span class="gauge__fill gauge__fill--warn" style="width:91%"></span></span>
+            <span style="color:var(--warn)">91%</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- .safe-note / .verify-note -->
+      <div class="card atom-group">
+        <div class="atom-group__label">.safe-note · .verify-note</div>
+        <div class="atom-row" style="flex-wrap:wrap;gap:10px">
+          <span class="safe-note"><svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> 승인 전까지 원본은 바뀌지 않습니다</span>
+          <span class="verify-note"><span class="spin"></span>자가검증 중…</span>
+          <span class="verify-note t-add"><svg class="ico" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg> 자가검증 완료 — 목적 충족</span>
+        </div>
+      </div>
+
+      <!-- .honesty -->
+      <div class="card atom-group">
+        <div class="atom-group__label">.honesty — 미지원 작업 안내</div>
+        <div class="honesty">
+          <span class="honesty__icon"><svg class="ico" viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4M12 17h.01"/></svg></span>
+          <div>
+            <div style="color:var(--text-muted);font-size:var(--t-sm);font-weight:600;margin-bottom:3px">계약서.hwp — 머리말 편집 불가</div>
+            <div style="color:var(--text-faint);font-size:var(--t-sm)">.hwp 포맷은 머리말·꼬리말·각주 직접 편집을 지원하지 않습니다. .hwpx로 변환하면 일부 작업이 가능해집니다.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- .banner -->
+      <div class="card atom-group">
+        <div class="atom-group__label">.banner — warn · info</div>
+        <div class="col gap-4">
+          <div class="banner banner--warn">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4M12 17h.01"/></svg>
+            <span><b>포맷 변환 안내</b> — 계약서.hwp를 .hwpx로 변환해야 이 작업을 진행할 수 있습니다. 원본 파일은 보존됩니다.</span>
+          </div>
+          <div class="banner banner--info">
+            <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+            <span>HTML 미리보기는 <b>근사</b>입니다 — 픽셀 정확도는 한글 뷰어에서 확인하세요.</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

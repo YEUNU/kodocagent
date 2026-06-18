@@ -1,0 +1,634 @@
+<!-- @dsCard group="Panels" name="중앙 패널 — 스프레드시트 미리보기" subtitle=".xlsx 변형 · 시트 탭 · 수식 바 · 그리드 · 원본/변경본/diff" width="760" height="760" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 스프레드시트 미리보기 패널</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  /* ── Screen-specific layout only — no color definitions ── */
+  html, body {
+    height: 100%;
+    background: var(--chrome-bg);
+  }
+
+  .card-wrap {
+    padding: 20px;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  .panel-frame {
+    width: 760px;
+    background: var(--chrome-surface);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Top toolbar: sheet tabs + actions ── */
+  .sheet-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--chrome-border);
+    flex: none;
+  }
+
+  .toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+  }
+
+  /* Sheet tabs (document-level, not view-mode tabs) */
+  .sheet-tabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .sheet-tab {
+    border: 1px solid var(--chrome-border);
+    background: var(--chrome-inset);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: var(--t-sm);
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: var(--r-xs) var(--r-xs) 0 0;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .sheet-tab--active {
+    background: var(--chrome-surface);
+    border-bottom-color: var(--chrome-surface);
+    color: var(--text-strong);
+    font-weight: 600;
+  }
+
+  .sheet-tab:hover:not(.sheet-tab--active) {
+    color: var(--text);
+  }
+
+  /* ── Formula bar ── */
+  .formula-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border-bottom: 1px solid var(--chrome-border);
+    background: var(--chrome-elevated);
+    flex: none;
+  }
+
+  .formula-label {
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex: none;
+  }
+
+  .formula-content {
+    flex: 1;
+    min-width: 0;
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-sm);
+    padding: 4px 10px;
+    font-family: var(--font-mono);
+    font-size: var(--t-sm);
+    color: var(--text-strong);
+  }
+
+  /* ── View-mode tabs (원본/변경본/diff) ── */
+  .view-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--chrome-border);
+    background: var(--chrome-bg);
+    flex: none;
+  }
+
+  /* ── Scrollable canvas ── */
+  .doc-canvas {
+    background: var(--chrome-bg);
+    padding: 20px 22px;
+    overflow: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .section-label__tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-xs);
+    padding: 3px 10px;
+    font-size: var(--t-sm);
+    font-weight: 600;
+    color: var(--text-strong);
+  }
+
+  .section-label__tab.is-original {
+    border-color: var(--chrome-border-strong);
+    color: var(--text-muted);
+  }
+
+  .section-label__tab.is-changed {
+    background: var(--add-soft);
+    border-color: var(--add-soft);
+    color: var(--add);
+  }
+
+  .section-label__tab.is-diff {
+    background: var(--accent-soft);
+    border-color: var(--accent-line);
+    color: var(--accent);
+  }
+
+  .section-label__line {
+    flex: 1;
+    height: 1px;
+    background: var(--chrome-border);
+  }
+
+  /* ── Spreadsheet grid ── */
+  .sheet-wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .sheet-canvas {
+    background: var(--paper);
+    border-radius: var(--r-sm);
+    box-shadow: var(--shadow-paper);
+    overflow: hidden;
+  }
+
+  /* file meta row inside sheet canvas */
+  .sheet-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--paper-border);
+    background: var(--paper-sunken);
+  }
+
+  .sheet-meta__name {
+    font-size: var(--t-sm);
+    font-family: var(--font-mono);
+    color: var(--paper-ink-muted);
+  }
+
+  /* Grid table */
+  .grid-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: var(--t-sm);
+    font-family: var(--font-sans);
+    table-layout: fixed;
+  }
+
+  /* Row number / column header rail */
+  .grid-table .col-header {
+    background: var(--paper-sunken);
+    border: 1px solid var(--paper-rule);
+    color: var(--paper-ink-muted);
+    font-weight: 600;
+    font-size: var(--t-xs);
+    text-align: center;
+    padding: 5px 6px;
+    user-select: none;
+    letter-spacing: 0.04em;
+    width: 36px;
+  }
+
+  .grid-table .row-num {
+    background: var(--paper-sunken);
+    border: 1px solid var(--paper-rule);
+    color: var(--paper-ink-muted);
+    font-size: var(--t-xs);
+    text-align: center;
+    padding: 5px 6px;
+    width: 36px;
+    font-family: var(--font-mono);
+    user-select: none;
+  }
+
+  .grid-table td {
+    border: 1px solid var(--paper-rule);
+    padding: 5px 9px;
+    color: var(--paper-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Number cells: right-align */
+  .grid-table td.num {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: var(--t-sm);
+  }
+
+  /* Selected cell accent border */
+  .grid-table td.cell--selected {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+    background: var(--accent-soft);
+    color: var(--paper-ink);
+  }
+
+  /* Changed cell */
+  .grid-table td.cell--changed {
+    background: var(--p-add-bg);
+    color: var(--p-add-ink);
+    font-weight: 600;
+  }
+
+  /* Removed / diff cell */
+  .grid-table td.cell--removed {
+    background: var(--p-remove-bg);
+    color: var(--p-remove-ink);
+    text-decoration: line-through;
+  }
+
+  /* Header row of the data (bold, sunken bg) */
+  .grid-table tr.data-header td {
+    background: var(--paper-rail);
+    font-weight: 700;
+    color: var(--paper-ink);
+    border-color: var(--paper-border);
+  }
+
+  /* Sum row */
+  .grid-table tr.sum-row td {
+    background: var(--paper-sunken);
+    font-weight: 700;
+    border-top: 2px solid var(--paper-border);
+    color: var(--paper-ink);
+  }
+
+  /* ── Diff wrap (reuse .diff from ds.css) ── */
+  .diff-wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .diff {
+    padding: 12px 0;
+  }
+
+  .diff__file-head {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    color: var(--text-muted);
+    padding: 4px 12px 8px;
+    letter-spacing: 0.03em;
+  }
+
+  /* ── Approx note ── */
+  .approx {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--t-xs);
+    color: var(--text-muted);
+    margin-top: 14px;
+    padding: 6px 10px;
+    background: var(--chrome-inset);
+    border-radius: var(--r-xs);
+    border: 1px solid var(--chrome-border);
+  }
+
+  /* ── Bottom stats row ── */
+  .stats-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    border-top: 1px solid var(--chrome-border);
+    background: var(--chrome-surface);
+    flex: none;
+  }
+</style>
+</head>
+<body>
+<div class="card-wrap">
+<div class="panel-frame">
+
+  <!-- ── Top toolbar: sheet tabs + actions ── -->
+  <div class="sheet-toolbar">
+    <div class="toolbar-left">
+      <div class="row gap-4">
+        <!-- file icon + name chip -->
+        <svg class="ico" viewBox="0 0 24 24" style="color:var(--text-muted)"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M4 15h16M10 4v16"/></svg>
+        <span class="chip chip--tool" style="font-size:var(--t-xs)">2026실적.xlsx</span>
+      </div>
+      <!-- sheet tabs -->
+      <div class="sheet-tabs">
+        <button class="sheet-tab sheet-tab--active">2026실적</button>
+        <button class="sheet-tab">1분기</button>
+        <button class="sheet-tab">메모</button>
+      </div>
+    </div>
+    <div class="toolbar-right">
+      <span class="chip chip--clickable">
+        <svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-3.4-3.4"/></svg> 찾기
+      </span>
+      <button class="btn btn--ghost btn--sm">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg> 내보내기
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Formula bar ── -->
+  <div class="formula-bar">
+    <span class="formula-label">셀</span>
+    <span class="chip chip--coord">
+      <svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+      C4
+    </span>
+    <div class="formula-content t-mono">=SUM(C2:C3)</div>
+  </div>
+
+  <!-- ── View-mode tabs ── -->
+  <div class="view-toolbar">
+    <div class="tabs">
+      <button class="tab">원본</button>
+      <button class="tab tab--active">변경본</button>
+      <button class="tab">diff</button>
+    </div>
+    <div class="row gap-4">
+      <span class="badge badge--add"><span class="dot dot--add"></span>셀 3곳 변경됨</span>
+    </div>
+  </div>
+
+  <!-- ── Canvas: three tab states stacked ── -->
+  <div class="doc-canvas">
+
+    <!-- ────────────────────────────────────
+         (1) 원본 탭
+    ──────────────────────────────────── -->
+    <div>
+      <div class="section-label">
+        <span class="section-label__tab is-original">원본</span>
+        <span class="section-label__line"></span>
+        <span class="t-xs t-faint">변경 전 시트 그대로</span>
+      </div>
+      <div class="sheet-wrap">
+        <div class="sheet-canvas">
+          <div class="sheet-meta">
+            <svg class="ico ico--sm" viewBox="0 0 24 24" style="color:var(--paper-ink-muted)"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M4 15h16M10 4v16"/></svg>
+            <span class="sheet-meta__name">2026실적.xlsx — 2026실적</span>
+            <span style="margin-left:auto;font-size:var(--t-xs);padding:1px 8px;border-radius:var(--r-pill);background:var(--paper-rail);color:var(--paper-ink-muted);border:1px solid var(--paper-border)">읽기 전용</span>
+          </div>
+          <table class="grid-table">
+            <thead>
+              <tr>
+                <td class="col-header"></td>
+                <td class="col-header">A</td>
+                <td class="col-header">B</td>
+                <td class="col-header">C</td>
+                <td class="col-header">D</td>
+                <td class="col-header">E</td>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="data-header">
+                <td class="row-num">1</td>
+                <td>항목</td>
+                <td>예산(원)</td>
+                <td>실적(원)</td>
+                <td>달성률(%)</td>
+                <td>비고</td>
+              </tr>
+              <tr>
+                <td class="row-num">2</td>
+                <td>1월</td>
+                <td class="num">4800000</td>
+                <td class="num">4200000</td>
+                <td class="num">87.5</td>
+                <td></td>
+              </tr>
+              <tr>
+                <td class="row-num">3</td>
+                <td>2월</td>
+                <td class="num">4800000</td>
+                <td class="num">5100000</td>
+                <td class="num">106.3</td>
+                <td>초과 달성</td>
+              </tr>
+              <tr>
+                <td class="row-num">4</td>
+                <td>1분기 합계</td>
+                <td class="num">9600000</td>
+                <td class="num">9300000</td>
+                <td class="num">96.9</td>
+                <td></td>
+              </tr>
+              <tr>
+                <td class="row-num">5</td>
+                <td>3월</td>
+                <td class="num">4800000</td>
+                <td class="num">4650000</td>
+                <td class="num">96.9</td>
+                <td></td>
+              </tr>
+              <tr class="sum-row">
+                <td class="row-num">6</td>
+                <td>연간 누계</td>
+                <td class="num">14400000</td>
+                <td class="num">13950000</td>
+                <td class="num">96.9</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ────────────────────────────────────
+         (2) 변경본 탭 (C4 선택됨, 수식 적용)
+    ──────────────────────────────────── -->
+    <div>
+      <div class="section-label">
+        <span class="section-label__tab is-changed">변경본</span>
+        <span class="section-label__line"></span>
+        <span class="badge badge--add"><span class="dot dot--add"></span>셀 3곳 변경됨</span>
+        <span class="t-xs t-faint" style="margin-left:4px">SUM 수식 + 천 단위 서식 적용</span>
+      </div>
+      <div class="safe-note" style="margin-bottom:12px;max-width:680px;margin-left:auto;margin-right:auto">
+        <svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        원본은 아직 바뀌지 않았습니다 — 승인 후에만 저장됩니다
+      </div>
+      <div class="sheet-wrap">
+        <div class="sheet-canvas">
+          <div class="sheet-meta">
+            <svg class="ico ico--sm" viewBox="0 0 24 24" style="color:var(--paper-ink-muted)"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M4 15h16M10 4v16"/></svg>
+            <span class="sheet-meta__name">2026실적.xlsx — 2026실적</span>
+            <span class="badge badge--add" style="margin-left:auto;font-size:var(--t-xs)"><span class="dot dot--add"></span>미저장 변경</span>
+          </div>
+          <table class="grid-table">
+            <thead>
+              <tr>
+                <td class="col-header"></td>
+                <td class="col-header">A</td>
+                <td class="col-header">B</td>
+                <td class="col-header" style="background:var(--accent-soft);color:var(--accent)">C</td>
+                <td class="col-header">D</td>
+                <td class="col-header">E</td>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="data-header">
+                <td class="row-num">1</td>
+                <td>항목</td>
+                <td>예산(원)</td>
+                <td>실적(원)</td>
+                <td>달성률(%)</td>
+                <td>비고</td>
+              </tr>
+              <tr>
+                <td class="row-num">2</td>
+                <td>1월</td>
+                <td class="num">4,800,000</td>
+                <td class="num cell--changed">4,200,000</td>
+                <td class="num">87.5</td>
+                <td></td>
+              </tr>
+              <tr>
+                <td class="row-num">3</td>
+                <td>2월</td>
+                <td class="num">4,800,000</td>
+                <td class="num cell--changed">5,100,000</td>
+                <td class="num">106.3</td>
+                <td>초과 달성</td>
+              </tr>
+              <!-- Row 4: C4 selected, formula result changed -->
+              <tr>
+                <td class="row-num" style="background:var(--accent-soft);color:var(--accent)">4</td>
+                <td>1분기 합계</td>
+                <td class="num">9,600,000</td>
+                <td class="num cell--selected">9,300,000</td>
+                <td class="num">96.9</td>
+                <td></td>
+              </tr>
+              <tr>
+                <td class="row-num">5</td>
+                <td>3월</td>
+                <td class="num">4,800,000</td>
+                <td class="num">4,650,000</td>
+                <td class="num">96.9</td>
+                <td></td>
+              </tr>
+              <tr class="sum-row">
+                <td class="row-num">6</td>
+                <td>연간 누계</td>
+                <td class="num">14,400,000</td>
+                <td class="num cell--changed">13,950,000</td>
+                <td class="num">96.9</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="approx">
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+          HTML 미리보기는 <strong>근사</strong>입니다 — 수식·서식 정확도는 한글 또는 Excel에서 확인하세요.
+        </div>
+      </div>
+    </div>
+
+    <!-- ────────────────────────────────────
+         (3) diff 탭
+    ──────────────────────────────────── -->
+    <div>
+      <div class="section-label">
+        <span class="section-label__tab is-diff">diff</span>
+        <span class="section-label__line"></span>
+        <span class="chip chip--ok" style="font-size:var(--t-xs)">+3</span>
+        <span class="chip" style="background:var(--remove-soft);color:var(--remove);border-color:var(--remove-soft);font-size:var(--t-xs)">−3</span>
+        <span class="t-xs t-faint" style="margin-left:4px">git-diff 스타일 · 셀 단위</span>
+      </div>
+      <div class="diff-wrap">
+        <div class="diff">
+          <div class="diff__file-head">--- 2026실적.xlsx!2026실적  (원본)</div>
+          <div class="diff__file-head">+++ 2026실적.xlsx!2026실적  (변경본)</div>
+          <span class="diff__line diff__line--hunk">@@ C2:C6 실적(원) 열 @@</span>
+          <span class="diff__line diff__line--ctx"> C1  실적(원)</span>
+          <span class="diff__line diff__line--remove">-C2  4200000</span>
+          <span class="diff__line diff__line--add">+C2  4,200,000</span>
+          <span class="diff__line diff__line--remove">-C3  5100000</span>
+          <span class="diff__line diff__line--add">+C3  5,100,000</span>
+          <span class="diff__line diff__line--remove">-C4  9300000</span>
+          <span class="diff__line diff__line--add">+C4  =SUM(C2:C3)  → 9,300,000</span>
+          <span class="diff__line diff__line--ctx"> C5  4,650,000</span>
+          <span class="diff__line diff__line--remove">-C6  13950000</span>
+          <span class="diff__line diff__line--add">+C6  13,950,000</span>
+        </div>
+        <div class="approx">
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+          HTML 미리보기는 <strong>근사</strong>입니다 — 수식·서식 정확도는 한글 또는 Excel에서 확인하세요.
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /doc-canvas -->
+
+  <!-- ── Bottom stats row ── -->
+  <div class="stats-row">
+    <div class="row gap-12">
+      <span class="chip chip--ok">
+        <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg> 자가검증 완료
+      </span>
+      <span class="t-xs t-muted">셀 3곳 · propose_cell_edit</span>
+    </div>
+    <div class="row gap-12">
+      <span class="t-xs t-faint">2026실적.xlsx</span>
+      <button class="btn btn--approve btn--sm">승인</button>
+      <button class="btn btn--danger btn--sm">거절</button>
+    </div>
+  </div>
+
+</div><!-- /panel-frame -->
+</div><!-- /card-wrap -->
+</body>
+</html>

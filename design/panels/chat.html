@@ -1,0 +1,368 @@
+<!-- @dsCard group="Panels" name="우측 패널 — 대화·도구활동·빠른작업" subtitle="대화 버블, 도구활동 그룹, 스트리밍 커서, usage 라인, 첫 진입 칩, 빠른작업" width="360" height="860" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 대화 패널</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  html, body { height: 100%; }
+
+  /* panel shell — exact right-pane column */
+  .panel-wrap {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  .panel {
+    width: 360px;
+    height: 860px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-2);
+  }
+
+  /* pane body scroll area */
+  .chat-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 14px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 0;
+  }
+
+  /* ── first-entry suggestion chips ── */
+  .suggest-block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .suggest-label {
+    font-size: var(--t-sm);
+    color: var(--text-muted);
+    text-align: center;
+  }
+  .suggest-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+  }
+  .chip--suggest {
+    cursor: pointer;
+    font-size: var(--t-sm);
+    padding: 5px 12px;
+    border-radius: var(--r-pill);
+  }
+  .chip--suggest:hover {
+    border-color: var(--accent-line);
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  /* ── tool-activity collapsible group ── */
+  .tool-group {
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-sm);
+    overflow: hidden;
+  }
+  .tool-group__toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 9px;
+    cursor: pointer;
+    user-select: none;
+    font-size: var(--t-xs);
+    color: var(--text-muted);
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+  }
+  .tool-group__toggle:hover { color: var(--text-strong); }
+  .tool-group__arrow { transition: transform 0.15s; color: var(--text-faint); }
+  .tool-group--open .tool-group__arrow { transform: rotate(90deg); }
+  .tool-group__rows {
+    padding: 0 9px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  /* ── in-progress tool row ── */
+  .tool-row--inprogress .tool-row__icon { color: var(--accent); }
+  .tool-row--inprogress { color: var(--text); }
+
+  /* ── streaming cursor ── */
+  .cursor-blink {
+    display: inline-block;
+    width: 2px;
+    height: 13px;
+    background: var(--text);
+    border-radius: 1px;
+    vertical-align: text-bottom;
+    margin-left: 1px;
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+  }
+
+  /* ── assistant bubble text ── */
+  .bubble-text {
+    font-size: var(--t-base);
+    color: var(--text);
+    line-height: 1.65;
+  }
+
+  /* ── usage line ── */
+  .usage-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-top: 4px;
+  }
+
+  /* ── proposal card inside bubble ── */
+  .proposal-card {
+    background: var(--chrome-elevated);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-md);
+    overflow: hidden;
+  }
+  .proposal-card__header {
+    padding: 9px 12px 7px;
+    border-bottom: 1px solid var(--chrome-border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .proposal-card__title {
+    font-size: var(--t-sm);
+    font-weight: 600;
+    color: var(--text-strong);
+    flex: 1;
+    min-width: 0;
+  }
+  .proposal-card__body {
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .proposal-card__meta {
+    font-size: var(--t-xs);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .proposal-card__footer {
+    padding: 8px 12px;
+    border-top: 1px solid var(--chrome-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  /* ── quick-action bar ── */
+  .quick-bar {
+    padding: 8px 10px;
+    border-top: 1px solid var(--chrome-border);
+    background: var(--chrome-surface);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    flex: none;
+  }
+
+  /* ── composer ── */
+  .composer-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--chrome-surface);
+    border-top: 1px solid var(--chrome-border);
+    flex: none;
+  }
+  .composer-bar textarea {
+    flex: 1;
+    min-width: 0;
+    resize: none;
+    height: 52px;
+    font-size: var(--t-sm);
+  }
+</style>
+</head>
+<body>
+<div class="panel-wrap">
+  <div class="panel pane">
+
+    <!-- ── pane header ── -->
+    <div class="pane__header">
+      <span class="pane__title">대화</span>
+      <button class="btn btn--ghost btn--sm">새 세션</button>
+    </div>
+
+    <!-- ── scrollable chat body ── -->
+    <div class="chat-scroll">
+
+      <!-- 첫 진입 제안 칩 -->
+      <div class="suggest-block">
+        <span class="suggest-label">이 문서로 무엇을 할까요?</span>
+        <div class="suggest-chips">
+          <span class="chip chip--suggest chip--clickable"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg> 요약</span>
+          <span class="chip chip--suggest chip--clickable"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M12 4v16M7 20h10M5 8h14M5 8l-2.6 5.2a3 3 0 0 0 5.2 0L5 8zM19 8l-2.6 5.2a3 3 0 0 0 5.2 0L19 8z"/></svg> 검토</span>
+          <span class="chip chip--suggest chip--clickable"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 10.7a2 2 0 0 0 2.7 2.7"/><path d="M9.3 5.3A9.7 9.7 0 0 1 12 5c5 0 9 5 9 7a13 13 0 0 1-2.2 2.9M6.1 6.2C3.8 7.7 3 11 3 12c1 2 3 5 7 6"/></svg> PII 가리기</span>
+          <span class="chip chip--suggest chip--clickable"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg> 내보내기</span>
+        </div>
+      </div>
+
+      <hr class="divider" style="margin: 0;" />
+
+      <!-- 사용자 버블 1 -->
+      <div class="bubble-user t-sm">
+        계약서 내용 간단히 요약해줘
+      </div>
+
+      <!-- 어시스턴트 버블 1 — 완료 -->
+      <div class="bubble-assistant">
+        <!-- 도구활동 그룹 (완료·접힘) -->
+        <div class="tool-group">
+          <button class="tool-group__toggle">
+            <svg class="ico ico--sm tool-group__arrow" viewBox="0 0 24 24"><path d="M9.5 7.5 14.5 12l-5 4.5"/></svg>
+            <span class="t-add"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg></span>
+            <span>도구 활동 2건 완료</span>
+          </button>
+        </div>
+        <span class="bubble-text">
+          <b class="t-strong">계약서.hwp</b> 주요 내용입니다:<br />
+          • 계약 당사자: (주)한국기술연구소 ↔ 이지원 외 1인<br />
+          • 계약 기간: 2026. 1. 1 ~ 2026. 12. 31<br />
+          • 총 계약금액: 24,000,000원 (부가세 포함)<br />
+          • 지급 조건: 월 2,000,000원 분할 지급<br />
+          필요하면 특정 조항을 더 자세히 볼게요.
+        </span>
+        <div class="usage-line">
+          <span class="t-xs t-faint t-mono">입력 3.2k · 출력 0.4k 토큰</span>
+        </div>
+      </div>
+
+      <!-- 사용자 버블 2 -->
+      <div class="bubble-user t-sm">
+        표 금액에 천 단위 콤마 넣어줘. 그리고 담당자 이름은 개인정보니까 가려줘.
+      </div>
+
+      <!-- 어시스턴트 버블 2 — 진행중 -->
+      <div class="bubble-assistant">
+        <!-- 도구활동 그룹 (일부 완료, 일부 진행중, 펼침) -->
+        <div class="tool-group tool-group--open">
+          <button class="tool-group__toggle">
+            <svg class="ico ico--sm tool-group__arrow" viewBox="0 0 24 24"><path d="M9.5 7.5 14.5 12l-5 4.5"/></svg>
+            <span class="t-accent"><span class="spin"></span></span>
+            <span>도구 활동 진행 중…</span>
+          </button>
+          <div class="tool-group__rows">
+            <div class="tool-row tool-row--done">
+              <span class="tool-row__icon"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg></span>
+              <span>read_document(계약서.hwp)</span>
+            </div>
+            <div class="tool-row tool-row--done">
+              <span class="tool-row__icon"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg></span>
+              <span>find_table_cells · 금액 열 5개 발견</span>
+            </div>
+            <div class="tool-row tool-row--done">
+              <span class="tool-row__icon"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg></span>
+              <span>propose_cell_edit · 5곳 콤마 추가</span>
+            </div>
+            <div class="tool-row tool-row--done">
+              <span class="tool-row__icon"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg></span>
+              <span>scan_pii · 성명 3건, 생년월일 1건</span>
+            </div>
+            <div class="tool-row tool-row--inprogress">
+              <span class="tool-row__icon spin"></span>
+              <span>propose_redact_pii · PII 처리 중</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 스트리밍 텍스트 (깜빡 커서) -->
+        <span class="bubble-text">
+          금액 셀 5곳에 천 단위 콤마를 넣는 변경을 제안했어요. 가운데 미리보기에서 초록 셀로 확인하세요.<br /><br />
+          개인정보(성명 3건, 생년월일 1건)는 현재 처리 중입니다. 잠시만<span class="cursor-blink"></span>
+        </span>
+
+        <!-- 진행 중이므로 usage 없음, 자가검증 표시 -->
+        <div class="verify-note">
+          <span class="spin"></span>
+          자가검증 중…
+        </div>
+
+        <!-- 이미 완료된 제안 카드 (cell-edit) -->
+        <div class="proposal-card">
+          <div class="proposal-card__header">
+            <span class="badge badge--accent">cell-edit</span>
+            <span class="proposal-card__title">금액 셀 콤마 형식 적용</span>
+            <span class="badge badge--add">대기중</span>
+          </div>
+          <div class="proposal-card__body">
+            <div class="proposal-card__meta">
+              <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg>
+              <span class="t-mono">계약서.hwp</span>
+              <span>·</span>
+              <span>5개 셀</span>
+            </div>
+            <div class="proposal-card__meta t-warn">
+              <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4M12 17h.01"/></svg> .hwp → .hwpx 변환 필요 (원본 보존)
+            </div>
+          </div>
+          <div class="proposal-card__footer">
+            <span class="safe-note t-xs" style="padding: 3px 8px;">
+              <svg class="ico ico--sm" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> 승인 전까지 원본은 바뀌지 않습니다
+            </span>
+            <div class="row gap-4">
+              <button class="btn btn--danger btn--sm">거절</button>
+              <button class="btn btn--approve btn--sm">승인</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+    <!-- end chat-scroll -->
+
+    <!-- ── 빠른작업 버튼 바 ── -->
+    <div class="quick-bar">
+      <button class="btn btn--secondary btn--sm"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg> 요약</button>
+      <button class="btn btn--secondary btn--sm"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M12 4v16M7 20h10M5 8h14M5 8l-2.6 5.2a3 3 0 0 0 5.2 0L5 8zM19 8l-2.6 5.2a3 3 0 0 0 5.2 0L19 8z"/></svg> 검토</button>
+      <button class="btn btn--secondary btn--sm"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 10.7a2 2 0 0 0 2.7 2.7"/><path d="M9.3 5.3A9.7 9.7 0 0 1 12 5c5 0 9 5 9 7a13 13 0 0 1-2.2 2.9M6.1 6.2C3.8 7.7 3 11 3 12c1 2 3 5 7 6"/></svg> PII</button>
+      <button class="btn btn--secondary btn--sm"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg> 내보내기</button>
+      <button class="btn btn--ghost btn--sm"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.5-6.2"/><path d="M3 4v4h4"/></svg> 되돌리기</button>
+    </div>
+
+    <!-- ── composer ── -->
+    <div class="composer-bar">
+      <textarea class="field" placeholder="문서에 대해 질문하거나 작업을 요청하세요…"></textarea>
+      <button class="btn btn--primary" style="padding: 8px 14px; height: 52px;">전송</button>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

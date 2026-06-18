@@ -1,0 +1,425 @@
+<!-- @dsCard group="Approval" name="승인 — 내보내기 & 되돌리기" subtitle="export_document · restore_backup 두 모달 미리보기" width="820" height="760" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 승인: 내보내기 &amp; 되돌리기</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  /* screen-specific layout — no new colors, only var(--...) */
+  html, body { height: 100%; }
+
+  .page {
+    min-height: 100vh;
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 36px;
+  }
+
+  /* ── Modal preview wrapper ─────────────────────────────── */
+  .modal-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    /* simulate scrim, but not fixed so both fit in one scroll */
+    background: var(--scrim);
+    border-radius: var(--r-lg);
+    padding: 28px;
+  }
+
+  /* ── Export: format tabs + filename row ─────────────────── */
+  .export-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .export-format-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .format-label {
+    font-size: var(--t-sm);
+    color: var(--text-muted);
+    flex: none;
+  }
+
+  /* ── Thumbnail strip ────────────────────────────────────── */
+  .thumb-strip {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .thumb {
+    width: 96px;
+    flex: none;
+    background: var(--paper);
+    border-radius: var(--r-sm);
+    box-shadow: var(--shadow-paper);
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    border: 1px solid var(--paper-border);
+  }
+  .thumb__title-bar {
+    width: 68%;
+    height: 7px;
+    background: var(--paper-rail);
+    border-radius: 2px;
+  }
+  .thumb__line {
+    width: 100%;
+    height: 5px;
+    background: var(--paper-rule);
+    border-radius: 2px;
+  }
+  .thumb__line--short { width: 60%; }
+  .thumb__line--mid { width: 80%; }
+  .thumb__table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 2px;
+  }
+  .thumb__table td {
+    border: 1px solid var(--paper-border);
+    height: 7px;
+    padding: 0;
+  }
+  .thumb__table td.hi {
+    background: var(--p-add-bg);
+  }
+  .thumb__caption {
+    font-size: var(--t-xs);
+    color: var(--text-faint);
+    text-align: center;
+    margin-top: 4px;
+  }
+  .thumb-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    justify-content: flex-start;
+    padding-top: 2px;
+  }
+
+  /* ── Restore: snapshot card ─────────────────────────────── */
+  .snapshot-card {
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border-strong);
+    border-radius: var(--r-md);
+    padding: 12px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .snapshot-card--selected {
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+  }
+  .snapshot-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--r-sm);
+    background: var(--chrome-elevated);
+    border: 1px solid var(--chrome-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+  }
+  .snapshot-card--selected .snapshot-icon {
+    background: var(--accent-soft);
+    border-color: var(--accent-line);
+  }
+  .snapshot-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .snapshot-time {
+    font-family: var(--font-mono);
+    font-size: var(--t-sm);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .snapshot-summary {
+    font-size: var(--t-md);
+    color: var(--text-strong);
+    font-weight: 600;
+  }
+  .snapshot-detail {
+    font-size: var(--t-sm);
+    color: var(--text-muted);
+  }
+
+  /* ── Restore: change-loss warning ──────────────────────── */
+  .restore-warn {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: var(--remove-soft);
+    border: 1px solid var(--remove-soft);
+    border-radius: var(--r-sm);
+    padding: 10px 13px;
+    font-size: var(--t-sm);
+    color: var(--remove);
+  }
+  .restore-warn__icon { flex: none; }
+
+  /* ── Approval badge ─────────────────────────────────────── */
+  .approval-required {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: var(--t-xs);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: var(--warn);
+    border: 1px dashed var(--warn-soft);
+    background: var(--warn-soft);
+    border-radius: var(--r-sm);
+    padding: 3px 9px;
+  }
+</style>
+</head>
+<body>
+<div class="ds-card">
+  <div class="page">
+
+    <!-- ════════════════════════════════════════════════════
+         MODAL 1 — export_document
+    ═════════════════════════════════════════════════════ -->
+    <div>
+      <p class="ds-card__caption">Approval · export_document — 문서 내보내기 승인</p>
+      <div class="ds-card__frame">
+        <div class="modal-preview">
+          <div class="modal">
+
+            <!-- Header -->
+            <div class="modal__header">
+              <div class="row between">
+                <div class="row gap-12">
+                  <span class="modal__title">문서 내보내기</span>
+                  <span class="chip chip--tool">export_document</span>
+                </div>
+                <span class="badge badge--accent">
+                  <span class="dot dot--accent"></span>승인 대기
+                </span>
+              </div>
+              <div class="row gap-12" style="margin-top:8px">
+                <span class="t-sm t-muted">대상 파일</span>
+                <span class="chip"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg> 예산보고서.hwpx</span>
+              </div>
+            </div>
+
+            <!-- Body -->
+            <div class="modal__body">
+
+              <!-- Format selector -->
+              <div class="export-controls">
+                <div class="export-format-row">
+                  <span class="format-label">내보내기 형식</span>
+                  <div class="tabs">
+                    <button class="tab tab--active">HTML</button>
+                    <button class="tab is-disabled" title="puppeteer 필요">PDF</button>
+                  </div>
+                </div>
+
+                <!-- Filename field -->
+                <div class="field-row" style="margin-bottom:0">
+                  <label class="field-label">저장 파일명</label>
+                  <input
+                    class="field"
+                    type="text"
+                    value="예산보고서_2026.html"
+                    readonly
+                  />
+                </div>
+              </div>
+
+              <!-- PDF unavailable banner -->
+              <div class="banner banner--warn">
+                <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4M12 17h.01"/></svg>
+                <span>
+                  <b>PDF 내보내기는 puppeteer가 필요합니다.</b>
+                  현재 환경에 설치되어 있지 않아 PDF 탭은 비활성화 됩니다.
+                  HTML로 내보낸 뒤 브라우저에서 인쇄하면 PDF로 변환할 수 있습니다.
+                </span>
+              </div>
+
+              <!-- Paper mini-preview -->
+              <div>
+                <p class="field-label" style="margin-bottom:8px">미리보기</p>
+                <div class="thumb-strip">
+                  <div class="thumb">
+                    <div class="thumb__title-bar"></div>
+                    <div class="thumb__line thumb__line--mid"></div>
+                    <div class="thumb__line thumb__line--short"></div>
+                    <table class="thumb__table">
+                      <tbody>
+                        <tr>
+                          <td></td><td class="hi"></td><td></td>
+                        </tr>
+                        <tr>
+                          <td></td><td class="hi"></td><td></td>
+                        </tr>
+                        <tr>
+                          <td></td><td></td><td></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div class="thumb__line thumb__line--short"></div>
+                    <p class="thumb__caption">1 / 2 페이지</p>
+                  </div>
+                  <div class="thumb-info">
+                    <div class="row gap-12">
+                      <span class="t-sm t-muted">형식</span>
+                      <span class="chip">HTML (UTF-8)</span>
+                    </div>
+                    <div class="row gap-12">
+                      <span class="t-sm t-muted">페이지</span>
+                      <span class="t-sm t-strong">2 페이지</span>
+                    </div>
+                    <div class="row gap-12">
+                      <span class="t-sm t-muted">변경 셀</span>
+                      <span class="chip chip--ok">2곳 하이라이트</span>
+                    </div>
+                    <div class="row gap-12" style="margin-top:4px">
+                      <span class="chip chip--warn"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4M12 17h.01"/></svg> HTML 미리보기는 근사치</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Safe note -->
+              <div class="safe-note">
+                <svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> 승인 전까지 원본 파일은 바뀌지 않습니다. 내보내기는 사본을 생성합니다.
+              </div>
+
+            </div>
+
+            <!-- Footer -->
+            <div class="modal__footer">
+              <div class="row gap-12">
+                <span class="verify-note">
+                  <span class="spin"></span>
+                  자가검증 완료
+                </span>
+              </div>
+              <div class="modal__footer-actions">
+                <button class="btn btn--ghost">거절</button>
+                <button class="btn btn--approve">승인 — HTML로 내보내기</button>
+              </div>
+            </div>
+
+          </div><!-- /modal -->
+        </div><!-- /modal-preview -->
+      </div><!-- /ds-card__frame -->
+    </div>
+
+
+    <!-- ════════════════════════════════════════════════════
+         MODAL 2 — restore_backup
+    ═════════════════════════════════════════════════════ -->
+    <div>
+      <p class="ds-card__caption">Approval · restore_backup — 백업 시점으로 되돌리기 승인</p>
+      <div class="ds-card__frame">
+        <div class="modal-preview">
+          <div class="modal">
+
+            <!-- Header -->
+            <div class="modal__header">
+              <div class="row between">
+                <div class="row gap-12">
+                  <span class="modal__title">백업 시점으로 되돌리기</span>
+                  <span class="chip chip--tool">restore_backup</span>
+                </div>
+                <span class="approval-required"><svg class="ico ico--sm" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> 승인 필요</span>
+              </div>
+              <div class="row gap-12" style="margin-top:8px">
+                <span class="t-sm t-muted">대상 파일</span>
+                <span class="chip"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg> 예산보고서.hwpx</span>
+              </div>
+            </div>
+
+            <!-- Body -->
+            <div class="modal__body">
+
+              <!-- Snapshot card -->
+              <div>
+                <p class="field-label" style="margin-bottom:8px">복원할 시점</p>
+                <div class="snapshot-card snapshot-card--selected">
+                  <div class="snapshot-icon"><svg class="ico ico--xl" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.5-6.2"/><path d="M3 4v4h4"/><path d="M12 8v4l3 1.7"/></svg></div>
+                  <div class="snapshot-meta">
+                    <span class="snapshot-time">14:02</span>
+                    <span class="snapshot-summary">표 금액 콤마 적용</span>
+                    <span class="snapshot-detail">셀 편집 2곳 · 예산보고서.hwpx</span>
+                  </div>
+                  <div style="margin-left:auto; flex:none;">
+                    <span class="badge badge--accent">선택됨</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Timeline context (other snapshots, dimmed) -->
+              <div>
+                <p class="field-label" style="margin-bottom:6px">전체 타임라인</p>
+                <div class="col gap-4">
+                  <div class="snapshot-card is-disabled">
+                    <div class="snapshot-icon"><svg class="ico ico--xl" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.5-6.2"/><path d="M3 4v4h4"/><path d="M12 8v4l3 1.7"/></svg></div>
+                    <div class="snapshot-meta">
+                      <span class="snapshot-time">13:51</span>
+                      <span class="snapshot-summary">개인정보 가리기</span>
+                      <span class="snapshot-detail">redact · 3곳</span>
+                    </div>
+                  </div>
+                  <div class="snapshot-card is-disabled">
+                    <div class="snapshot-icon"><svg class="ico ico--xl" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg></div>
+                    <div class="snapshot-meta">
+                      <span class="snapshot-time">13:40</span>
+                      <span class="snapshot-summary">원본 (시작)</span>
+                      <span class="snapshot-detail">초기 업로드</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Change-loss warning -->
+              <div class="restore-warn">
+                <svg class="ico restore-warn__icon" viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4M12 17h.01"/></svg>
+                <span>
+                  <b>이 시점으로 되돌리면 이후의 변경(개인정보 가리기, 13:51)이 모두 사라집니다.</b>
+                  되돌린 뒤 다시 실행 취소는 불가합니다. 정말 계속하시겠습니까?
+                </span>
+              </div>
+
+              <!-- Safe note -->
+              <div class="safe-note">
+                <svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> 승인 전까지 원본 파일은 바뀌지 않습니다. 되돌리기도 승인 후에 적용됩니다.
+              </div>
+
+            </div>
+
+            <!-- Footer -->
+            <div class="modal__footer">
+              <div class="row gap-12">
+                <span class="t-sm t-muted">restore_backup · 승인 전까지 원본 유지</span>
+              </div>
+              <div class="modal__footer-actions">
+                <button class="btn btn--ghost">취소</button>
+                <button class="btn btn--danger">되돌리기 승인</button>
+              </div>
+            </div>
+
+          </div><!-- /modal -->
+        </div><!-- /modal-preview -->
+      </div><!-- /ds-card__frame -->
+    </div>
+
+  </div><!-- /page -->
+</div><!-- /ds-card -->
+</body>
+</html>

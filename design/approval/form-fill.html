@@ -1,0 +1,285 @@
+<!-- @dsCard group="Approval" name="승인 — 양식 채우기(form-fill)" subtitle="propose_form_fill / extractFormSchema 승인 모달" width="820" height="820" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 승인: 양식 채우기</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  /* screen-specific layout only — all colors/atoms from ds.css */
+  html, body { height: 100%; }
+
+  /* header meta row */
+  .modal-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  /* section heading row inside body */
+  .body-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  /* form grid — 2-col for wider fields */
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 16px;
+  }
+  .form-grid .field-row--full {
+    grid-column: 1 / -1;
+  }
+
+  /* input with prefix icon / symbol */
+  .field-wrap {
+    position: relative;
+  }
+  .field-wrap .field-prefix {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-faint);
+    font-size: var(--t-sm);
+    pointer-events: none;
+    user-select: none;
+  }
+  .field-wrap .field {
+    padding-left: 28px;
+  }
+
+  /* filled preview state — accent border + value color */
+  .field--filled {
+    border-color: var(--accent-line);
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .field--filled::placeholder {
+    color: var(--accent);
+  }
+
+  /* checkbox row */
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-sm);
+  }
+  .check-row input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent);
+    cursor: default;
+    flex: none;
+  }
+  .check-row__label {
+    font-size: var(--t-md);
+    color: var(--text-strong);
+  }
+  .check-row--filled {
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+  }
+  .check-row--filled .check-row__label {
+    color: var(--accent);
+  }
+
+  /* PII field — masked */
+  .field--pii {
+    border-color: var(--pii-soft);
+    background: var(--pii-soft);
+    color: var(--pii);
+    letter-spacing: 0.08em;
+  }
+
+  /* pii badge inline */
+  .pii-type-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--t-xs);
+    color: var(--pii);
+    margin-top: 4px;
+  }
+
+  /* unmatched field chips container */
+  .extra-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  /* extra field chip — accent toned */
+  .chip--extra {
+    background: var(--accent-soft);
+    border-color: var(--accent-line);
+    color: var(--accent);
+    cursor: pointer;
+    font-size: var(--t-sm);
+    padding: 4px 10px;
+  }
+  .chip--extra:hover {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: var(--accent);
+  }
+
+  /* footer left */
+  .footer-left {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+</style>
+</head>
+<body>
+<div class="modal-scrim">
+  <div class="modal">
+
+    <!-- ── Header ── -->
+    <div class="modal__header">
+      <div class="row between">
+        <span class="modal__title">양식 채우기 제안</span>
+        <span class="badge badge--accent">propose_form_fill</span>
+      </div>
+
+      <!-- meta: target file + summary -->
+      <div class="modal-meta">
+        <span class="chip chip--tool">
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg>
+          보조금_신청서_양식.hwpx
+        </span>
+        <span class="t-muted t-sm">·</span>
+        <span class="t-sm" style="color:var(--text)">extractFormSchema로 추출한 6개 필드에 값 채우기</span>
+        <span class="chip chip--ok">필드 6 / 6 매칭</span>
+      </div>
+    </div>
+
+    <!-- ── Body ── -->
+    <div class="modal__body">
+
+      <!-- ① form preview -->
+      <div>
+        <div class="body-section-head">
+          <span class="h-section">채워질 값 미리보기</span>
+          <span class="t-xs t-muted">파란 칸 = 채울 값 · 보라 칸 = 개인정보(원문 미표시)</span>
+        </div>
+
+        <div class="card" style="padding: 16px 18px;">
+          <div class="form-grid">
+
+            <!-- 기관명 -->
+            <div class="field-row">
+              <label class="field-label">기관명<span class="req">*</span></label>
+              <input class="field field--filled" type="text" value="(사)한국청년창업진흥원" readonly />
+            </div>
+
+            <!-- 신청일 -->
+            <div class="field-row">
+              <label class="field-label">신청일<span class="req">*</span></label>
+              <input class="field field--filled" type="text" value="2026-06-18" readonly />
+            </div>
+
+            <!-- 담당자 연락처 -->
+            <div class="field-row">
+              <label class="field-label">담당자 연락처<span class="req">*</span></label>
+              <input class="field field--filled" type="text" value="010-3942-7761" readonly />
+            </div>
+
+            <!-- 신청 금액 -->
+            <div class="field-row">
+              <label class="field-label">신청 금액(원)<span class="req">*</span></label>
+              <div class="field-wrap">
+                <span class="field-prefix">₩</span>
+                <input class="field field--filled" type="text" value="1,500,000" readonly />
+              </div>
+            </div>
+
+            <!-- 주민등록번호 — PII -->
+            <div class="field-row">
+              <label class="field-label">
+                대표자 주민등록번호
+                <span class="req">*</span>
+              </label>
+              <input class="field field--pii" type="text" value="••••••-•••••••" readonly />
+              <span class="pii-type-note">
+                <svg class="ico ico--sm" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+                주민등록번호(PII) — 원문은 표시하지 않습니다
+              </span>
+            </div>
+
+            <!-- 개인정보 수집·이용 동의 — checkbox -->
+            <div class="field-row" style="justify-content: flex-end;">
+              <label class="field-label">개인정보 수집·이용 동의<span class="req">*</span></label>
+              <div class="check-row check-row--filled">
+                <input type="checkbox" checked readonly />
+                <span class="check-row__label">동의함 (채울 값: 체크)</span>
+              </div>
+            </div>
+
+          </div><!-- /.form-grid -->
+        </div><!-- /.card -->
+      </div>
+
+      <!-- ② 미매칭 / 추가 제안 -->
+      <div>
+        <div class="body-section-head" style="margin-bottom:6px;">
+          <span class="h-section">채울 수 있는 추가 필드</span>
+          <span class="t-xs t-muted">클릭하면 목록에 추가</span>
+        </div>
+        <div class="card" style="padding:12px 14px;">
+          <span class="t-sm" style="color:var(--text-muted);display:block;margin-bottom:4px;">문서에서 발견됐으나 지시에서 명시되지 않은 필드입니다. 원하는 항목을 선택하세요.</span>
+          <div class="extra-chips">
+            <span class="chip chip--extra chip--clickable"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> 사업자등록번호</span>
+            <span class="chip chip--extra chip--clickable"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> 주소</span>
+            <span class="chip chip--extra chip--clickable"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> 첨부서류 목록</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ③ safe-note -->
+      <div>
+        <span class="safe-note">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/></svg>
+          승인 전까지 원본은 바뀌지 않습니다
+        </span>
+      </div>
+
+    </div><!-- /.modal__body -->
+
+    <!-- ── Footer ── -->
+    <div class="modal__footer">
+      <div class="footer-left">
+        <span class="t-faint t-xs">필드 6개 · 보조금_신청서_양식.hwpx</span>
+        <span class="t-faint t-xs">
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          PII 1개 포함 — 원문은 에이전트도 확인하지 않습니다
+        </span>
+      </div>
+      <div class="modal__footer-actions">
+        <button class="btn btn--ghost" style="color:var(--remove);border-color:var(--remove-soft)">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          거절
+        </button>
+        <button class="btn btn--approve">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg>
+          채우기 승인
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /.modal -->
+</div><!-- /.modal-scrim -->
+</body>
+</html>

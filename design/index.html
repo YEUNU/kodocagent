@@ -1,0 +1,168 @@
+<!-- @dsCard group="_index" name="디자인 시스템 갤러리" subtitle="kodocagent GUI" width="1200" height="900" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent GUI — 디자인 시스템</title>
+<link rel="stylesheet" href="./assets/ds.css" />
+<style>
+  body { min-height: 100vh; }
+  .gw { max-width: 1120px; margin: 0 auto; padding: 28px 24px 64px; }
+  .gw__head { margin-bottom: 8px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .gw__title { font-size: var(--t-2xl); font-weight: 700; color: var(--text-strong); }
+  .gw__lead { color: var(--text-muted); margin-bottom: 24px; max-width: 720px; }
+  .group { margin-top: 32px; }
+  .group__title { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .group__title h2 { font-size: var(--t-lg); color: var(--text-strong); }
+  .group__count { color: var(--text-faint); font-size: var(--t-sm); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+  .tile { display: flex; flex-direction: column; text-decoration: none; border: 1px solid var(--chrome-border); border-radius: var(--r-md); overflow: hidden; background: var(--chrome-surface); transition: border-color 0.14s, transform 0.14s; }
+  .tile:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .tile--hero { grid-column: 1 / -1; }
+  .thumb { position: relative; height: 188px; overflow: hidden; background: var(--chrome-inset); border-bottom: 1px solid var(--chrome-border); }
+  .tile--hero .thumb { height: 320px; }
+  .thumb iframe { position: absolute; top: 0; left: 0; width: 1280px; height: 860px; border: 0; transform: scale(0.219); transform-origin: top left; pointer-events: none; background: var(--chrome-bg); }
+  .tile--hero .thumb iframe { transform: scale(0.875); width: 1280px; height: 800px; }
+  .tile__meta { padding: 11px 13px; display: flex; flex-direction: column; gap: 3px; }
+  .tile__name { color: var(--text-strong); font-weight: 600; font-size: var(--t-md); }
+  .tile__sub { color: var(--text-muted); font-size: var(--t-sm); }
+  .note { margin-top: 28px; }
+</style>
+</head>
+<body>
+<div class="gw">
+  <div class="gw__head">
+    <span class="brand-mark">k</span>
+    <span class="gw__title">kodocagent · GUI 디자인 시스템</span>
+    <span class="badge badge--neutral">다크 크롬 + 라이트 페이퍼</span>
+  </div>
+  <p class="gw__lead">한글·오피스 문서를 다루는 비전문가를 위한 문서 AI 챗봇 데스크톱(Electron) GUI. 어두운 중립 크롬이 흰 "종이" 문서 캔버스를 감싼다. 모든 카드는 <code class="t-mono">assets/ds.css</code> 토큰과 <code class="t-mono">assets/icons.html</code> 아이콘 세트를 공유한다(이모지 미사용). 타일을 클릭하면 전체 화면으로 열린다.</p>
+
+  <div class="group">
+    <div class="group__title"><h2>Shell · 셸</h2><span class="group__count">워크스페이스 골격</span></div>
+    <div class="grid">
+      <a class="tile tile--hero" href="shell/workspace.html" target="_blank">
+        <div class="thumb"><iframe src="shell/workspace.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">3-pane 워크스페이스 (히어로)</div><div class="tile__sub">파일·되돌리기 / 문서 미리보기 / 대화 + 상단바 + 컴포저</div></div>
+      </a>
+      <a class="tile" href="shell/topbar.html" target="_blank">
+        <div class="thumb"><iframe src="shell/topbar.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">상단바 (모델 선택)</div><div class="tile__sub">폴더·토큰·컨텍스트·모델 드롭다운</div></div>
+      </a>
+      <a class="tile" href="shell/app-states.html" target="_blank">
+        <div class="thumb"><iframe src="shell/app-states.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">앱 상태</div><div class="tile__sub">대기 / 실행 / 설정필요</div></div>
+      </a>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group__title"><h2>Foundations · 파운데이션</h2><span class="group__count">토큰·아이콘·아톰</span></div>
+    <div class="grid">
+      <a class="tile" href="foundations/foundations.html" target="_blank">
+        <div class="thumb"><iframe src="foundations/foundations.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">스타일가이드</div><div class="tile__sub">색·타이포·버튼·칩·배지·필드</div></div>
+      </a>
+      <a class="tile" href="assets/icons.html" target="_blank">
+        <div class="thumb"><iframe src="assets/icons.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">아이콘 세트</div><div class="tile__sub">inline SVG · 이모지 대체</div></div>
+      </a>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group__title"><h2>Panels · 패널</h2><span class="group__count">3-pane 상세</span></div>
+    <div class="grid">
+      <a class="tile" href="panels/file-timeline.html" target="_blank">
+        <div class="thumb"><iframe src="panels/file-timeline.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">좌측 — 파일·되돌리기</div><div class="tile__sub">드롭존·파일목록·타임라인</div></div>
+      </a>
+      <a class="tile" href="panels/document-preview.html" target="_blank">
+        <div class="thumb"><iframe src="panels/document-preview.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">중앙 — 문서 미리보기</div><div class="tile__sub">원본/변경본/diff 3탭 + 찾기</div></div>
+      </a>
+      <a class="tile" href="panels/spreadsheet-preview.html" target="_blank">
+        <div class="thumb"><iframe src="panels/spreadsheet-preview.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">중앙 — 스프레드시트 미리보기</div><div class="tile__sub">.xlsx 그리드 · 시트탭 · 수식바</div></div>
+      </a>
+      <a class="tile" href="panels/chat.html" target="_blank">
+        <div class="thumb"><iframe src="panels/chat.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">우측 — 대화</div><div class="tile__sub">도구활동·검증·빠른작업</div></div>
+      </a>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group__title"><h2>Approval · 승인</h2><span class="group__count">신뢰의 핵심 · kind별</span></div>
+    <div class="grid">
+      <a class="tile" href="approval/edit-diff.html" target="_blank">
+        <div class="thumb"><iframe src="approval/edit-diff.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">텍스트 편집 (edit)</div><div class="tile__sub">유니파이드 diff</div></div>
+      </a>
+      <a class="tile" href="approval/find-replace.html" target="_blank">
+        <div class="thumb"><iframe src="approval/find-replace.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">찾기·바꾸기 (find-replace)</div><div class="tile__sub">매치별 전/후 카드</div></div>
+      </a>
+      <a class="tile" href="approval/cell-edit.html" target="_blank">
+        <div class="thumb"><iframe src="approval/cell-edit.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">표 셀 편집 (cell-edit)</div><div class="tile__sub">바뀌는 셀만 하이라이트</div></div>
+      </a>
+      <a class="tile" href="approval/table-structure.html" target="_blank">
+        <div class="thumb"><iframe src="approval/table-structure.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">표 구조 (table-structure)</div><div class="tile__sub">고스트 행/열</div></div>
+      </a>
+      <a class="tile" href="approval/sheet-edit.html" target="_blank">
+        <div class="thumb"><iframe src="approval/sheet-edit.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">스프레드시트 셀 (sheet-edit)</div><div class="tile__sub">.xlsx 그리드 · 수식</div></div>
+      </a>
+      <a class="tile" href="approval/redact-pii.html" target="_blank">
+        <div class="thumb"><iframe src="approval/redact-pii.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">개인정보 가리기 (redact-pii)</div><div class="tile__sub">원문 미표시 · 타입만</div></div>
+      </a>
+      <a class="tile" href="approval/form-fill.html" target="_blank">
+        <div class="thumb"><iframe src="approval/form-fill.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">양식 채우기 (form-fill)</div><div class="tile__sub">라벨·타입별 폼</div></div>
+      </a>
+      <a class="tile" href="approval/form-object.html" target="_blank">
+        <div class="thumb"><iframe src="approval/form-object.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">양식 객체 (form-object)</div><div class="tile__sub">편집상자·체크박스·콤보</div></div>
+      </a>
+      <a class="tile" href="approval/export-restore.html" target="_blank">
+        <div class="thumb"><iframe src="approval/export-restore.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">내보내기 & 되돌리기</div><div class="tile__sub">export / restore</div></div>
+      </a>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group__title"><h2>States · 상태·편의</h2><span class="group__count">온보딩·생성·정직성·법령·비교</span></div>
+    <div class="grid">
+      <a class="tile" href="states/onboarding.html" target="_blank">
+        <div class="thumb"><iframe src="states/onboarding.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">첫 실행 설정 마법사</div><div class="tile__sub">API 키·작업폴더</div></div>
+      </a>
+      <a class="tile" href="states/new-document.html" target="_blank">
+        <div class="thumb"><iframe src="states/new-document.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">새로 만들기</div><div class="tile__sub">새 문서 / 스프레드시트</div></div>
+      </a>
+      <a class="tile" href="states/honesty-empty.html" target="_blank">
+        <div class="thumb"><iframe src="states/honesty-empty.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">정직성·빈 상태·안전 신호</div><div class="tile__sub">미지원 회색처리·원본 무변경</div></div>
+      </a>
+      <a class="tile" href="states/law-citation.html" target="_blank">
+        <div class="thumb"><iframe src="states/law-citation.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">법령 인용 카드</div><div class="tile__sub">korean-law · 현행 여부</div></div>
+      </a>
+      <a class="tile" href="states/compare.html" target="_blank">
+        <div class="thumb"><iframe src="states/compare.html" scrolling="no" loading="lazy"></iframe></div>
+        <div class="tile__meta"><div class="tile__name">문서 비교</div><div class="tile__sub">신구대조표</div></div>
+      </a>
+    </div>
+  </div>
+
+  <hr class="divider note" />
+  <p class="t-sm t-muted" style="margin-top:16px">제작: Opus(파운데이션·아이콘·히어로·판정) + Sonnet 서브에이전트(카드 병렬 제작·de-AI 리스킨). 이모지 아이콘 0개 · 모든 색은 ds.css 토큰. 일부 타일이 비어 보이면 카드 생성 중이거나 새로고침이 필요한 상태입니다.</p>
+</div>
+</body>
+</html>

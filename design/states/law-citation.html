@@ -1,0 +1,310 @@
+<!-- @dsCard group="States" name="검토 결과 — 법령 인용 카드" subtitle="korean-law MCP 검토 결과: 법령 인용 + 현행 여부 + 출처 칩" width="760" height="640" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 법령 인용 카드</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  html, body { height: 100%; }
+
+  /* chat pane simulation */
+  .chat-pane {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: var(--chrome-surface);
+  }
+
+  .chat-pane__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--chrome-border);
+    flex: none;
+  }
+
+  .chat-pane__body {
+    flex: 1;
+    overflow: auto;
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* law citation card — inside assistant bubble; extends ds.css .card */
+  .law-card {
+    overflow: hidden;
+    padding: 0; /* override .card default padding; sections control their own */
+  }
+
+  .law-card__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px 10px;
+    border-bottom: 1px solid var(--chrome-border);
+  }
+
+  .law-card__title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .law-card__statute {
+    font-size: var(--t-md);
+    font-weight: 700;
+    color: var(--text-strong);
+    line-height: 1.35;
+  }
+
+  .law-card__article {
+    font-size: var(--t-sm);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .law-card__meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+  }
+
+  .law-card__body {
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* quotation block — paper--sunken embedded doc snippet inside chrome card */
+  .law-quote {
+    border-left: 3px solid var(--accent-line);
+    border-radius: 0 var(--r-xs) var(--r-xs) 0;
+    padding: 10px 13px;
+    font-size: var(--t-sm);
+    color: var(--paper-ink); /* dark ink on light paper--sunken bg */
+    line-height: 1.65;
+  }
+
+  .law-quote__label {
+    font-size: var(--t-xs);
+    color: var(--paper-ink-muted);
+    margin-bottom: 5px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .law-quote__ellipsis {
+    color: var(--paper-ink-muted);
+    font-size: var(--t-xs);
+    margin-top: 4px;
+  }
+
+  .law-card__footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px 11px;
+    flex-wrap: wrap;
+  }
+
+  /* conflict / commentary note */
+  .conflict-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: var(--warn-soft);
+    border: 1px solid var(--warn-soft);
+    border-radius: var(--r-sm);
+    padding: 9px 12px;
+    font-size: var(--t-sm);
+    color: var(--warn);
+    line-height: 1.5;
+  }
+
+  .conflict-note__icon {
+    flex: none;
+    margin-top: 1px;
+  }
+
+  /* assistant prose text */
+  .prose {
+    font-size: var(--t-base);
+    color: var(--text);
+    line-height: 1.65;
+  }
+
+  /* tool-row spacing override */
+  .tool-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 2px;
+  }
+
+  /* "·" separator in meta */
+  .sep {
+    color: var(--text-faint);
+    font-size: var(--t-xs);
+  }
+</style>
+</head>
+<body>
+<div class="chat-pane">
+
+  <!-- pane header -->
+  <div class="chat-pane__header">
+    <div class="row gap-12">
+      <span class="pane__title">대화</span>
+      <span class="chip chip--tool">계약서.hwp</span>
+    </div>
+    <div class="row gap-8">
+      <span class="chip chip--ok">korean-law 연결됨</span>
+      <button class="btn btn--ghost btn--sm">새 세션</button>
+    </div>
+  </div>
+
+  <!-- conversation body -->
+  <div class="chat-pane__body">
+
+    <!-- user turn -->
+    <div class="bubble-user">
+      계약서 제3조 임금 조항이 근로기준법이랑 문제없는지 검토해줘
+    </div>
+
+    <!-- assistant turn -->
+    <div class="bubble-assistant" style="width:100%">
+
+      <!-- tool activity -->
+      <div class="tool-rows">
+        <div class="tool-row tool-row--done">
+          <svg class="ico ico--sm tool-row__icon" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg>
+          read_document(계약서.hwp)
+        </div>
+        <div class="tool-row tool-row--done">
+          <svg class="ico ico--sm tool-row__icon" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg>
+          korean-law · search_statute("근로기준법 제17조")
+        </div>
+        <div class="tool-row tool-row--done">
+          <svg class="ico ico--sm tool-row__icon" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg>
+          korean-law · search_statute("근로기준법 제43조")
+        </div>
+      </div>
+
+      <!-- prose intro -->
+      <p class="prose">계약서 제3조 임금 조항과 관련 법령을 검토한 결과, 두 조항을 참고하시기 바랍니다.</p>
+
+      <!-- law citation card 1 -->
+      <div class="card law-card">
+        <div class="law-card__header">
+          <div class="law-card__title-group">
+            <span class="law-card__statute">근로기준법</span>
+            <span class="law-card__article">제17조 (근로조건의 명시)</span>
+          </div>
+          <div class="law-card__meta">
+            <span class="badge badge--add"><span class="dot dot--add"></span>현행</span>
+            <span class="sep">·</span>
+            <span class="t-xs t-muted">시행 2024.2.9.</span>
+          </div>
+        </div>
+        <div class="law-card__body">
+          <div class="paper--sunken law-quote">
+            <div class="law-quote__label">조문 발췌</div>
+            사용자는 근로계약을 체결할 때에 근로자에게 다음 각 호의 사항을 명시하여야 한다. 근로계약 후 다음 각 호의 사항을 변경하는 경우에도 또한 같다.<br />
+            <br />
+            1. 임금<br />
+            2. 소정근로시간<br />
+            3. 제55조에 따른 휴일<br />
+            4. 제60조에 따른 연차 유급휴가<br />
+            5. 그 밖에 대통령령으로 정하는 근로조건
+            <div class="law-quote__ellipsis">… (이하 생략)</div>
+          </div>
+
+          <!-- conflict note -->
+          <div class="conflict-note">
+            <span class="conflict-note__icon">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4M12 17h.01"/></svg>
+            </span>
+            <span>
+              계약서 제3조는 임금을 월 단위 총액으로만 기재하고 있어 <b>시간급·수당 구분이 누락</b>될 수 있습니다.
+              근로기준법 제17조 및 시행령 제8조는 임금의 구성항목·계산방법·지급방법을 서면으로 명시하도록 요구합니다.
+              이 조항과 <b>계약서 제3조가 상충될 수 있습니다.</b>
+            </span>
+          </div>
+        </div>
+        <div class="law-card__footer">
+          <span class="chip chip--clickable">
+            <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 5h5v5"/><path d="M19 5 11 13"/><path d="M19 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4"/></svg>
+            법제처 원문
+          </span>
+          <span class="chip chip--coord">law:근로기준법/17</span>
+          <span class="t-faint t-xs" style="margin-left:auto">법률 제19591호</span>
+        </div>
+      </div>
+
+      <!-- law citation card 2 -->
+      <div class="card law-card">
+        <div class="law-card__header">
+          <div class="law-card__title-group">
+            <span class="law-card__statute">근로기준법</span>
+            <span class="law-card__article">제43조 (임금 지급)</span>
+          </div>
+          <div class="law-card__meta">
+            <span class="badge badge--add"><span class="dot dot--add"></span>현행</span>
+            <span class="sep">·</span>
+            <span class="t-xs t-muted">시행 2024.2.9.</span>
+          </div>
+        </div>
+        <div class="law-card__body">
+          <div class="paper--sunken law-quote">
+            <div class="law-quote__label">조문 발췌</div>
+            ① 임금은 통화(通貨)로 직접 근로자에게 그 전액을 지급하여야 한다. 다만, 법령 또는 단체협약에 특별한 규정이 있는 경우에는 임금의 일부를 공제하거나 통화 이외의 것으로 지급할 수 있다.<br />
+            <br />
+            ② 임금은 매월 1회 이상 일정한 날짜를 정하여 지급하여야 한다. 다만, 임시로 지급하는 임금, 수당, 그 밖에 이에 준하는 것 또는 대통령령으로 정하는 임금에 대하여는 그러하지 아니하다.
+          </div>
+
+          <!-- conflict note -->
+          <div class="conflict-note">
+            <span class="conflict-note__icon">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4M12 17h.01"/></svg>
+            </span>
+            <span>
+              계약서 제3조 4항 "임금 일부를 물품으로 대체할 수 있다"는 문구는
+              근로기준법 제43조 제1항의 <b>통화 전액 지급 원칙과 충돌</b>합니다.
+              단체협약 없이 이 조항을 유지하면 법 위반이 될 수 있습니다.
+            </span>
+          </div>
+        </div>
+        <div class="law-card__footer">
+          <span class="chip chip--clickable">
+            <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 5h5v5"/><path d="M19 5 11 13"/><path d="M19 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4"/></svg>
+            법제처 원문
+          </span>
+          <span class="chip chip--coord">law:근로기준법/43</span>
+          <span class="t-faint t-xs" style="margin-left:auto">법률 제19591호</span>
+        </div>
+      </div>
+
+      <!-- closing prose + safety note -->
+      <p class="prose">제3조를 수정하려면 말씀해 주세요. 수정 제안을 만들어 드릴게요 — 승인 전까지 원본은 바뀌지 않습니다.</p>
+      <div class="safe-note" style="align-self:flex-start">
+        <svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        승인 전까지 원본은 바뀌지 않습니다
+      </div>
+
+    </div>
+    <!-- /assistant turn -->
+
+  </div>
+  <!-- /chat body -->
+
+</div>
+</body>
+</html>

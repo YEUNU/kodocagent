@@ -1,0 +1,316 @@
+<!-- @dsCard group="Approval" name="승인 — 양식 객체 값(form-object)" subtitle="propose_form_object / list_form_objects 승인 모달 — 개별 양식 컨트롤 값 설정" width="820" height="780" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 승인: 양식 객체 채우기</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  /* screen-specific layout only — all colors/atoms from ds.css */
+  html, body { height: 100%; }
+
+  /* header meta row */
+  .modal-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  /* section heading row inside body */
+  .body-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  /* object list */
+  .obj-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* single object row */
+  .obj-row {
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-sm);
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .obj-row__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .obj-row__label {
+    font-size: var(--t-sm);
+    color: var(--text-muted);
+    flex: none;
+    min-width: 130px;
+  }
+
+  .obj-row__value {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* filled field state */
+  .field--filled {
+    border-color: var(--accent-line);
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  /* combo field wrapper — show chevron inside */
+  .combo-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .combo-wrap .field {
+    padding-right: 34px;
+    cursor: default;
+  }
+  .combo-wrap .combo-arrow {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-faint);
+    pointer-events: none;
+  }
+  .combo-wrap .combo-arrow.filled {
+    color: var(--accent);
+  }
+
+  /* checkbox object row */
+  .check-obj {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-sm);
+    padding: 10px 14px;
+  }
+  .check-obj--filled {
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+  }
+  .check-obj__label {
+    flex: 1;
+    font-size: var(--t-md);
+    color: var(--text-strong);
+  }
+  .check-obj--filled .check-obj__label {
+    color: var(--accent);
+  }
+  .check-obj__state {
+    font-size: var(--t-sm);
+    color: var(--add);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: none;
+  }
+
+  /* radio group */
+  .radio-group {
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-sm);
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .radio-opt {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: var(--t-md);
+    color: var(--text);
+    cursor: default;
+  }
+  .radio-opt--selected {
+    color: var(--accent);
+  }
+  .radio-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1.8px solid var(--chrome-border-strong);
+    background: transparent;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .radio-dot--selected {
+    border-color: var(--accent);
+  }
+  .radio-dot__inner {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  /* object type chip label */
+  .obj-type-chip {
+    flex: none;
+  }
+
+  /* footer left meta */
+  .footer-left {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+</style>
+</head>
+<body>
+<div class="modal-scrim">
+  <div class="modal">
+
+    <!-- ── Header ── -->
+    <div class="modal__header">
+      <div class="row between">
+        <span class="modal__title">양식 객체 채우기</span>
+        <span class="chip chip--tool">
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg>
+          propose_form_object
+        </span>
+      </div>
+
+      <!-- meta: target file + object count -->
+      <div class="modal-meta">
+        <span class="chip chip--tool">
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg>
+          민원신청서.hwpx
+        </span>
+        <span class="t-muted t-sm">·</span>
+        <span class="chip chip--ok">
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg>
+          객체 4개 발견
+        </span>
+        <span class="t-sm" style="color:var(--text-muted)">— form-fill(스키마 일괄)과 달리 컨트롤 개별 설정</span>
+      </div>
+    </div>
+
+    <!-- ── Body ── -->
+    <div class="modal__body">
+
+      <div>
+        <div class="body-section-head">
+          <span class="h-section">발견된 양식 객체</span>
+          <span class="t-xs t-muted">채워질 값 강조 표시</span>
+        </div>
+
+        <div class="obj-list">
+
+          <!-- ① 편집상자 — 텍스트 입력 -->
+          <div class="obj-row">
+            <div class="obj-row__head">
+              <span class="chip chip--tool obj-type-chip">편집상자</span>
+              <span class="obj-row__label t-sm t-muted">신청인</span>
+              <div class="obj-row__value">
+                <input class="field field--filled" type="text" value="홍길동" readonly />
+              </div>
+            </div>
+          </div>
+
+          <!-- ② 체크박스 -->
+          <div class="check-obj check-obj--filled">
+            <span class="chip chip--tool obj-type-chip">체크박스</span>
+            <svg class="ico" viewBox="0 0 24 24" style="color:var(--accent)"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M8 12.5 11 15.5 16.5 9"/></svg>
+            <span class="check-obj__label">개인정보 수집 동의</span>
+            <span class="check-obj__state">
+              <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg>
+              체크됨
+            </span>
+          </div>
+
+          <!-- ③ 콤보박스 -->
+          <div class="obj-row">
+            <div class="obj-row__head">
+              <span class="chip chip--tool obj-type-chip">콤보박스</span>
+              <span class="obj-row__label t-sm t-muted">민원 종류</span>
+              <div class="obj-row__value">
+                <div class="combo-wrap">
+                  <input class="field field--filled" type="text" value="등본 발급" readonly />
+                  <span class="combo-arrow filled">
+                    <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="m6 9.5 6 6 6-6"/></svg>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ④ 라디오 -->
+          <div class="obj-row">
+            <div class="obj-row__head" style="align-items:flex-start">
+              <span class="chip chip--tool obj-type-chip" style="margin-top:1px">라디오</span>
+              <span class="obj-row__label t-sm t-muted" style="margin-top:2px">신청 구분</span>
+              <div class="obj-row__value">
+                <div class="radio-group">
+                  <label class="radio-opt radio-opt--selected">
+                    <span class="radio-dot radio-dot--selected"><span class="radio-dot__inner"></span></span>
+                    본인 신청
+                  </label>
+                  <label class="radio-opt">
+                    <span class="radio-dot"></span>
+                    대리 신청
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /.obj-list -->
+      </div>
+
+      <!-- safe-note -->
+      <div>
+        <span class="safe-note">
+          <svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          승인 전까지 원본은 바뀌지 않습니다
+        </span>
+      </div>
+
+    </div><!-- /.modal__body -->
+
+    <!-- ── Footer ── -->
+    <div class="modal__footer">
+      <div class="footer-left">
+        <span class="t-faint t-xs">객체 4개 · 민원신청서.hwpx</span>
+        <span class="t-faint t-xs">
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          편집상자 1 · 체크박스 1 · 콤보박스 1 · 라디오 1
+        </span>
+      </div>
+      <div class="modal__footer-actions">
+        <button class="btn btn--ghost" style="color:var(--remove);border-color:var(--remove-soft)">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          거절
+        </button>
+        <button class="btn btn--approve">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg>
+          채우기 승인
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /.modal -->
+</div><!-- /.modal-scrim -->
+</body>
+</html>

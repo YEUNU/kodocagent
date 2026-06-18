@@ -1,0 +1,425 @@
+<!-- @dsCard group="Panels" name="중앙 패널 — 문서 미리보기 3탭" subtitle="원본 / 변경본 / diff + 찾기 + 내보내기" width="760" height="900" -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kodocagent — 문서 미리보기 패널</title>
+<link rel="stylesheet" href="../assets/ds.css" />
+<style>
+  /* ── Screen-specific layout only — no color definitions ── */
+  html, body {
+    height: 100%;
+    background: var(--chrome-bg);
+  }
+
+  /* Outer card frame */
+  .card-wrap {
+    padding: 20px;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  .panel-frame {
+    width: 760px;
+    background: var(--chrome-surface);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Toolbar / header ── */
+  .doc-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--chrome-border);
+    flex: none;
+  }
+
+  .toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Find bar (inline, shown below toolbar when active) */
+  .find-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border-bottom: 1px solid var(--chrome-border);
+    background: var(--chrome-elevated);
+    flex: none;
+  }
+
+  .find-bar__input {
+    flex: 0 0 200px;
+    background: var(--chrome-inset);
+    border: 1px solid var(--accent-line);
+    border-radius: var(--r-sm);
+    color: var(--text-strong);
+    font-family: inherit;
+    font-size: var(--t-sm);
+    padding: 4px 9px;
+    outline: none;
+  }
+
+  .find-bar__count {
+    font-size: var(--t-xs);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  /* ── Scrollable canvas area ── */
+  .doc-canvas {
+    background: var(--chrome-bg);
+    padding: 22px 24px;
+    overflow: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  /* ── Section label (tab caption above each mini canvas) ── */
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .section-label__tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--chrome-inset);
+    border: 1px solid var(--chrome-border);
+    border-radius: var(--r-xs);
+    padding: 3px 10px;
+    font-size: var(--t-sm);
+    font-weight: 600;
+    color: var(--text-strong);
+  }
+
+  .section-label__tab.is-original {
+    border-color: var(--chrome-border-strong);
+    color: var(--text-muted);
+  }
+
+  .section-label__tab.is-changed {
+    background: var(--add-soft);
+    border-color: var(--add-soft);
+    color: var(--add);
+  }
+
+  .section-label__tab.is-diff {
+    background: var(--accent-soft);
+    border-color: var(--accent-line);
+    color: var(--accent);
+  }
+
+  .section-label__line {
+    flex: 1;
+    height: 1px;
+    background: var(--chrome-border);
+  }
+
+  /* Paper canvas sizing */
+  .paper-wrap {
+    max-width: 640px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  /* file path row inside paper */
+  .paper-file {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--paper-rule);
+  }
+
+  .paper-file__name {
+    font-size: var(--t-sm);
+    color: var(--paper-ink-muted);
+    font-family: var(--font-mono);
+  }
+
+  /* diff container */
+  .diff-wrap {
+    max-width: 640px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .diff {
+    padding: 12px 0;
+  }
+
+  .diff__file-head {
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    color: var(--text-muted);
+    padding: 4px 12px 8px;
+    letter-spacing: 0.03em;
+  }
+
+  /* approx banner */
+  .approx {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--t-xs);
+    color: var(--text-muted);
+    margin-top: 14px;
+    padding: 6px 10px;
+    background: var(--chrome-inset);
+    border-radius: var(--r-xs);
+    border: 1px solid var(--chrome-border);
+  }
+
+  /* stats row at very bottom */
+  .stats-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    border-top: 1px solid var(--chrome-border);
+    background: var(--chrome-surface);
+    flex: none;
+  }
+</style>
+</head>
+<body>
+<div class="card-wrap">
+<div class="panel-frame">
+
+  <!-- ── Toolbar ── -->
+  <div class="doc-toolbar">
+    <div class="toolbar-left">
+      <div class="tabs">
+        <button class="tab is-original">원본</button>
+        <button class="tab is-changed tab--active">변경본</button>
+        <button class="tab">diff</button>
+      </div>
+      <span class="chip chip--tool" style="font-size:var(--t-xs)">예산보고서.hwpx</span>
+    </div>
+    <div class="toolbar-right">
+      <span class="chip chip--clickable chip--coord"><svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-3.4-3.4"/></svg> 찾기 <span style="font-size:var(--t-xs);margin-left:2px">1/3</span></span>
+      <button class="btn btn--ghost btn--sm"><svg class="ico" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg> 내보내기</button>
+    </div>
+  </div>
+
+  <!-- ── Find bar (active state) ── -->
+  <div class="find-bar">
+    <input class="find-bar__input" value="추진비" readonly />
+    <span class="find-bar__count">1 / 3 건</span>
+    <button class="btn btn--ghost btn--sm"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="m6 9.5 6 6 6-6" style="transform:rotate(180deg);transform-origin:center"/></svg></button>
+    <button class="btn btn--ghost btn--sm"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="m6 9.5 6 6 6-6"/></svg></button>
+    <button class="btn btn--secondary btn--sm" style="margin-left:auto">닫기</button>
+  </div>
+
+  <!-- ── Canvas: three tab states stacked ── -->
+  <div class="doc-canvas">
+
+    <!-- ────────────────────────────────────────────
+         (1) 원본 탭 상태
+    ──────────────────────────────────────────── -->
+    <div>
+      <div class="section-label">
+        <span class="section-label__tab is-original">원본</span>
+        <span class="section-label__line"></span>
+        <span class="t-xs t-faint">변경 전 파일 그대로</span>
+      </div>
+      <div class="paper-wrap">
+        <div class="paper">
+          <div class="paper-file">
+            <svg class="ico ico--sm" viewBox="0 0 24 24" style="color:var(--paper-ink-muted)"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg>
+            <span class="paper-file__name">예산보고서.hwpx</span>
+            <span class="chip badge--neutral" style="font-size:var(--t-xs);padding:1px 7px;border-radius:var(--r-pill);background:var(--paper-rail);color:var(--paper-ink-muted);border:1px solid var(--paper-border)">읽기 전용</span>
+          </div>
+          <h1>2026년 추진비·운영비 예산 보고서</h1>
+          <p>아래 표는 2026년도 항목별 집행 예산입니다. 금액 단위는 원입니다.</p>
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>항목</th><th>예산(원)</th><th>집행(원)</th><th>잔액(원)</th><th>비고</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><mark class="mark-find">추진비</mark></td>
+                <td>1500000</td>
+                <td>1200000</td>
+                <td>300000</td>
+                <td>1분기 집행</td>
+              </tr>
+              <tr>
+                <td>인쇄비</td>
+                <td>820000</td>
+                <td>820000</td>
+                <td>0</td>
+                <td>소진</td>
+              </tr>
+              <tr>
+                <td>회의비</td>
+                <td>400000</td>
+                <td>150000</td>
+                <td>250000</td>
+                <td></td>
+              </tr>
+              <tr>
+                <td>예비비</td>
+                <td>300000</td>
+                <td>0</td>
+                <td>300000</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+          <p style="margin-top:12px;font-size:var(--t-sm);color:var(--paper-ink-muted)">
+            작성: 기획팀 · 기준일 2026-05-31
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ────────────────────────────────────────────
+         (2) 변경본 탭 상태 (cell--changed 하이라이트)
+    ──────────────────────────────────────────── -->
+    <div>
+      <div class="section-label">
+        <span class="section-label__tab is-changed">변경본</span>
+        <span class="section-label__line"></span>
+        <span class="badge badge--add"><span class="dot dot--add"></span>셀 9곳 변경됨</span>
+        <span class="t-xs t-faint" style="margin-left:4px">천 단위 콤마 적용</span>
+      </div>
+      <div class="safe-note" style="margin-bottom:12px;max-width:640px;margin-left:auto;margin-right:auto">
+        <svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> 원본은 아직 바뀌지 않았습니다 — 승인 후에만 저장됩니다
+      </div>
+      <div class="paper-wrap">
+        <div class="paper">
+          <div class="paper-file">
+            <svg class="ico ico--sm" viewBox="0 0 24 24" style="color:var(--paper-ink-muted)"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg>
+            <span class="paper-file__name">예산보고서.hwpx</span>
+            <span class="badge badge--add" style="border-radius:var(--r-pill);font-size:var(--t-xs)"><span class="dot dot--add"></span>미저장 변경</span>
+          </div>
+          <h1>2026년 추진비·운영비 예산 보고서</h1>
+          <p>아래 표는 2026년도 항목별 집행 예산입니다. 금액 단위는 원입니다.</p>
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>항목</th><th>예산(원)</th><th>집행(원)</th><th>잔액(원)</th><th>비고</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><mark class="mark-find">추진비</mark></td>
+                <td class="cell--changed">1,500,000</td>
+                <td class="cell--changed">1,200,000</td>
+                <td class="cell--changed">300,000</td>
+                <td>1분기 집행</td>
+              </tr>
+              <tr>
+                <td>인쇄비</td>
+                <td class="cell--changed">820,000</td>
+                <td class="cell--changed">820,000</td>
+                <td class="cell--changed">0</td>
+                <td>소진</td>
+              </tr>
+              <tr>
+                <td>회의비</td>
+                <td class="cell--changed">400,000</td>
+                <td class="cell--changed">150,000</td>
+                <td class="cell--changed">250,000</td>
+                <td></td>
+              </tr>
+              <tr>
+                <td>예비비</td>
+                <td>300,000</td>
+                <td>0</td>
+                <td>300,000</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+          <p style="margin-top:12px;font-size:var(--t-sm);color:var(--paper-ink-muted)">
+            작성: 기획팀 · 기준일 2026-05-31
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ────────────────────────────────────────────
+         (3) diff 탭 상태 — 유니파이드 diff
+    ──────────────────────────────────────────── -->
+    <div>
+      <div class="section-label">
+        <span class="section-label__tab is-diff">diff</span>
+        <span class="section-label__line"></span>
+        <span class="chip chip--ok" style="font-size:var(--t-xs)">+8</span>
+        <span class="chip" style="background:var(--remove-soft);color:var(--remove);border-color:var(--remove-soft);font-size:var(--t-xs)">−8</span>
+        <span class="t-xs t-faint" style="margin-left:4px">git-diff 스타일 · 행 번호 포함</span>
+      </div>
+      <div class="diff-wrap">
+        <div class="diff">
+          <div class="diff__file-head">--- 예산보고서.hwpx  (원본)</div>
+          <div class="diff__file-head">+++ 예산보고서.hwpx  (변경본)</div>
+          <span class="diff__line diff__line--hunk">@@ -9,13 +9,13 @@ 2026년 추진비·운영비 예산 보고서</span>
+          <span class="diff__line diff__line--ctx"> &lt;tr&gt;&lt;th&gt;항목&lt;/th&gt;&lt;th&gt;예산(원)&lt;/th&gt;&lt;th&gt;집행(원)&lt;/th&gt;&lt;th&gt;잔액(원)&lt;/th&gt;&lt;th&gt;비고&lt;/th&gt;&lt;/tr&gt;</span>
+          <span class="diff__line diff__line--remove">-  &lt;td&gt;추진비&lt;/td&gt;&lt;td&gt;1500000&lt;/td&gt;&lt;td&gt;1200000&lt;/td&gt;&lt;td&gt;300000&lt;/td&gt;</span>
+          <span class="diff__line diff__line--add">+  &lt;td&gt;추진비&lt;/td&gt;&lt;td&gt;1,500,000&lt;/td&gt;&lt;td&gt;1,200,000&lt;/td&gt;&lt;td&gt;300,000&lt;/td&gt;</span>
+          <span class="diff__line diff__line--ctx">   &lt;td&gt;1분기 집행&lt;/td&gt;</span>
+          <span class="diff__line diff__line--remove">-  &lt;td&gt;인쇄비&lt;/td&gt;&lt;td&gt;820000&lt;/td&gt;&lt;td&gt;820000&lt;/td&gt;&lt;td&gt;0&lt;/td&gt;</span>
+          <span class="diff__line diff__line--add">+  &lt;td&gt;인쇄비&lt;/td&gt;&lt;td&gt;820,000&lt;/td&gt;&lt;td&gt;820,000&lt;/td&gt;&lt;td&gt;0&lt;/td&gt;</span>
+          <span class="diff__line diff__line--ctx">   &lt;td&gt;소진&lt;/td&gt;</span>
+          <span class="diff__line diff__line--remove">-  &lt;td&gt;회의비&lt;/td&gt;&lt;td&gt;400000&lt;/td&gt;&lt;td&gt;150000&lt;/td&gt;&lt;td&gt;250000&lt;/td&gt;</span>
+          <span class="diff__line diff__line--add">+  &lt;td&gt;회의비&lt;/td&gt;&lt;td&gt;400,000&lt;/td&gt;&lt;td&gt;150,000&lt;/td&gt;&lt;td&gt;250,000&lt;/td&gt;</span>
+          <span class="diff__line diff__line--ctx">   &lt;td&gt;&lt;/td&gt;</span>
+          <span class="diff__line diff__line--remove">-  &lt;td&gt;예비비&lt;/td&gt;&lt;td&gt;300000&lt;/td&gt;&lt;td&gt;0&lt;/td&gt;&lt;td&gt;300000&lt;/td&gt;</span>
+          <span class="diff__line diff__line--add">+  &lt;td&gt;예비비&lt;/td&gt;&lt;td&gt;300,000&lt;/td&gt;&lt;td&gt;0&lt;/td&gt;&lt;td&gt;300,000&lt;/td&gt;</span>
+          <span class="diff__line diff__line--ctx"> &lt;/tbody&gt;</span>
+        </div>
+        <div class="approx">
+          <svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+          <span>HTML 미리보기는 <strong>근사</strong>입니다 — 픽셀 정확도는 한글에서 확인하세요.</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /doc-canvas -->
+
+  <!-- ── Bottom stats row ── -->
+  <div class="stats-row">
+    <div class="row gap-12">
+      <span class="chip chip--ok"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7"/></svg> 자가검증 완료</span>
+      <span class="t-xs t-muted">셀 9곳 · propose_cell_edit</span>
+    </div>
+    <div class="row gap-12">
+      <span class="t-xs t-faint">예산보고서.hwpx</span>
+      <button class="btn btn--approve btn--sm">승인</button>
+      <button class="btn btn--danger btn--sm">거절</button>
+    </div>
+  </div>
+
+</div><!-- /panel-frame -->
+</div><!-- /card-wrap -->
+</body>
+</html>
