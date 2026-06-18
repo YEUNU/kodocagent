@@ -27,6 +27,7 @@ import type { KodocConfig } from "@kodocagent/shared";
 import { KNOWN_MODELS, resolveApiKey } from "@kodocagent/shared";
 import chalk from "chalk";
 import { createCliApprovalHandler } from "./approve.js";
+import { formatCumulativeUsage } from "./usage.js";
 
 /** 슬래시 커맨드 도움말 */
 const HELP_TEXT = `
@@ -41,6 +42,7 @@ const HELP_TEXT = `
 슬래시 명령:
   /model   — 프로바이더/모델 전환
   /context — 현재 컨텍스트 사용량 표시
+  /usage   — 누적 API 사용량·추정 비용 표시 (/cost)
   /clear   — 새 세션 시작
   /help    — 이 도움말 표시
   /exit    — 종료
@@ -138,6 +140,9 @@ export async function runChat(opts: {
   let currentController: AbortController | null = null;
   // 마지막 턴의 실제 입력(컨텍스트) 토큰 — 푸터 및 /context 표시용
   let lastContextTokens = 0;
+  // 세션 누적 API 사용량(과금 기준: 매 턴 입력·출력 토큰 합) — /usage·종료 요약·턴 표시용
+  let cumulativeInputTokens = 0;
+  let cumulativeOutputTokens = 0;
   // 턴 루프 바깥에서도 스피너 정리가 가능하도록 레퍼런스 유지
   let sharedActiveInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -202,6 +207,18 @@ export async function runChat(opts: {
     if (trimmed.startsWith("/")) {
       if (trimmed.toLowerCase() === "/context") {
         printContextUsage(lastContextTokens, config.maxContextTokens);
+        continue;
+      }
+      if (trimmed.toLowerCase() === "/usage" || trimmed.toLowerCase() === "/cost") {
+        if (cumulativeInputTokens === 0 && cumulativeOutputTokens === 0) {
+          process.stdout.write(
+            chalk.dim("아직 API 사용 기록이 없습니다 — 대화를 시작하면 누적됩니다.\n"),
+          );
+        } else {
+          process.stdout.write(
+            `${formatCumulativeUsage(config, cumulativeInputTokens, cumulativeOutputTokens)}\n`,
+          );
+        }
         continue;
       }
       const handled = await handleSlashCommand(trimmed, config, store, cwd, rl);
@@ -320,10 +337,16 @@ export async function runChat(opts: {
           if (event.usage) {
             // 실제 입력 토큰 = 그 턴에 모델로 간 전체 컨텍스트 (가장 정확한 사용량)
             lastContextTokens = event.usage.inputTokens;
+            // 과금은 매 턴 입력·출력 토큰을 합산(컨텍스트 재전송 포함) — 누적 사용량.
+            cumulativeInputTokens += event.usage.inputTokens;
+            cumulativeOutputTokens += event.usage.outputTokens;
             process.stdout.write(
               `\n${formatContextUsage(event.usage.inputTokens, config.maxContextTokens)}  ${chalk.dim(
-                `출력 ${event.usage.outputTokens} 토큰`,
+                `이번 턴 출력 ${event.usage.outputTokens} 토큰`,
               )}\n`,
+            );
+            process.stdout.write(
+              `${formatCumulativeUsage(config, cumulativeInputTokens, cumulativeOutputTokens)}\n`,
             );
           }
         } else if (event.type === "error") {
@@ -341,6 +364,12 @@ export async function runChat(opts: {
   }
 
   rl.close();
+  // 세션 종료 요약 — 이번 세션의 누적 API 사용량·추정 비용
+  if (cumulativeInputTokens > 0 || cumulativeOutputTokens > 0) {
+    process.stdout.write(
+      `${formatCumulativeUsage(config, cumulativeInputTokens, cumulativeOutputTokens)}\n`,
+    );
+  }
   // 정상 종료 (/exit, EOF): 세션 스테이징 정리 후 연결 종료
   await cleanSessionStaging(store.id).catch(() => {});
   await mcpManager.disconnect();
