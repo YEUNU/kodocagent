@@ -8,7 +8,7 @@
  * 보안 원칙: API 키·키 파일 내용을 렌더러/IPC로 전달 금지 (boolean만).
  */
 
-import { readdir, stat } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, isAbsolute, join } from "node:path";
 import type { AgentEvent, AgentSessionOptions } from "@kodocagent/core";
 import {
@@ -68,6 +68,8 @@ export interface BackupEntry {
   /** 사람이 읽는 시각 "2026-06-16 23:18:42" */
   time: string;
   mtimeMs: number;
+  /** 작업 요약 (백업 사이드카에 기록돼 있으면) */
+  summary?: string;
 }
 
 const BACKUP_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)-(.+)$/;
@@ -241,7 +243,24 @@ export class AgentBridge {
         } catch {
           mtimeMs = 0;
         }
-        out.push({ filename, name: m[2] ?? filename, time: formatBackupTime(m[1] ?? ""), mtimeMs });
+        // 작업 요약 사이드카(.<filename>.meta.json) — 있으면 무슨 작업인지 표시
+        let summary: string | undefined;
+        try {
+          const parsed: unknown = JSON.parse(
+            await readFile(join(dir, `.${filename}.meta.json`), "utf-8"),
+          );
+          const s = (parsed as { summary?: unknown } | null)?.summary;
+          if (typeof s === "string") summary = s;
+        } catch {
+          summary = undefined;
+        }
+        out.push({
+          filename,
+          name: m[2] ?? filename,
+          time: formatBackupTime(m[1] ?? ""),
+          mtimeMs,
+          summary,
+        });
       }
       out.sort((a, b) => b.mtimeMs - a.mtimeMs);
       return out.slice(0, 20);

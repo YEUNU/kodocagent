@@ -366,7 +366,8 @@ export function App(): React.ReactElement {
   const handleRestore = useCallback(
     (entry: BackupEntry) => {
       if (appState === "running") return;
-      handleSend(`백업 '${entry.time} · ${entry.name}'을(를) 그 시점으로 되돌려줘.`);
+      const what = entry.summary ? `'${entry.summary}'(${entry.name})` : `'${entry.name}'`;
+      handleSend(`${entry.time}에 백업된 ${what}을(를) 그 시점으로 되돌려줘.`);
     },
     [appState, handleSend],
   );

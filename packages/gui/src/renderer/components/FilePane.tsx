@@ -120,16 +120,35 @@ export function FilePane(props: FilePaneProps): React.ReactElement {
                       background: "transparent",
                       font: "inherit",
                       textAlign: "left",
+                      alignItems: "flex-start",
                     }}
                     onClick={() => onRestore(b)}
-                    title={`${b.time} · ${b.name} 시점으로 되돌리기`}
+                    title={`${b.time}${b.summary ? ` · ${b.summary}` : ""} · ${b.name} 시점으로 되돌리기`}
                   >
                     <span className="timeline__time">{b.time.slice(11, 16)}</span>
-                    <span
-                      className="grow"
-                      style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                    >
-                      {b.name}
+                    <span className="grow" style={{ overflow: "hidden", minWidth: 0 }}>
+                      <span
+                        style={{
+                          display: "block",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {b.summary ?? "백업"}
+                      </span>
+                      <span
+                        className="t-faint"
+                        style={{
+                          display: "block",
+                          fontSize: "var(--t-xs)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {b.name}
+                      </span>
                     </span>
                   </button>
                 </li>

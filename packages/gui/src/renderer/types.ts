@@ -44,6 +44,8 @@ export interface BackupEntry {
   /** 사람이 읽는 시각 "2026-06-16 23:18:42" */
   time: string;
   mtimeMs: number;
+  /** 작업 요약 (백업 사이드카에 있으면) */
+  summary?: string;
 }
 
 /** 툴콜 인자에서 핵심 경로 인자를 추출해 요약 문자열 생성 */
