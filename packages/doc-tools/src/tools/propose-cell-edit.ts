@@ -28,7 +28,12 @@ import JSZip from "jszip";
 import type { ScanCell, ScanTable, SpliceEdit } from "kordoc";
 import { applySplices, buildParagraphSplices, scanSectionXml } from "kordoc";
 import { z } from "zod";
-import { hwpStructuralGuard, isZipBinary, resolveSafePath } from "../security.js";
+import {
+  assertFileSizeWithinLimit,
+  hwpStructuralGuard,
+  isZipBinary,
+  resolveSafePath,
+} from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
@@ -589,6 +594,14 @@ export const proposeCellEditTool: ToolDefinition<ProposeCellEditInput> = {
       );
     }
 
+    // 파일 크기 가드 — 원본 readFile 직전
+    try {
+      await assertFileSizeWithinLimit(safePath);
+    } catch (err) {
+      if (err instanceof Error) return `오류: ${err.message}`;
+      throw err;
+    }
+
     // 파일 읽기
     let originalBuffer: Buffer;
     try {
@@ -736,6 +749,7 @@ export const proposeCellEditTool: ToolDefinition<ProposeCellEditInput> = {
         diff,
         warnings: [],
         willConvertFormat,
+        sourcePath: safePath,
       },
       commit: async (): Promise<string> => {
         const backupPath = await backupFile(safePath, undefined, { summary: input.summary });

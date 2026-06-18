@@ -27,6 +27,12 @@ export interface Proposal {
   warnings: string[];
   /** 포맷 변환이 일어나는 경우 명시 (예: ".hwp → .hwpx") */
   willConvertFormat?: string;
+  /**
+   * mtime 기반 lost-update 감지용 — 편집 대상이 되는 "기존 원본 파일"의 절대 경로.
+   * .hwp→.hwpx 변환 시에는 출력(.hwpx)이 아니라 읽은 원본(.hwp) 경로를 설정한다.
+   * 신규 생성(new-document/new-spreadsheet)·export·restore에는 설정하지 않는다.
+   */
+  sourcePath?: string;
 }
 
 export interface ApprovalResult {

@@ -2,7 +2,7 @@ import { mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { resolveSafePath } from "./security.js";
+import { assertFileSizeWithinLimit, resolveSafePath } from "./security.js";
 
 const testDir = join(tmpdir(), `kodocagent-test-security-${Date.now()}`);
 // macOS에서 /var/folders → /private/var/folders 심링크이므로 realpath로 정규화
@@ -66,5 +66,52 @@ describe("resolveSafePath", () => {
   it("cwd 자체 경로는 허용된다", async () => {
     const result = await resolveSafePath(testDir, ".");
     expect(result).toBe(realTestDir);
+  });
+});
+
+describe("assertFileSizeWithinLimit", () => {
+  const tmpBase = join(tmpdir(), `kodocagent-test-filesize-${Date.now()}`);
+  let realTmpBase: string;
+
+  beforeEach(async () => {
+    await mkdir(tmpBase, { recursive: true });
+    realTmpBase = await realpath(tmpBase);
+  });
+
+  afterEach(async () => {
+    await rm(tmpBase, { recursive: true, force: true });
+  });
+
+  it("파일이 한도 이내이면 통과한다", async () => {
+    const file = join(realTmpBase, "small.txt");
+    await writeFile(file, "abc", "utf-8"); // 3바이트
+    await expect(assertFileSizeWithinLimit(file, 10)).resolves.toBeUndefined();
+  });
+
+  it("파일이 정확히 한도와 같으면 통과한다", async () => {
+    const file = join(realTmpBase, "exact.txt");
+    await writeFile(file, "1234567890", "utf-8"); // 10바이트
+    await expect(assertFileSizeWithinLimit(file, 10)).resolves.toBeUndefined();
+  });
+
+  it("파일이 한도를 초과하면 KodocError를 던진다", async () => {
+    const file = join(realTmpBase, "large.txt");
+    await writeFile(file, "12345678901", "utf-8"); // 11바이트 > 10
+    await expect(assertFileSizeWithinLimit(file, 10)).rejects.toThrow("파일이 너무 커서");
+  });
+
+  it("파일이 없으면 던지지 않고 통과한다(후속 읽기가 친화 메시지로 처리)", async () => {
+    const missing = join(realTmpBase, "does-not-exist.txt");
+    await expect(assertFileSizeWithinLimit(missing, 10)).resolves.toBeUndefined();
+  });
+
+  it("KodocError의 hint에 해결 방법이 포함된다", async () => {
+    const file = join(realTmpBase, "large2.txt");
+    await writeFile(file, "x".repeat(20), "utf-8");
+    const { KodocError } = await import("@kodocagent/shared");
+    await expect(assertFileSizeWithinLimit(file, 5)).rejects.toSatisfy(
+      (e) =>
+        e instanceof KodocError && typeof (e as InstanceType<typeof KodocError>).hint === "string",
+    );
   });
 });

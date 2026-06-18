@@ -10,6 +10,9 @@
  * - propose가 string 반환: 툴-레벨 오류, handler/commit 미호출
  */
 
+import { mkdir, rm, utimes, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { ApprovalHandler, Proposal } from "@kodocagent/shared";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -360,5 +363,93 @@ describe("열린 파일 경고 (OVERWRITE_KINDS)", () => {
     // proposal.warnings에 동일 문자열이 1번만 있어야 함
     const count = proposal.warnings.filter((w) => w === OPEN_FILE_WARN).length;
     expect(count).toBe(1);
+  });
+});
+
+describe("가드 A — mtime lost-update 방지", () => {
+  /** 실제 임시 파일을 생성하고 sourcePath가 설정된 proposal을 반환하는 공통 셋업 */
+  async function setupMtimeTest(dir: string) {
+    const srcFile = join(dir, "source.hwpx");
+    await writeFile(srcFile, "original content", "utf-8");
+
+    const registry = new ToolRegistry();
+    const commitFn = vi.fn().mockResolvedValue("저장 완료");
+
+    registry.register({
+      name: "mtime_test_tool",
+      description: "mtime 테스트",
+      inputSchema: z.object({}),
+      requiresApproval: true,
+      propose: async (): Promise<ProposeOutcome> => ({
+        proposal: {
+          id: "mtime-prop-001",
+          kind: "edit",
+          targetPath: srcFile,
+          stagedPath: srcFile,
+          summary: "테스트",
+          diff: "",
+          warnings: [],
+          sourcePath: srcFile,
+        } satisfies Proposal,
+        commit: commitFn,
+      }),
+    });
+
+    registry.setContext({ cwd: dir, sessionId: "test-mtime" });
+
+    return { registry, commitFn, srcFile };
+  }
+
+  it("sourcePath의 mtime이 바뀌면 commit이 KodocError로 중단된다", async () => {
+    const dir = join(tmpdir(), `mtime-test-changed-${Date.now()}`);
+    await mkdir(dir, { recursive: true });
+    try {
+      const { registry, commitFn, srcFile } = await setupMtimeTest(dir);
+
+      // approval 핸들러 안에서 파일 mtime을 변경
+      const handler: ApprovalHandler = async () => {
+        // 1초 후 시간으로 utimes 설정 — mtime을 확실히 다르게
+        const futureTime = new Date(Date.now() + 5000);
+        await utimes(srcFile, futureTime, futureTime);
+        return { approved: true };
+      };
+      registry.setApprovalHandler(handler);
+
+      const tools = registry.toAiSdkTools();
+      const result = await tools["mtime_test_tool"]!.execute!(
+        {},
+        { toolCallId: "tc-mtime-1", messages: [], abortSignal: undefined },
+      );
+
+      // commit이 호출되지 않아야 함
+      expect(commitFn).not.toHaveBeenCalled();
+      // 오류 메시지에 "변경되어" 포함
+      expect(String(result)).toContain("변경되어");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("sourcePath의 mtime이 바뀌지 않으면 정상 저장된다", async () => {
+    const dir = join(tmpdir(), `mtime-test-ok-${Date.now()}`);
+    await mkdir(dir, { recursive: true });
+    try {
+      const { registry, commitFn } = await setupMtimeTest(dir);
+
+      // 정상 승인 핸들러 (mtime 미변경)
+      registry.setApprovalHandler(async () => ({ approved: true }));
+
+      const tools = registry.toAiSdkTools();
+      const result = await tools["mtime_test_tool"]!.execute!(
+        {},
+        { toolCallId: "tc-mtime-2", messages: [], abortSignal: undefined },
+      );
+
+      // commit이 호출되어야 함
+      expect(commitFn).toHaveBeenCalledOnce();
+      expect(String(result)).toContain("저장 완료");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

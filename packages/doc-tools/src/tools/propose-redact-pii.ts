@@ -15,7 +15,12 @@ import JSZip from "jszip";
 import { scanSectionXml } from "kordoc";
 import { z } from "zod";
 import { applyRangeSplicesToSection, collectParasInDocOrder } from "../hwpx-splice.js";
-import { hwpStructuralGuard, isZipBinary, resolveSafePath } from "../security.js";
+import {
+  assertFileSizeWithinLimit,
+  hwpStructuralGuard,
+  isZipBinary,
+  resolveSafePath,
+} from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
@@ -220,6 +225,14 @@ export const proposeRedactPiiTool: ToolDefinition<ProposeRedactPiiInput> = {
 
     const { outputPath, willConvertFormat } = resolveOutputPath(safePath);
 
+    // 파일 크기 가드 — 원본 readFile 직전
+    try {
+      await assertFileSizeWithinLimit(safePath);
+    } catch (err) {
+      if (err instanceof Error) return `오류: ${err.message}`;
+      throw err;
+    }
+
     // ── .hwpx / .hwp 처리 ─────────────────────────────────
     if (ext === ".hwpx" || ext === ".hwp") {
       let originalBuf: Buffer;
@@ -278,6 +291,7 @@ export const proposeRedactPiiTool: ToolDefinition<ProposeRedactPiiInput> = {
           diff,
           warnings: [],
           willConvertFormat,
+          sourcePath: safePath,
         },
         commit: async (): Promise<string> => {
           const backupPath = await backupFile(outputPath, undefined, { summary: summaryText });
@@ -318,6 +332,7 @@ export const proposeRedactPiiTool: ToolDefinition<ProposeRedactPiiInput> = {
         diff,
         warnings: [],
         willConvertFormat,
+        sourcePath: safePath,
       },
       commit: async (): Promise<string> => {
         const backupPath = await backupFile(outputPath, undefined, { summary: summaryText });

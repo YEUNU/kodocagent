@@ -10,7 +10,7 @@ import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import ExcelJS from "exceljs";
 import { z } from "zod";
-import { resolveSafePath } from "../security.js";
+import { assertFileSizeWithinLimit, resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
@@ -52,6 +52,14 @@ export const proposeSheetEditTool: ToolDefinition<ProposeSheetEditInput> = {
 
     if (ext !== ".xlsx" && ext !== ".xls") {
       return `오류: propose_sheet_edit은 .xlsx/.xls 파일만 지원합니다. 현재 파일: ${ext}.`;
+    }
+
+    // 파일 크기 가드 — 원본 readFile 직전
+    try {
+      await assertFileSizeWithinLimit(safePath);
+    } catch (err) {
+      if (err instanceof Error) return `오류: ${err.message}`;
+      throw err;
     }
 
     // 원본 파일 읽기
@@ -134,6 +142,7 @@ export const proposeSheetEditTool: ToolDefinition<ProposeSheetEditInput> = {
         diff,
         warnings: [],
         willConvertFormat,
+        sourcePath: safePath,
       },
       commit: async (): Promise<string> => {
         const backupPath = await backupFile(outputPath, undefined, { summary: opSummary });

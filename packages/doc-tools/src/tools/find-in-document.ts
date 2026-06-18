@@ -15,7 +15,7 @@ import { extname } from "node:path";
 import JSZip from "jszip";
 import { scanSectionXml } from "kordoc";
 import { z } from "zod";
-import { isZipBinary, resolveSafePath } from "../security.js";
+import { assertFileSizeWithinLimit, isZipBinary, resolveSafePath } from "../security.js";
 import type { ToolContext, ToolDefinition } from "../types.js";
 
 // ─────────────────────────────────────────────────────────
@@ -177,6 +177,14 @@ export const findInDocumentTool: ToolDefinition<FindInDocumentInput> = {
         "본문 텍스트 검색은 read_document의 search 모드를 사용하세요. " +
         "(.hwp 파일은 한글에서 다른 이름으로 저장 → .hwpx로 변환 후 사용하세요.)"
       );
+    }
+
+    // 파일 크기 가드 — 원본 readFile 직전
+    try {
+      await assertFileSizeWithinLimit(safePath);
+    } catch (err) {
+      if (err instanceof Error) return `오류: ${err.message}`;
+      throw err;
     }
 
     // 파일 읽기

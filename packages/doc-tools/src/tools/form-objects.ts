@@ -19,7 +19,12 @@ import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import JSZip from "jszip";
 import { z } from "zod";
-import { hwpStructuralGuard, isZipBinary, resolveSafePath } from "../security.js";
+import {
+  assertFileSizeWithinLimit,
+  hwpStructuralGuard,
+  isZipBinary,
+  resolveSafePath,
+} from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
@@ -803,6 +808,14 @@ export const proposeFormObjectTool: ToolDefinition<ProposeFormObjectInput> = {
     const safePath = await resolveSafePath(ctx.cwd, input.path);
     const ext = extname(safePath).toLowerCase();
 
+    // 파일 크기 가드 — 원본 readFile 직전
+    try {
+      await assertFileSizeWithinLimit(safePath);
+    } catch (err) {
+      if (err instanceof Error) return `오류: ${err.message}`;
+      throw err;
+    }
+
     let originalBuffer: Buffer;
     try {
       originalBuffer = await readFile(safePath);
@@ -1007,6 +1020,7 @@ export const proposeFormObjectTool: ToolDefinition<ProposeFormObjectInput> = {
         diff,
         warnings: [],
         willConvertFormat,
+        sourcePath: safePath,
       },
       commit: async (): Promise<string> => {
         const backupPath = await backupFile(safePath, undefined, { summary: input.summary });

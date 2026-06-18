@@ -17,7 +17,7 @@ import { compare, patchHwp, patchHwpx } from "kordoc";
 import { z } from "zod";
 import { parse } from "../kordoc-parse.js";
 import { markdownToDocx } from "../md-to-docx.js";
-import { resolveSafePath } from "../security.js";
+import { assertFileSizeWithinLimit, resolveSafePath } from "../security.js";
 import {
   backupFile,
   commitStaged,
@@ -55,6 +55,14 @@ export const proposeEditTool: ToolDefinition<ProposeEditInput> = {
   }): Promise<ProposeOutcome | string> => {
     const safePath = await resolveSafePath(ctx.cwd, input.path);
     const ext = extname(safePath).toLowerCase();
+
+    // 파일 크기 가드 — 원본 readFile 직전
+    try {
+      await assertFileSizeWithinLimit(safePath);
+    } catch (err) {
+      if (err instanceof Error) return `오류: ${err.message}`;
+      throw err;
+    }
 
     // 원본 파일 읽기
     let originalBuffer: Buffer;
@@ -172,6 +180,7 @@ export const proposeEditTool: ToolDefinition<ProposeEditInput> = {
         diff,
         warnings,
         willConvertFormat,
+        sourcePath: safePath,
       },
       commit: async (): Promise<string> => {
         // 백업 (원본이 있을 때만)

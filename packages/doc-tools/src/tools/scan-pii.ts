@@ -10,7 +10,7 @@ import { extname } from "node:path";
 import { detectPii } from "@kodocagent/shared";
 import { z } from "zod";
 import { parse } from "../kordoc-parse.js";
-import { resolveSafePath } from "../security.js";
+import { assertFileSizeWithinLimit, resolveSafePath } from "../security.js";
 import type { ToolContext, ToolDefinition } from "../types.js";
 
 /** 평문 텍스트 확장자 집합 (소문자) — kordoc 없이 직접 읽는다 */
@@ -46,6 +46,14 @@ export const scanPiiTool: ToolDefinition<ScanPiiInput> = {
     }
 
     const ext = extname(safePath).toLowerCase();
+
+    // 파일 크기 가드 — 원본 readFile 직전
+    try {
+      await assertFileSizeWithinLimit(safePath);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return `오류: ${msg}`;
+    }
 
     let text: string;
     if (PLAIN_TEXT_EXTS.has(ext)) {

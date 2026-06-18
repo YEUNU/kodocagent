@@ -9,7 +9,7 @@
 import { readFile } from "node:fs/promises";
 import { blocksToMarkdown, compare } from "kordoc";
 import { z } from "zod";
-import { resolveSafePath } from "../security.js";
+import { assertFileSizeWithinLimit, resolveSafePath } from "../security.js";
 import type { ToolContext, ToolDefinition } from "../types.js";
 
 /** 반환 마크다운 최대 길이 — read_document와 동일 */
@@ -81,12 +81,14 @@ export const compareDocumentsTool: ToolDefinition<CompareDocumentsInput> = {
     let bufA: Buffer;
     let bufB: Buffer;
     try {
+      await assertFileSizeWithinLimit(safePathA);
       bufA = await readFile(safePathA);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       return `오류: 첫 번째 파일을 읽을 수 없습니다 (${input.pathA}): ${msg}`;
     }
     try {
+      await assertFileSizeWithinLimit(safePathB);
       bufB = await readFile(safePathB);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);

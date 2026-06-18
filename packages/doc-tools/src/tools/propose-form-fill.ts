@@ -18,7 +18,7 @@ import { kordocErrorMessage } from "@kodocagent/shared";
 import { extractFormSchema, fillHwpx } from "kordoc";
 import { z } from "zod";
 import { parse } from "../kordoc-parse.js";
-import { hwpStructuralGuard, resolveSafePath } from "../security.js";
+import { assertFileSizeWithinLimit, hwpStructuralGuard, resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
@@ -53,6 +53,14 @@ export const proposeFormFillTool: ToolDefinition<ProposeFormFillInput> = {
 
     if (ext !== ".hwpx" && ext !== ".hwp") {
       return `오류: propose_form_fill은 .hwp/.hwpx 파일만 지원합니다. 현재 파일: ${ext}. .docx 파일은 propose_edit을 사용하세요.`;
+    }
+
+    // 파일 크기 가드 — 원본 readFile 직전
+    try {
+      await assertFileSizeWithinLimit(safePath);
+    } catch (err) {
+      if (err instanceof Error) return `오류: ${err.message}`;
+      throw err;
     }
 
     // 원본 파일 읽기
@@ -153,6 +161,7 @@ export const proposeFormFillTool: ToolDefinition<ProposeFormFillInput> = {
         diff,
         warnings,
         willConvertFormat,
+        sourcePath: safePath,
       },
       commit: async (): Promise<string> => {
         const backupPath = await backupFile(safePath, undefined, { summary: input.summary });

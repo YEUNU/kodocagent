@@ -10,6 +10,7 @@
  * approved=true 결과 후에만 호출된다.
  */
 
+import { stat } from "node:fs/promises";
 import type { ApprovalHandler, Proposal } from "@kodocagent/shared";
 import { detectPii, KodocError, summarizePii } from "@kodocagent/shared";
 import type { Schema, ToolSet } from "ai";
@@ -201,7 +202,19 @@ export class ToolRegistry {
               proposal.warnings = [...(proposal.warnings ?? []), OPEN_FILE_WARN];
             }
 
-            // 2단계: approval-required 이벤트 발행 (UI용)
+            // 2단계: approval-required 이벤트 발행 직전 — mtime baseline 캡처
+            // per-call 로컬 변수 (모듈 전역 금지 — 동시 호출 레이스 방지)
+            let baselineMtimeMs: number | null = null;
+            if (proposal.sourcePath) {
+              try {
+                const s = await stat(proposal.sourcePath);
+                baselineMtimeMs = s.mtimeMs;
+              } catch {
+                // 파일이 없거나 접근 불가 → null 유지 (검사 스킵)
+              }
+            }
+
+            // approval-required 이벤트 발행 (UI용)
             getEventEmitter()?.(proposal);
 
             // 3단계: ApprovalHandler 호출
@@ -214,8 +227,31 @@ export class ToolRegistry {
               );
             }
 
-            // 4단계: commit() — 백업 + 원자적 쓰기
+            // commit() — 백업 + 원자적 쓰기
+            // (mtime 재확인도 이 블록 안에서 수행 — KodocError가 동일한 catch로 노출됨)
             try {
+              // 4단계: commit() 직전 — mtime 재확인 (lost-update 방지)
+              // 이 경로는 commit 전에 중단되므로 파일을 건드리지 않는다(부분쓰기·temp 없음)
+              if (baselineMtimeMs !== null && proposal.sourcePath) {
+                let currentMtimeMs: number;
+                try {
+                  const s = await stat(proposal.sourcePath);
+                  currentMtimeMs = s.mtimeMs;
+                } catch {
+                  // 파일 삭제됨 → 저장 중단
+                  throw new KodocError(
+                    "승인을 기다리는 동안 파일이 변경되어 저장하지 않았습니다.",
+                    "read_document로 문서를 다시 읽고 변경을 다시 제안하세요. 다른 프로그램에서 편집 중이면 닫아 주세요.",
+                  );
+                }
+                if (Math.abs(currentMtimeMs - baselineMtimeMs) > 1) {
+                  throw new KodocError(
+                    "승인을 기다리는 동안 파일이 변경되어 저장하지 않았습니다.",
+                    "read_document로 문서를 다시 읽고 변경을 다시 제안하세요. 다른 프로그램에서 편집 중이면 닫아 주세요.",
+                  );
+                }
+              }
+
               const commitMsg = await commit();
               // 제안 경고를 결과에 덧붙여 모델이 정직하게 보고하도록 한다
               // (예: find/replace에서 서식 분리로 일부 미치환 시 — "모두 변경" 과장 방지)

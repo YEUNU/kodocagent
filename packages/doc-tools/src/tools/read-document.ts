@@ -9,36 +9,22 @@
  * search 모드: 키워드 주변 맥락만 반환해 필요한 부분만 효율적으로 읽음.
  * 두 모드 동시 지정 시 outline 우선.
  */
-import { readFile, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { kordocErrorMessage } from "@kodocagent/shared";
 import { z } from "zod";
 import { parse } from "../kordoc-parse.js";
-import { resolveSafePath } from "../security.js";
+import { assertFileSizeWithinLimit, resolveSafePath } from "../security.js";
 import type { ToolContext, ToolDefinition } from "../types.js";
 
 /** 반환 마크다운 최대 길이 (약 80k 문자) */
 const MAX_MARKDOWN_LENGTH = 80_000;
-
-/** 입력 파일 최대 크기 (100MB) — 초과 시 파싱 없이 오류 반환 */
-const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 
 /** 평문 텍스트 확장자 집합 (소문자) — kordoc 없이 직접 읽는다 */
 const PLAIN_TEXT_EXTS = new Set([".md", ".markdown", ".txt", ".text"]);
 
 /** searchExcerpts 매치 블록 최대 수 */
 const MAX_SEARCH_MATCHES = 50;
-
-/**
- * 파일 크기 가드 메시지를 반환한다.
- * - 크기가 limitBytes를 초과하면 한국어 오류 문자열 반환
- * - 초과하지 않으면 null 반환
- */
-export function fileSizeGuardMessage(sizeBytes: number, limitBytes: number): string | null {
-  if (sizeBytes <= limitBytes) return null;
-  const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(1);
-  return `오류: 파일이 너무 큽니다 (${sizeMB}MB, 최대 100MB). 파일을 분할하거나 일부만 추출해 다시 시도하세요.`;
-}
 
 /**
  * 마크다운에서 헤딩(#~######) 라인만 추출해 문서 개요를 반환한다.
@@ -193,12 +179,10 @@ export const readDocumentTool: ToolDefinition<ReadDocumentInput> = {
 
     // 파일 크기 가드 — 평문/kordoc 분기 이전에 확인
     try {
-      const fileStat = await stat(safePath);
-      const guardMsg = fileSizeGuardMessage(fileStat.size, MAX_FILE_SIZE_BYTES);
-      if (guardMsg !== null) return guardMsg;
+      await assertFileSizeWithinLimit(safePath);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      return `오류: 파일을 읽을 수 없습니다: ${msg}`;
+      return `오류: ${msg}`;
     }
 
     // 평문 텍스트 파일은 kordoc 없이 직접 UTF-8로 읽어 반환한다.

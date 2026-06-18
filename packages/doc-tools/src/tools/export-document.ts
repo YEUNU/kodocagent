@@ -16,7 +16,7 @@ import { kordocErrorMessage } from "@kodocagent/shared";
 import { markdownToPdf, renderHtml } from "kordoc";
 import { z } from "zod";
 import { parse } from "../kordoc-parse.js";
-import { resolveSafePath } from "../security.js";
+import { assertFileSizeWithinLimit, resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
@@ -61,6 +61,14 @@ export const exportDocumentTool: ToolDefinition<ExportDocumentInput> = {
         `오류: 지원하지 않는 출력 형식입니다: ${outExt || "(확장자 없음)"}. ` +
         "출력 경로를 .html 또는 .pdf 로 지정하세요."
       );
+    }
+
+    // 파일 크기 가드 — 원본 파싱 직전 (출력 경로에는 적용하지 않음)
+    try {
+      await assertFileSizeWithinLimit(safePath);
+    } catch (err) {
+      if (err instanceof Error) return `오류: ${err.message}`;
+      throw err;
     }
 
     // 원본 파싱 — kordoc이 읽는 형식이면 모두 가능

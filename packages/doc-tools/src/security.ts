@@ -7,10 +7,45 @@
  * - 플랫폼 독립 구분자 처리 (path.relative 기반 — Windows 역슬래시 포함)
  * - 한국어 에러 메시지
  */
-import { realpath } from "node:fs/promises";
+import { realpath, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { KodocError } from "@kodocagent/shared";
 import { isOldHwpFile, isZipFile } from "kordoc";
+
+/** 파일 크기 한도 — 100 MB */
+export const MAX_FILE_BYTES = 100 * 1024 * 1024;
+
+/**
+ * 파일 크기가 한도 이내인지 검증한다.
+ * 사용자 원본 문서를 readFile하기 직전에 호출하라.
+ *
+ * stat 실패(파일 없음·권한 등)는 여기서 던지지 않는다 — 후속 readFile/parse가
+ * 한국어 친화 메시지로 처리하도록 위임한다(없는 경로에 raw ENOENT·절대경로가 새지 않게).
+ * 실제로 너무 큰 파일(한도 초과)일 때만 KodocError를 던진다.
+ *
+ * @param path     검증할 파일 절대 경로 (resolveSafePath 통과 후)
+ * @param maxBytes 최대 바이트 수 (기본값: MAX_FILE_BYTES = 100 MB)
+ * @throws KodocError — 한도 초과 시에만
+ */
+export async function assertFileSizeWithinLimit(
+  path: string,
+  maxBytes = MAX_FILE_BYTES,
+): Promise<void> {
+  let size: number;
+  try {
+    size = (await stat(path)).size;
+  } catch {
+    // 파일이 없거나 stat 실패 → 크기 가드는 통과시키고 후속 읽기가 처리하게 둔다.
+    return;
+  }
+  if (size > maxBytes) {
+    const maxMb = Math.round(maxBytes / (1024 * 1024));
+    throw new KodocError(
+      `파일이 너무 커서 처리할 수 없습니다(최대 ${maxMb}MB).`,
+      "더 작은 파일로 나누거나 한글에서 일부만 저장해 다시 시도하세요.",
+    );
+  }
+}
 
 // ─────────────────────────────────────────────────────────
 // HWP 구조 편집 가드 — 포맷 감지는 kordoc API에 위임
