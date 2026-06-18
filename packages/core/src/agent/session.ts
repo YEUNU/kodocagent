@@ -14,7 +14,28 @@ import type { SessionStore } from "../session/store.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import { compactMessages } from "./context.js";
 import type { AgentEvent } from "./events.js";
-import { buildSystemPrompt } from "./prompts.js";
+import { buildSystemPrompt, SELF_VERIFY_PROMPT } from "./prompts.js";
+
+/**
+ * 문서를 실제로 변경하는(승인 후 커밋되는) 편집 도구 집합.
+ * 이 도구가 호출된 턴 끝에는 자가 검증 라운드를 1회 강제해 완결성·정확성을 보정한다.
+ */
+const EDITING_TOOLS = new Set<string>([
+  "propose_edit",
+  "propose_find_replace",
+  "propose_cell_edit",
+  "propose_redact_pii",
+  "propose_form_fill",
+  "propose_table_structure",
+  "propose_form_object",
+  "propose_sheet_edit",
+  "write_new_document",
+  "write_new_spreadsheet",
+  "restore_backup",
+]);
+
+/** 자가 검증 라운드 최대 횟수(무한 루프 방지). 1회면 대부분의 완결성 누락을 잡는다. */
+const MAX_SELF_VERIFY_ROUNDS = 1;
 
 export interface AgentSessionOptions {
   config: KodocConfig;
@@ -110,134 +131,167 @@ export class AgentSession {
     const userMsg: ModelMessage = { role: "user", content: userMessage };
     this.messages.push(userMsg);
 
-    const system = buildSystemPrompt({
-      cwd: this.opts.cwd,
-      mcpServers: this.opts.mcpServers ?? [],
-      openDocuments: this.openDocuments,
-      toolNames: tools.toolNames,
-    });
-
     const aiSdkTools = tools.toAiSdkTools();
 
-    // streamText 호출 전 토큰 예산 내로 컨텍스트 압축 (in-memory만 적용, 영속화 무관)
-    this.messages = compactMessages(this.messages, config.maxContextTokens);
+    // 자가 검증 루프 — 편집을 수행한 라운드 끝에 검증 라운드를 1회 강제한다.
+    // 약한 모델이 일부만 처리하고 조기 종료하는 것을 구조적으로 보정(완결성·정확성).
+    // 환경변수 KODOC_SELF_VERIFY=0 으로 비활성화(평가 대조용).
+    const selfVerifyEnabled = process.env.KODOC_SELF_VERIFY !== "0";
+    let verifyRounds = 0;
+    // turn-complete 는 모든 라운드 종료 후 1회만 방출(누적 토큰).
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let sawFinish = false;
 
     try {
-      const result = streamText({
-        model,
-        system,
-        messages: this.messages,
-        tools: aiSdkTools,
-        // 멀티스텝 정지 조건: maxSteps번 툴콜 후 중단 (AI SDK v6 실제 API)
-        stopWhen: stepCountIs(config.maxSteps),
-        abortSignal: signal,
-        // 샘플링 파라미터 미설정 (SPEC §3, §5 불변 원칙)
-        onError: () => {
-          // 오류는 fullStream의 error 파트와 아래 catch에서 이미 깔끔히 처리됨.
-          // AI SDK 기본 onError(console.error 원시 덤프)를 비활성화한다.
-        },
-      });
+      while (true) {
+        // 시스템 프롬프트는 라운드마다 재생성(openDocuments 변동 반영) + 캐시 친화 안정 prefix
+        const system = buildSystemPrompt({
+          cwd: this.opts.cwd,
+          mcpServers: this.opts.mcpServers ?? [],
+          openDocuments: this.openDocuments,
+          toolNames: tools.toolNames,
+        });
+        // 토큰 예산 내로 컨텍스트 압축 (in-memory만 적용)
+        this.messages = compactMessages(this.messages, config.maxContextTokens);
 
-      // fullStream으로 모든 이벤트를 구독한다
-      for await (const part of result.fullStream) {
-        if (signal.aborted) break;
+        let editedThisRound = false;
 
-        // approval-required 이벤트를 방출 (UI가 렌더링할 수 있도록)
-        // 실제 승인/거절은 ApprovalHandler가 동기적으로 처리하므로 이미 완료됨
-        while (this.pendingApprovalEvents.length > 0) {
-          const proposal = this.pendingApprovalEvents.shift()!;
-          yield { type: "approval-required", proposal };
-        }
+        const result = streamText({
+          model,
+          system,
+          messages: this.messages,
+          tools: aiSdkTools,
+          // 멀티스텝 정지 조건: maxSteps번 툴콜 후 중단 (AI SDK v6 실제 API)
+          stopWhen: stepCountIs(config.maxSteps),
+          abortSignal: signal,
+          // 샘플링 파라미터 미설정 (SPEC §3, §5 불변 원칙)
+          onError: () => {
+            // 오류는 fullStream의 error 파트와 아래 catch에서 이미 깔끔히 처리됨.
+            // AI SDK 기본 onError(console.error 원시 덤프)를 비활성화한다.
+          },
+        });
 
-        switch (part.type) {
-          case "text-delta": {
-            yield { type: "text-delta", text: part.text };
-            break;
+        // fullStream으로 모든 이벤트를 구독한다
+        for await (const part of result.fullStream) {
+          if (signal.aborted) break;
+
+          // approval-required 이벤트를 방출 (UI가 렌더링할 수 있도록)
+          while (this.pendingApprovalEvents.length > 0) {
+            const proposal = this.pendingApprovalEvents.shift()!;
+            yield { type: "approval-required", proposal };
           }
-          case "tool-call": {
-            yield {
-              type: "tool-call",
-              toolName: part.toolName,
-              args: part.input,
-              callId: part.toolCallId,
-            };
-            // 열람한 문서 경로를 기록한다 (openDocuments → 시스템 프롬프트)
-            try {
-              const inp = part.input as Record<string, unknown>;
-              if (part.toolName === "read_document") {
-                this.recordOpenDocument(inp.path);
-              } else if (part.toolName === "compare_documents") {
-                this.recordOpenDocument(inp.pathA);
-                this.recordOpenDocument(inp.pathB);
-              } else if (
-                part.toolName === "write_new_document" ||
-                part.toolName === "write_new_spreadsheet"
-              ) {
-                this.recordOpenDocument(inp.path);
-              }
-            } catch {
-              // 방어적: 입력 접근 오류는 무시
+
+          switch (part.type) {
+            case "text-delta": {
+              yield { type: "text-delta", text: part.text };
+              break;
             }
-            break;
+            case "tool-call": {
+              yield {
+                type: "tool-call",
+                toolName: part.toolName,
+                args: part.input,
+                callId: part.toolCallId,
+              };
+              if (EDITING_TOOLS.has(part.toolName)) editedThisRound = true;
+              // 열람한 문서 경로를 기록한다 (openDocuments → 시스템 프롬프트)
+              try {
+                const inp = part.input as Record<string, unknown>;
+                if (part.toolName === "read_document") {
+                  this.recordOpenDocument(inp.path);
+                } else if (part.toolName === "compare_documents") {
+                  this.recordOpenDocument(inp.pathA);
+                  this.recordOpenDocument(inp.pathB);
+                } else if (
+                  part.toolName === "write_new_document" ||
+                  part.toolName === "write_new_spreadsheet"
+                ) {
+                  this.recordOpenDocument(inp.path);
+                }
+              } catch {
+                // 방어적: 입력 접근 오류는 무시
+              }
+              break;
+            }
+            case "tool-result": {
+              const isError = false; // tool-result는 성공
+              yield {
+                type: "tool-result",
+                callId: part.toolCallId,
+                result: part.output,
+                isError,
+              };
+              await store.appendToolResult(part.toolCallId, part.output, isError);
+              break;
+            }
+            case "tool-error": {
+              yield {
+                type: "tool-result",
+                callId: part.toolCallId,
+                result: String(part.error),
+                isError: true,
+              };
+              await store.appendToolResult(part.toolCallId, String(part.error), true);
+              break;
+            }
+            case "finish": {
+              const usage = part.totalUsage;
+              if (usage) {
+                totalInputTokens += usage.inputTokens ?? 0;
+                totalOutputTokens += usage.outputTokens ?? 0;
+              }
+              sawFinish = true;
+              break;
+            }
+            case "error": {
+              const errPart = part as { type: "error"; error: unknown };
+              const message =
+                errPart.error instanceof Error ? errPart.error.message : String(errPart.error);
+              yield { type: "error", message, recoverable: false };
+              break;
+            }
+            default:
+              // 그 외 이벤트는 무시 (reasoning, source 등)
+              break;
           }
-          case "tool-result": {
-            const isError = false; // tool-result는 성공
-            yield {
-              type: "tool-result",
-              callId: part.toolCallId,
-              result: part.output,
-              isError,
-            };
-            await store.appendToolResult(part.toolCallId, part.output, isError);
-            break;
-          }
-          case "tool-error": {
-            yield {
-              type: "tool-result",
-              callId: part.toolCallId,
-              result: String(part.error),
-              isError: true,
-            };
-            await store.appendToolResult(part.toolCallId, String(part.error), true);
-            break;
-          }
-          case "finish": {
-            const usage = part.totalUsage;
-            yield {
-              type: "turn-complete",
-              usage: usage
-                ? {
-                    inputTokens: usage.inputTokens ?? 0,
-                    outputTokens: usage.outputTokens ?? 0,
-                  }
-                : undefined,
-            };
-            break;
-          }
-          case "error": {
-            const errPart = part as { type: "error"; error: unknown };
-            const message =
-              errPart.error instanceof Error ? errPart.error.message : String(errPart.error);
-            yield { type: "error", message, recoverable: false };
-            break;
-          }
-          default:
-            // 그 외 이벤트는 무시 (reasoning, source 등)
-            break;
         }
+
+        // 라운드 완료 후 어시스턴트 메시지를 영속화(+ in-memory 누적)
+        try {
+          const response = await result.response;
+          for (const msg of response.messages) {
+            const modelMsg = msg as ModelMessage;
+            this.messages.push(modelMsg);
+            await store.appendAssistant(modelMsg);
+          }
+        } catch {
+          // 응답 메시지 영속화 실패는 무시 (스트림은 이미 완료)
+        }
+
+        // 검증 라운드 트리거: 이번 라운드에 편집 도구 호출이 있었고, 한도 내이며, 중단 안 됨.
+        if (
+          selfVerifyEnabled &&
+          editedThisRound &&
+          verifyRounds < MAX_SELF_VERIFY_ROUNDS &&
+          !signal.aborted
+        ) {
+          verifyRounds++;
+          const verifyMsg: ModelMessage = { role: "user", content: SELF_VERIFY_PROMPT };
+          this.messages.push(verifyMsg);
+          await store.appendUser(SELF_VERIFY_PROMPT);
+          continue; // 다음 반복 = 검증 라운드
+        }
+        break;
       }
 
-      // 스텝 완료 후 어시스턴트 메시지를 영속화
-      try {
-        const response = await result.response;
-        for (const msg of response.messages) {
-          const modelMsg = msg as ModelMessage;
-          this.messages.push(modelMsg);
-          await store.appendAssistant(modelMsg);
-        }
-      } catch {
-        // 응답 메시지 영속화 실패는 무시 (스트림은 이미 완료)
-      }
+      // 모든 라운드 종료 — turn-complete 1회 방출(누적 토큰)
+      yield {
+        type: "turn-complete",
+        usage: sawFinish
+          ? { inputTokens: totalInputTokens, outputTokens: totalOutputTokens }
+          : undefined,
+      };
     } catch (err: unknown) {
       if (signal.aborted) {
         // AbortSignal에 의한 중단 — 정상 종료

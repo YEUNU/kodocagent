@@ -254,6 +254,135 @@ describe("AgentSession", () => {
 });
 
 // ─────────────────────────────────────────────────────────
+// 자가 검증 루프
+// ─────────────────────────────────────────────────────────
+
+describe("AgentSession — 자가 검증 루프", () => {
+  beforeEach(async () => {
+    await mkdir(testSessionsDir, { recursive: true });
+  });
+  afterEach(async () => {
+    await rm(testSessionsDir, { recursive: true, force: true });
+  });
+
+  /** 편집툴 호출 → 텍스트 → (검증) 텍스트 의 3-doStream 목 + 편집툴 등록 */
+  function setupEditMock() {
+    const editToolCall: AnyStreamPart[] = [
+      { type: "stream-start", warnings: [] },
+      {
+        type: "tool-call",
+        toolCallId: "c1",
+        toolName: "propose_find_replace",
+        input: '{"path":"a.hwpx","find":"x","replace":"y","summary":"s"}',
+      },
+      {
+        type: "finish",
+        finishReason: "tool-calls",
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      },
+    ];
+    const mk = (parts: AnyStreamPart[]) => ({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      stream: simulateReadableStream<any>({
+        chunks: parts,
+        initialDelayInMs: null,
+        chunkDelayInMs: null,
+      }),
+      request: { body: "{}" },
+      response: {},
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doStream: any = vi
+      .fn()
+      .mockResolvedValueOnce(mk(editToolCall))
+      .mockResolvedValueOnce(mk(makeStreamParts("1차 수정 완료")))
+      .mockResolvedValueOnce(mk(makeStreamParts("검증 완료: 모두 반영됨")));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mockModel = new MockLanguageModelV3({ doStream } as any) as unknown as LanguageModel;
+
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "propose_find_replace",
+      description: "편집툴(테스트)",
+      inputSchema: z.object({
+        path: z.string(),
+        find: z.string(),
+        replace: z.string(),
+        summary: z.string(),
+      }),
+      requiresApproval: false,
+      execute: vi.fn().mockResolvedValue("저장 완료: a.hwpx"),
+    });
+    return { doStream, mockModel, tools };
+  }
+
+  it("편집툴 호출 후 자동 검증 라운드가 1회 실행된다(turn-complete는 1회)", async () => {
+    const { doStream, mockModel, tools } = setupEditMock();
+    const store = await createStore();
+    const session = new AgentSession({
+      config: testConfig,
+      model: mockModel,
+      tools,
+      approvalHandler: async () => ({ approved: true }),
+      store,
+      cwd: "/test",
+    });
+
+    const events: import("./events.js").AgentEvent[] = [];
+    const controller = new AbortController();
+    for await (const event of session.run("x를 y로 바꿔줘", controller.signal)) {
+      events.push(event);
+    }
+
+    // 검증 라운드 → doStream 3회(편집라운드 2 + 검증라운드 1)
+    expect(doStream).toHaveBeenCalledTimes(3);
+    // 검증 라운드의 응답 텍스트가 스트림에 포함
+    const text = events
+      .filter((e) => e.type === "text-delta")
+      .map((e) => (e as { text: string }).text)
+      .join("");
+    expect(text).toContain("검증 완료");
+    // turn-complete는 모든 라운드 후 1회만
+    expect(events.filter((e) => e.type === "turn-complete")).toHaveLength(1);
+    // 검증 프롬프트가 대화에 주입됨
+    const msgs = await store.loadMessages();
+    const hasVerifyPrompt = msgs.some(
+      (m) =>
+        m.role === "user" &&
+        typeof m.content === "string" &&
+        m.content.includes("[자동 검증 단계]"),
+    );
+    expect(hasVerifyPrompt).toBe(true);
+  });
+
+  it("KODOC_SELF_VERIFY=0이면 검증 라운드를 건너뛴다", async () => {
+    const prev = process.env.KODOC_SELF_VERIFY;
+    process.env.KODOC_SELF_VERIFY = "0";
+    try {
+      const { doStream, mockModel, tools } = setupEditMock();
+      const store = await createStore();
+      const session = new AgentSession({
+        config: testConfig,
+        model: mockModel,
+        tools,
+        approvalHandler: async () => ({ approved: true }),
+        store,
+        cwd: "/test",
+      });
+      const controller = new AbortController();
+      for await (const _e of session.run("x를 y로 바꿔줘", controller.signal)) {
+        // drain
+      }
+      // 검증 라운드 없음 → doStream 2회(편집라운드만)
+      expect(doStream).toHaveBeenCalledTimes(2);
+    } finally {
+      if (prev === undefined) delete process.env.KODOC_SELF_VERIFY;
+      else process.env.KODOC_SELF_VERIFY = prev;
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────
 // 세션 재개 통합 테스트
 // ─────────────────────────────────────────────────────────
 
