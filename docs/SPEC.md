@@ -53,7 +53,12 @@ tsup 8.5 / vitest 4.1 / @biomejs/biome 2.4 / @changesets/cli 2.31 / TypeScript 6
 ## 2. kordoc 검증된 API (kordoc 3.x — 이대로 코딩 가능)
 
 ```ts
-import { parse, compare, patchHwpx, patchHwp, extractFormFields, markdownToHwpx } from "kordoc";
+import {
+  parse, compare, patchHwpx, patchHwp, markdownToHwpx,        // 읽기·비교·패치·생성
+  extractFormSchema, fillHwpx,                                  // 양식
+  scanSectionXml, buildRangeSplices, buildParagraphSplices, applySplices,  // splice 편집(v0.7.0)
+  renderHtml, markdownToPdf, isOldHwpFile, isZipFile,           // 출력·포맷감지(v0.7.0)
+} from "kordoc";
 
 // 1) 읽기 — 절대 throw하지 않음. 항상 ParseResult 반환
 parse(input: string /*경로*/ | ArrayBuffer | Buffer | Uint8Array, options?: ParseOptions): Promise<ParseResult>
@@ -69,14 +74,26 @@ patchHwpx(original: Uint8Array, editedMarkdown: string, options?): Promise<Patch
 patchHwp(original: Uint8Array, editedMarkdown: string, options?): Promise<PatchResult>    // .hwp(HWP5 바이너리, 제자리)
 // PatchResult: { success, data?: Uint8Array, applied, skipped: { reason: string }[], verification?, error? }
 
-// 4) 폼 필드 추출 — 현재 값 읽기(채우기는 마크다운 치환 후 patchHwpx로 적용)
-extractFormFields(blocks: IRBlock[]): FormField[]
+// 4) 양식 — 스키마 추출(타입/필수/빈값) + HWPX 직접 채움(서식 100% 보존)
+extractFormSchema(blocks: IRBlock[]): FormSchemaResult   // 라벨·type(date/phone/amount/checkbox/idnum)·required·empty
+fillHwpx(hwpxBuffer: ArrayBuffer, values: Record<string,string>): Promise<HwpxFillResult>  // {buffer, filled, unmatched}
 
 // 5) 신규 문서 생성 — 마크다운 → 새 HWPX (템플릿 없음)
 markdownToHwpx(markdown: string, options?: { theme?: string }): Promise<ArrayBuffer>
+
+// 6) section XML splice 프리미티브 (v0.7.0 — find_replace·redact_pii·cell_edit·find_in_document이 사용)
+scanSectionXml(xml: string, sectionIndex: number): SectionScan  // 소스맵: bodyParagraphs·tables(cellByAnchor "r,c"·colSpan/rowSpan)·excluded
+buildRangeSplices(para, xml, start, end, replacement): SpliceEdit[] | null  // t-도메인 범위치환(run/charPr·tab/br 보존)
+buildParagraphSplices(para, newText, xml?): SpliceEdit[] | null             // 문단 전체 치환(빈 셀 채우기 포함)
+applySplices(xml: string, splices: SpliceEdit[]): string                    // 겹침검증·역순 적용
+
+// 7) 출력·포맷감지 (v0.7.0 — export_document·security)
+renderHtml(markdown: string, options?): string                  // HTML(항상)
+markdownToPdf(markdown: string, options?): Promise<Buffer>      // PDF(puppeteer-core 필요)
+isOldHwpFile(buffer): boolean / isZipFile(buffer): boolean      // .hwp(OLE2)/.hwpx(ZIP) 매직바이트
 ```
 
-핵심 포인트: **`propose_edit`은 `patchHwpx`/`patchHwp`로 원본을 무손실 패치**한다 — 마크다운 전체 재생성이 아니라 변경된 노드만 패치하므로 건드리지 않은 표·병합·서식이 보존된다. `.hwp`는 `patchHwp`로 **제자리 편집**(포맷 변환 없음), 신규 문서만 `markdownToHwpx`로 생성한다. 안전하게 적용 못 한 변경은 `PatchResult.skipped`로 보고된다. 암호화 문서는 `code: "ENCRYPTED"`로 반환되므로 에러 메시지로 변환해 모델에 전달.
+핵심 포인트: **`propose_edit`은 `patchHwpx`/`patchHwp`로 원본을 무손실 패치**한다 — 변경된 노드만 패치하므로 건드리지 않은 표·병합·서식이 보존된다. `.hwp`는 `patchHwp`로 **제자리 편집**(단, HTML 표 셀 등 일부는 HWP5 미지원 → `applied=0`이면 `propose_edit`이 정직한 오류·.hwpx 변환 안내). **v0.7.0부터 텍스트/셀 편집 도구(`propose_find_replace`·`propose_redact_pii`·`propose_cell_edit`·`find_in_document`)는 자체 XML 토크나이저 대신 위 splice 프리미티브를 사용**한다(kordoc API-우선 — 서식 분리 텍스트 처리·병합셀 보존). 양식은 `fillHwpx`(직접 채움)+`extractFormSchema`(필드 안내). 안전하게 적용 못 한 변경은 `PatchResult.skipped`로 보고된다.
 
 ## 3. 모델 레지스트리 (`core/src/providers/registry.ts`)
 
@@ -165,8 +182,10 @@ class AgentSession {
 }
 ```
 
-- 내부적으로 `streamText({ model, system, messages, tools, stopWhen: <v6 멀티스텝 정지 조건>(config.maxSteps), abortSignal })`
-- **컨텍스트 관리**: 매 턴 `streamText` 직전 `compactMessages(messages, config.maxContextTokens)`로 예산 초과 시 오래된 대형 tool-result를 플레이스홀더로 축약(system·최근 6개 보호, 메시지 삭제 없이 tool_call↔result 짝 보존). 세션 JSONL엔 전체 기록 유지. CLI는 매 턴/`/context`로 사용량 표시
+- 내부적으로 `streamText({ model, system, messages, tools, stopWhen: <v6 멀티스텝 정지 조건>(config.maxSteps), prepareStep, abortSignal })`
+- **컨텍스트 관리**: 매 턴 `streamText` 직전 `compactMessages(messages, config.maxContextTokens)`로 예산 초과 시 오래된 대형 tool-result를 플레이스홀더로 축약(system·최근 6개 보호, 메시지 삭제 없이 tool_call↔result 짝 보존). 세션 JSONL엔 전체 기록 유지. CLI는 매 턴/`/context`로 컨텍스트, `/usage`로 누적 토큰 표시
+- **자가 검증 루프(v0.7.0)**: 편집 도구(`propose_*`/`write_*`/`restore_backup`)를 호출한 라운드 끝에 `streamText`를 1회 더 돌려 모델이 `read_document`로 변경 결과를 재확인하고 원래 요청을 항목별로 점검·보정하게 한다(완결성 강제 — 약한 모델도 목적 충족). `turn-complete`는 전 라운드 후 1회로 통합. `KODOC_SELF_VERIFY=0`으로 비활성화
+- **thrash 감지(v0.7.1)**: `prepareStep`에서 같은 편집 도구가 임계치(5) 이상 반복되면 그 스텝 system에 전략 전환 nudge를 덧붙여 반복 헛호출을 억제(조언이라 정상 다중편집은 무방해)
 - `ApprovalHandler`는 CLI(clack confirm)/GUI(다이얼로그)가 주입. **core는 터미널 import·console 출력 금지**
 - Ctrl+C → AbortSignal → 턴 중단, 세션 파일은 유효 상태 유지
 
@@ -209,17 +228,20 @@ class AgentSession {
 | 툴 | 시그니처 | 구현 |
 |---|---|---|
 | `propose_edit` | `(path, newMarkdown, summary)` | `.hwpx` → `patchHwpx`(무손실), `.hwp` → `patchHwp`(제자리 무손실), `.docx` → `docx` 라이브러리로 재생성(서식 손실을 proposal에 명시), `.md`/`.txt` → 그대로 |
-| `propose_form_fill` | `(path, fields: Record<string,string>, summary)` | kordoc `extractFormFields` + 마크다운 치환 + `patchHwpx`(무손실) |
+| `propose_form_fill` | `(path, fields: Record<string,string>, summary)` | kordoc `fillHwpx`(HWPX 원본 직접 채움·서식 100% 보존) + `extractFormSchema`로 미매칭 시 채울 수 있는 필드·타입 안내 |
 | `propose_sheet_edit` | `(path, updates: {sheet, cell, value}[], summary)` | exceljs로 원본 워크북 로드 → 셀 단위 수정 → 서식 보존 저장 |
 | `write_new_document` | `(path, markdown)` | 확장자별: `.hwpx` kordoc / `.docx` docx / `.md` fs. 신규 파일이므로 diff 없이 내용 미리보기로 승인 |
 | `write_new_spreadsheet` | `(path, sheets: {name, rows: string[][]}[])` | exceljs 신규 생성 |
 
-### 추가 툴 (v0.4.0~0.6.0 도입 — 상세 동작은 루트 [README](../README.md) 기능 섹션)
+### 추가 툴 (v0.4.0~0.7.x 도입 — 상세 동작은 루트 [README](../README.md) 기능 섹션)
 
-위 표 이후 도입된 툴. 모두 `.hwpx` ZIP의 XML을 직접 패치하며(무손실), 쓰기 툴은 동일한 스테이징·승인 파이프라인을 거친다.
+위 표 이후 도입된 툴. `.hwpx` 텍스트/셀 편집은 **kordoc splice 프리미티브**(`scanSectionXml`+`buildRangeSplices`/`buildParagraphSplices`+`applySplices`, v0.7.0 마이그레이션)로 무손실 패치하고, 쓰기 툴은 동일한 스테이징·승인 파이프라인을 거친다.
 
-- **구조 정밀 편집**: `propose_cell_edit`(표 셀 좌표/라벨 지정, 병합 보존·빈칸 채우기), `propose_table_structure`(행·열 추가/삭제·셀 병합, 병합 가로지름 안전 거부), `propose_find_replace`(본문·표·머리말 전체 찾기/바꾸기), `list_form_objects`/`propose_form_object`(편집상자·누름틀·콤보·체크/라디오 5종)
-- **개인정보**: `scan_pii`(주민/전화/이메일/카드 탐지·읽기전용), `propose_redact_pii`(마스킹 비식별, 원문 미노출)
+- **구조 정밀 편집**: `propose_cell_edit`(표 셀 좌표/라벨 지정, 병합 보존·빈칸 채우기), `propose_table_structure`(행·열 추가/삭제·셀 병합, 병합 가로지름 안전 거부 — 표 구조 변경만 자체 XML 유지), `propose_find_replace`(본문·표·머리말·꼬리말 전체 찾기/바꾸기, 서식 분리 텍스트도 처리), `list_form_objects`/`propose_form_object`(편집상자·누름틀·콤보·체크/라디오 5종)
+- **위치 검색**: `find_in_document`(텍스트 → 표 셀 좌표(tableIndex/row/col)·본문 위치, `propose_cell_edit`과 좌표 일치)
+- **개인정보**: `scan_pii`(주민/전화/이메일/카드 탐지·읽기전용), `propose_redact_pii`(마스킹 비식별, 원문 미노출, 서식 분리 PII도 처리)
+- **내보내기(v0.7.0)**: `export_document`(문서 → HTML(kordoc `renderHtml`, 항상)/PDF(`markdownToPdf`, puppeteer-core 있을 때). 원본 불변, 새 파일 생성)
+- **포맷 감지**: `.hwp`(OLE2)/`.hwpx`(ZIP) 판별은 kordoc `isOldHwpFile`/`isZipFile`에 위임(v0.7.0). 단, `.hwp`의 표·셀 편집은 kordoc HWP5 미지원 → `propose_edit`이 정직한 오류로 `.hwpx` 변환을 안내(v0.7.1)
 - **탐색·복구**: `find_in_document`(텍스트→표 셀 좌표/본문 위치), `list_backups`/`restore_backup`(승인 백업 되돌리기, 복원도 승인·자동 백업)
 
 경로 정규화: 모든 path는 NFC 정규화(macOS NFD 대응) + cwd 이하 검증.

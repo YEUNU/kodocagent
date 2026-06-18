@@ -35,6 +35,7 @@
 | R13 | **v0.6.2 발행 — 능력·한계 grounding**(요청을 시스템 능력으로 판단 — 미지원 기능은 어설피 시도 말고 솔직히 flag; '가능' 목록은 도구 레지스트리에서 자동 도출·드리프트 방지) (실모델 e2e — 하드티어 능력 flag claude 3/3, 검증 하네스를 실 .hwpx XML 아티팩트+LLM-judge로 강화·EVAL_SPECS 9/9) | OIDC 자동(2026-06-17) |
 | R14 | **v0.6.3 발행 — kordoc '표입니다' 무성 텍스트 손실 수정 + 양식 채우기 견고화** (도형 대체텍스트 전역 스트립 정규식이 '목표/번호/발표입니다' 등 합성어 꼬리를 절단 — pnpm patch + 발행 번들 런타임 복원 가드(44키워드, 실 unpatched kordoc e2e 복원); `propose_form_fill`→`fillHwpx` 전환. **실 한컴 뷰어 열림 검증으로 포착·재확인**, 게이트 그린) | OIDC 자동(2026-06-18) |
 | R15 | **v0.7.0 발행 — kordoc API-우선 마이그레이션 + 자가검증 루프 + API 사용량 표시** (편집엔진 find_replace·redact_pii·cell_edit를 kordoc splice 프리미티브로 이전(서식 분리 텍스트 처리·병합셀 보존, cell_edit 전면 재작성 40테스트 보존)·포맷감지 위임·`extractFormSchema` 안내·신규 `export_document`(HTML); **AgentSession 자가검증 루프**(편집 후 재읽기·완결성 점검 — gpt 12→15/18, 실 수능지 한컴 무손상); **`/usage` API 사용량·추정 비용**; parse 가드 blocks 복원. 테스트 501·게이트 그린) | OIDC 자동(2026-06-18) |
+| R16 | **v0.7.1 발행 — API 사용량 토큰만 표시 + thrash 감지 + .hwp 표 셀 한계 정직 안내** (추정 비용 표시 제거 — 누적 입력·출력 토큰만; `prepareStep`으로 같은 편집툴 5회+ 반복 시 전략전환 nudge 주입(반복 헛호출 억제); `.hwp` HTML 표 셀은 kordoc HWP5 미지원 → `propose_edit` applied=0 시 무변경 위장 않고 **정직한 오류**·.hwpx 변환 안내, 능력·한계 반영. **실 통일부 보도자료(.hwp) 18회 헛호출→1회 정직안내 입증**, gpt eval verify+thrash 15/18·테스트 499·게이트 그린) | OIDC 자동(2026-06-18) |
 | 운영 | CI 그린(3 OS × Node 22/24), Actions v6, TS6 의존성 최신화 | `4b159d7` |
 | 검증 | 실키 E2E(2026-06-15): **OpenAI gpt-5.5 + Google gemini-3.5-flash + Anthropic claude-sonnet-4-6** 읽기·요약(툴콜)·쓰기 거절+원본 무변경; **법령 MCP(korean-law)** 연동으로 근로기준법 제60조 조회→취업규칙 위반 식별·인용 성공 | — |
 
@@ -197,6 +198,8 @@
 
 ## GUI 트랙 (1.0과 독립, 0.x)
 
+> **설계 정의: [GUI-DESIGN.md](GUI-DESIGN.md)** — CLI 20개 도구·에이전트 동작(승인·자가검증·thrash·능력grounding·PII·법령·사용량·백업)을 GUI UX로 매핑한 3-pane 워크스페이스 설계.
+
 **프레임워크: Electron** (2026-06-11 결정)
 - 근거: 로컬 Rust 툴체인 부재(Tauri는 Rust 필수), 기존 Node/TS 재사용, `@rhwp/editor`(iframe 웹 컴포넌트) 자연 결합, electron-updater로 GUI OTA 가능
 - 트레이드오프: 번들 ~100MB. core가 UI 비종속이라 Tauri 전환 비용 낮음(추후 재검토 가능)
@@ -204,7 +207,7 @@
 | 단계 | 산출물 | 완료 기준 | 상태 |
 |---|---|---|---|
 | GUI 스캐폴딩(M5a) | `packages/gui`(비공개): Electron 42 + electron-vite + React 19, 채팅·툴콜 칩, 승인 다이얼로그(diff·사유), IPC 승인 브릿지, cwd 선택, `~/.kodocagent` 설정 공유 | 창 실행 → 실키 채팅 → propose 승인/거절 | ✅ 구현·기동(에러 0). 잔여: 화면 수동 확인 `cd packages/gui && pnpm dev` |
-| GUI 미리보기(M5b) | `@rhwp/editor` 임베드 HWPX 시각 미리보기(승인 전 전/후), 문서 탐색 패널, 마크다운 렌더, 세션 재개 UI, GUI 온보딩 | 실제 .hwpx 렌더 + 승인 흐름 미리보기 연동 | 예정 |
+| GUI 미리보기(M5b) | **kordoc `renderHtml`/`export_document`로 HWPX 시각 미리보기**(승인 전 전/후 — rhwp 제거로 @rhwp/editor 대신 채택), 문서 탐색 패널, kind별 시각 승인(텍스트/표 diff·PII 하이라이트·폼), 되돌리기 타임라인, GUI 온보딩 | 실제 .hwpx 렌더 + 승인 흐름 미리보기 연동 (상세 [GUI-DESIGN.md](GUI-DESIGN.md)) | 예정 |
 | GUI 패키징(M5c) | electron-builder(맥 dmg/윈도 nsis), electron-updater(GitHub Releases 채널) | 설치본 자동 업데이트 확인 | 예정 |
 
 GUI 참고: electron-vite는 vite 8 지원 위해 6.0.0-beta.1 사용 — stable 출시 시 갱신. CI는 `ELECTRON_SKIP_BINARY_DOWNLOAD=1`로 빌드/타입체크/테스트만 수행.
