@@ -4,11 +4,13 @@ import { ChatView } from "./components/ChatView.js";
 import { Composer } from "./components/Composer.js";
 import { DocumentPreview } from "./components/DocumentPreview.js";
 import { FilePane } from "./components/FilePane.js";
+import { Onboarding } from "./components/Onboarding.js";
 import { type QuickActionKey, QuickActions } from "./components/QuickActions.js";
 import { Topbar } from "./components/Topbar.js";
 import type {
   BackupEntry,
   ChatMessage,
+  ConfigSnapshot,
   DocPreviewResult,
   FileEntry,
   Proposal,
@@ -379,18 +381,15 @@ export function App(): React.ReactElement {
 
   if (configMissing) {
     return (
-      <div className="config-missing">
-        <div className="config-missing__card">
-          <h2>설정이 필요합니다</h2>
-          <p>
-            CLI에서 <code>kodocagent</code>를 실행해 온보딩(API 키 설정)을 완료하세요.
-          </p>
-          <p>
-            설정 파일: <code>~/.kodocagent/config.json</code>
-          </p>
-          <p>온보딩 후 앱을 재시작하세요.</p>
-        </div>
-      </div>
+      <Onboarding
+        onComplete={(snapshot: ConfigSnapshot) => {
+          setModel(snapshot.model);
+          setConfigMissing(false);
+          setAppState("idle");
+          refreshFiles();
+          refreshBackups();
+        }}
+      />
     );
   }
 

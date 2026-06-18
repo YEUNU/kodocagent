@@ -13,7 +13,10 @@ import type {
   DocPreviewResult,
   FileEntry,
   SerializedAgentEvent,
+  SetupValues,
 } from "../main/agent-bridge.js";
+
+type ConfigSnapshot = { provider: string; model: string | null; hasKeys: Record<string, boolean> };
 
 export interface KodocApi {
   chat: {
@@ -30,11 +33,9 @@ export interface KodocApi {
   };
   config: {
     /** 설정 조회 (키 값은 boolean만) */
-    get: () => Promise<{
-      provider: string;
-      model: string | null;
-      hasKeys: Record<string, boolean>;
-    }>;
+    get: () => Promise<ConfigSnapshot>;
+    /** 온보딩: 사용자 입력 설정 저장 → 갱신된 스냅샷 */
+    save: (values: SetupValues) => Promise<ConfigSnapshot>;
   };
   session: {
     /** 새 세션 시작 */
@@ -85,6 +86,7 @@ const api: KodocApi = {
   },
   config: {
     get: () => ipcRenderer.invoke("config:get"),
+    save: (values: SetupValues) => ipcRenderer.invoke("config:save", values),
   },
   session: {
     new: () => {

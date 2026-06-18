@@ -18,6 +18,7 @@ import {
   loadMcpConfig,
   McpManager,
   SessionStore,
+  saveConfig,
   ToolRegistry,
 } from "@kodocagent/core";
 import {
@@ -28,8 +29,8 @@ import {
   SUPPORTED_READ_EXTENSIONS,
   SUPPORTED_WRITE_EXTENSIONS,
 } from "@kodocagent/doc-tools";
-import type { KodocConfig, Proposal } from "@kodocagent/shared";
-import { KODOC_PATHS, resolveApiKey } from "@kodocagent/shared";
+import type { KodocConfig, Proposal, Provider } from "@kodocagent/shared";
+import { KODOC_PATHS, PROVIDERS, resolveApiKey } from "@kodocagent/shared";
 
 /** IPC로 전달 가능한 직렬화된 AgentEvent */
 export type SerializedAgentEvent = AgentEvent;
@@ -39,6 +40,13 @@ export interface ConfigSnapshot {
   provider: string;
   model: string | null;
   hasKeys: Record<string, boolean>;
+}
+
+/** 온보딩 마법사가 보내는 설정 값 (사용자 입력 — 저장만 하고 렌더러로 되돌리지 않음) */
+export interface SetupValues {
+  provider: string;
+  apiKeys: { anthropic?: string; openai?: string; google?: string };
+  lawApiKey?: string;
 }
 
 /** 좌측 파일 패널 항목 (IPC 직렬화) */
@@ -367,6 +375,30 @@ export class AgentBridge {
       model: config.model,
       hasKeys,
     };
+  }
+
+  /**
+   * 온보딩 마법사: 사용자가 입력한 API 키/프로바이더를 config.json에 저장하고 재초기화한다.
+   * 키 값은 저장만 하며 렌더러로 되돌리지 않는다(스냅샷은 boolean만).
+   */
+  async saveSetup(values: SetupValues): Promise<ConfigSnapshot> {
+    const config = await loadConfig();
+    if ((PROVIDERS as readonly string[]).includes(values.provider)) {
+      config.provider = values.provider as Provider;
+    }
+    for (const p of PROVIDERS) {
+      const k = values.apiKeys[p];
+      if (typeof k === "string" && k.trim()) {
+        config.apiKeys[p] = k.trim();
+      }
+    }
+    if (typeof values.lawApiKey === "string" && values.lawApiKey.trim()) {
+      config.lawApiKey = values.lawApiKey.trim();
+    }
+    await saveConfig(config);
+    this.config = config;
+    await this.init();
+    return this.getConfigSnapshot();
   }
 
   /**

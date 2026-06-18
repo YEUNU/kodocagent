@@ -1,5 +1,14 @@
 # @kodocagent/gui
 
+## 0.4.0
+
+### Minor Changes
+
+- G3 온보딩 마법사: 첫 실행 시 "CLI에서 설정하세요" 안내 대신 **앱에서 직접 API 키 입력·저장**.
+  - 제공자 선택(Claude/OpenAI/Gemini) + 제공자별 키 입력(password·보기 토글) + 선택 국가법령 OC 키. 키는 **사용자가 직접 입력**하며 `~/.kodocagent/config.json` 에만 저장(미리 채우지 않음).
+  - 새 IPC `config.save` → agent-bridge `saveSetup()`(core `saveConfig` 재사용) → 저장 후 재초기화 + 갱신 스냅샷 반환. **키 값은 렌더러로 되돌리지 않음**(스냅샷은 boolean만).
+  - 격리 home + 가짜 키로 저장 백엔드 end-to-end 검증, 실 Electron `capturePage`로 마법사 렌더 확인.
+
 ## 0.3.0
 
 ### Minor Changes

@@ -48,6 +48,20 @@ export interface BackupEntry {
   summary?: string;
 }
 
+/** 온보딩 마법사 입력 값 (사용자가 입력) */
+export interface SetupValues {
+  provider: string;
+  apiKeys: { anthropic?: string; openai?: string; google?: string };
+  lawApiKey?: string;
+}
+
+/** 설정 스냅샷 (키 값 없이 boolean만) */
+export interface ConfigSnapshot {
+  provider: string;
+  model: string | null;
+  hasKeys: Record<string, boolean>;
+}
+
 /** 툴콜 인자에서 핵심 경로 인자를 추출해 요약 문자열 생성 */
 export function formatToolCallSummary(toolName: string, args: unknown): string {
   const MAX_LEN = 50;
@@ -97,11 +111,8 @@ export interface KodocApi {
     respond: (proposalId: string, approved: boolean, reason?: string) => void;
   };
   config: {
-    get: () => Promise<{
-      provider: string;
-      model: string | null;
-      hasKeys: Record<string, boolean>;
-    }>;
+    get: () => Promise<ConfigSnapshot>;
+    save: (values: SetupValues) => Promise<ConfigSnapshot>;
   };
   session: {
     new: () => void;

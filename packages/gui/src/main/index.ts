@@ -9,7 +9,7 @@
 
 import { join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
-import { AgentBridge } from "./agent-bridge.js";
+import { AgentBridge, type SetupValues } from "./agent-bridge.js";
 
 let mainWindow: BrowserWindow | null = null;
 let bridge: AgentBridge | null = null;
@@ -119,6 +119,17 @@ function registerIpc(): void {
   /** config.get */
   ipcMain.handle("config:get", async () => {
     return bridge?.getConfigSnapshot() ?? { provider: "anthropic", model: null, hasKeys: {} };
+  });
+
+  /** config.save — 온보딩 마법사 설정 저장 (사용자 입력 키 저장) */
+  ipcMain.handle("config:save", async (_event, values: SetupValues) => {
+    return (
+      (await bridge?.saveSetup(values)) ?? {
+        provider: "anthropic",
+        model: null,
+        hasKeys: {} as Record<string, boolean>,
+      }
+    );
   });
 
   /** session.new */
