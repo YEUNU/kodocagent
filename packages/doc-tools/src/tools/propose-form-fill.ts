@@ -7,13 +7,15 @@
  * patchHwpx 우회를 썼으나, kordoc 3.1.x 가 전용 API 를 제공하므로 이를 채택한다.
  * (직접 XML 수정이라 patchHwpx 의 전-마크다운 LCS 재조정 경로를 타지 않는다.)
  *
- * diff: 라벨: 이전 값 → 새 값 표. 미매칭 라벨은 fillHwpx 의 unmatched 로 경고.
+ * diff: 라벨: 이전 값 → 새 값 표. 미매칭 라벨은 fillHwpx 의 unmatched 로 경고하고,
+ * kordoc `extractFormSchema`(type/required/empty 추론)로 채울 수 있는 필드 목록을
+ * 함께 안내해 에이전트가 라벨을 자가교정하도록 돕는다.
  */
 
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { kordocErrorMessage } from "@kodocagent/shared";
-import { extractFormFields, fillHwpx } from "kordoc";
+import { extractFormSchema, fillHwpx } from "kordoc";
 import { z } from "zod";
 import { parse } from "../kordoc-parse.js";
 import { hwpStructuralGuard, resolveSafePath } from "../security.js";
@@ -81,10 +83,28 @@ export const proposeFormFillTool: ToolDefinition<ProposeFormFillInput> = {
       return `오류: ${msg}`;
     }
 
-    // 현재 양식 필드 추출 (diff 의 '이전 값' 표시용)
-    const formResult = extractFormFields(parseResult.blocks);
-    const existingFields = new Map(formResult.fields.map((f) => [f.label, f.value]));
+    // 현재 양식 필드 스키마 추출 — kordoc extractFormSchema(type/required/empty 추론).
+    // diff 의 '이전 값' 표시 + 미매칭 시 채울 수 있는 필드 안내에 사용.
+    const formSchema = extractFormSchema(parseResult.blocks);
+    const existingFields = new Map(formSchema.fields.map((f) => [f.label, f.value]));
     const warnings: string[] = [];
+
+    // 채울 수 있는 필드 안내 문자열 — 라벨 불일치 시 에이전트 자가교정용
+    const fieldTypeKo: Record<string, string> = {
+      text: "텍스트",
+      date: "날짜",
+      phone: "전화",
+      email: "이메일",
+      amount: "금액",
+      checkbox: "체크박스",
+      idnum: "주민번호",
+    };
+    const availableHint =
+      formSchema.fields.length > 0
+        ? ` 채울 수 있는 필드: ${formSchema.fields
+            .map((f) => `${f.label}(${fieldTypeKo[f.type] ?? f.type}${f.required ? ", 필수" : ""})`)
+            .join(", ")}.`
+        : "";
 
     // diff 구성: 라벨 | 이전 값 | 새 값
     const diffLines: string[] = ["| 라벨 | 이전 값 | 새 값 |", "| --- | --- | --- |"];
@@ -104,13 +124,15 @@ export const proposeFormFillTool: ToolDefinition<ProposeFormFillInput> = {
       const fillResult = await fillHwpx(origAB, input.fields);
       if (fillResult.unmatched.length > 0) {
         warnings.push(
-          `다음 라벨을 찾을 수 없습니다: ${fillResult.unmatched.join(", ")}. read_document로 현재 필드 목록을 확인하세요.`,
+          `다음 라벨을 찾을 수 없습니다: ${fillResult.unmatched.join(", ")}.${
+            availableHint || " read_document로 현재 필드 목록을 확인하세요."
+          }`,
         );
       }
       if (fillResult.filled.length === 0) {
-        return `오류: 채워진 양식 필드가 없습니다. 라벨이 문서와 일치하는지 read_document로 확인하세요${
+        return `오류: 채워진 양식 필드가 없습니다. 라벨이 문서와 일치하는지 확인하세요${
           fillResult.unmatched.length > 0 ? ` (미매칭: ${fillResult.unmatched.join(", ")})` : ""
-        }.`;
+        }.${availableHint || " read_document로 현재 필드 목록을 확인하세요."}`;
       }
       stagedData = new Uint8Array(fillResult.buffer);
     } catch (err) {

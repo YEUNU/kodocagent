@@ -639,3 +639,70 @@ describe("proposeFindReplaceTool — OLE2 .hwp 바이너리 가드", () => {
     expect(Buffer.from(afterBytes).equals(oleBytes)).toBe(true);
   }, 10000);
 });
+
+// ─────────────────────────────────────────────────────────
+// 서식 분리(크로스런) 텍스트 치환 — kordoc splice 프리미티브 이전의 핵심 이득
+//
+// 텍스트가 여러 <hp:t> 런에 나뉘면(굵게 등 부분 서식) 구 정규식 경로는 노드 경계를
+// 가로지르는 패턴을 매칭하지 못했다. scanSectionXml + buildRangeSplices(t-도메인)
+// 경로는 이를 매칭·치환한다. 이 테스트는 한 단락의 hp:t를 2개 런으로 쪼갠 뒤
+// 경계를 가로지르는 패턴을 치환하여 splice 경로가 실제로 동작함을 증명한다.
+// (구 경로뿐이면 '찾을 텍스트 미발견' 오류 문자열이 반환되었을 것이다.)
+// ─────────────────────────────────────────────────────────
+
+/** HWPX 파일의 section0.xml을 새 내용으로 교체한다(테스트 픽스처 조립용). */
+async function rewriteSectionXml(filePath: string, newXml: string): Promise<void> {
+  const buf = await readFile(filePath);
+  const zip = await JSZip.loadAsync(new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength));
+  zip.file("Contents/section0.xml", newXml);
+  const out = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+  await writeFile(filePath, new Uint8Array(out as unknown as ArrayBuffer));
+}
+
+describe("proposeFindReplaceTool — 서식 분리(크로스런) 텍스트", () => {
+  it("여러 hp:t 런에 나뉜 텍스트도 경계를 가로질러 치환한다(splice 경로)", async () => {
+    const subDir = join(testDir, `crossrun-${Date.now()}`);
+    await mkdir(subDir, { recursive: true });
+
+    // 단일 hp:t 단락으로 .hwpx 생성 후, hp:t를 두 런으로 분할해 크로스런 상태를 만든다
+    const md = "# 보고서\n\n문화기획팀이 담당하는 사업별 예산 현황입니다.\n";
+    const filePath = await saveHwpx(subDir, "crossrun.hwpx", md);
+    const sectionXml = await readSectionXml(filePath);
+
+    const oneRun = "<hp:t>문화기획팀이 담당하는 사업별 예산 현황입니다.</hp:t>";
+    expect(sectionXml).toContain(oneRun); // 전제: 단일 hp:t
+    const twoRuns =
+      '<hp:t>문화</hp:t></hp:run><hp:run charPrIDRef="0">' +
+      "<hp:t>기획팀이 담당하는 사업별 예산 현황입니다.</hp:t>";
+    await rewriteSectionXml(filePath, sectionXml.replace(oneRun, twoRuns));
+
+    // "문화기획"은 런 경계(문화|기획)를 가로지른다 — 구 정규식 경로로는 매칭 불가
+    const ctx = makeCtx(subDir);
+    const result = await proposeFindReplaceTool.propose?.({
+      input: {
+        path: "crossrun.hwpx",
+        find: "문화기획",
+        replace: "디지털콘텐츠",
+        caseSensitive: false,
+        all: true,
+        summary: "크로스런 치환",
+      },
+      ctx,
+    });
+
+    // 제안 객체가 반환되어야 함(오류 문자열이면 splice 경로가 동작하지 않은 것)
+    expect(typeof result).toBe("object");
+    if (result == null || typeof result === "string") throw new Error(String(result));
+
+    await result.commit();
+    const out = await readFile(filePath);
+    const re = await parse(
+      out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer,
+    );
+    expect(re.success).toBe(true);
+    if (re.success) {
+      expect(re.markdown).toContain("디지털콘텐츠");
+      expect(re.markdown).not.toContain("문화기획");
+    }
+  }, 15000);
+});

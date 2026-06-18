@@ -19,7 +19,7 @@ import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import JSZip from "jszip";
 import { z } from "zod";
-import { hwpStructuralGuard, resolveSafePath } from "../security.js";
+import { hwpStructuralGuard, isZipBinary, resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
@@ -631,7 +631,8 @@ function validateHwpxBuffer(ext: string, buffer: Uint8Array): string | null {
   if (structuralGuard !== null) {
     return structuralGuard;
   }
-  if (buffer[0] !== 0x50 || buffer[1] !== 0x4b) {
+  // ZIP 매직 바이트 검증 (PK = 0x504B) — kordoc isZipFile 위임
+  if (!isZipBinary(buffer)) {
     return (
       "오류: 파일이 유효한 .hwpx(ZIP) 포맷이 아닙니다. " +
       "파일이 손상되었거나 구형 .hwp(OLE 바이너리) 포맷입니다."

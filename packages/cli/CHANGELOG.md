@@ -1,5 +1,16 @@
 # kodocagent
 
+## [Unreleased] — kordoc API-우선 마이그레이션
+
+> 원칙: kordoc이 제공하는 API를 1순위로 사용하고, kordoc이 없는 기능만 우리가 추가한다.
+> (버전 미정 — 발행 전 단계. 모든 게이트 그린 + 실제 한컴오피스 뷰어 무손상 검증 완료.)
+
+- **편집 엔진을 kordoc 무손실 프리미티브로 이전** — 찾기·바꾸기(`propose_find_replace`), 개인정보 마스킹(`propose_redact_pii`), 표 셀 편집(`propose_cell_edit`)이 자체 XML 정규식/토크나이저 대신 kordoc `scanSectionXml`(소스맵) + `buildRangeSplices`/`buildParagraphSplices`(run·서식 보존 범위 치환) + `applySplices`로 동작합니다. **부가 효과**: 텍스트가 여러 서식 런에 나뉘어 있어도(굵게 등 부분 서식) 찾기·바꾸기와 PII 마스킹이 경계를 가로질러 처리됩니다(기존엔 누락). 병합 셀(cellSpan/rowSpan) 구조는 그대로 보존됩니다.
+- **양식 필드 안내 강화** — `propose_form_fill`이 kordoc `extractFormSchema`로 채울 수 있는 필드와 타입(텍스트·날짜·전화·금액 등)을 파악해, 라벨이 안 맞으면 실제 채울 수 있는 필드 목록을 알려줍니다.
+- **포맷 감지를 kordoc에 위임** — .hwp(OLE2)·.hwpx(ZIP) 매직바이트 판별을 자체 구현 대신 kordoc `isOldHwpFile`/`isZipFile`로 통일했습니다.
+- **새 기능: 문서 내보내기(`export_document`)** — 문서를 HTML로 내보냅니다(kordoc `renderHtml`, 항상 가능). PDF는 puppeteer-core가 설치된 환경에서 가능하며, 없으면 친절히 안내합니다.
+- **검증** — find-replace·cell-edit(좌표+라벨)·redact-pii 산출물을 실제 한컴오피스 뷰어로 열어 무손상 확인. 서식 분리 텍스트 처리·병합셀 보존 회귀 테스트 추가. 전체 테스트 486 통과.
+
 ## 0.6.3
 
 ### Patch Changes (문서 텍스트 무성 손실 수정 · 양식 채우기 견고화)

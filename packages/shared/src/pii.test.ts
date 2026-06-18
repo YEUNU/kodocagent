@@ -1,5 +1,39 @@
 import { describe, expect, it } from "vitest";
-import { detectPii, redactText, summarizePii } from "./pii.js";
+import { detectPii, redactRanges, redactText, summarizePii } from "./pii.js";
+
+describe("redactRanges", () => {
+  it("PII 매치의 [start,end)와 마스킹값을 반환한다", () => {
+    const text = "전화 010-1234-5678 끝";
+    const ranges = redactRanges(text);
+    expect(ranges).toHaveLength(1);
+    const r = ranges[0]!;
+    expect(text.slice(r.start, r.end)).toBe("010-1234-5678");
+    expect(r.replacement).toBe("010-****-5678");
+    expect(r.type).toBe("전화번호");
+  });
+
+  it("여러 PII를 시작 순서로 정렬해 반환한다", () => {
+    const text = "a@b.com 그리고 901215-1234567";
+    const ranges = redactRanges(text);
+    expect(ranges.map((r) => r.type)).toEqual(["이메일", "주민등록번호"]);
+    expect(ranges[0]!.start).toBeLessThan(ranges[1]!.start);
+  });
+
+  it("PII가 없으면 빈 배열", () => {
+    expect(redactRanges("회의는 3시")).toEqual([]);
+    expect(redactRanges("")).toEqual([]);
+  });
+
+  it("범위를 적용하면 redactText와 동일한 결과가 된다", () => {
+    const text = "주민 901215-1234567, 카드 1234-5678-9012-3456";
+    const ranges = redactRanges(text);
+    let out = text;
+    for (const r of [...ranges].sort((a, b) => b.start - a.start)) {
+      out = out.slice(0, r.start) + r.replacement + out.slice(r.end);
+    }
+    expect(out).toBe(redactText(text).text);
+  });
+});
 
 describe("detectPii", () => {
   it("주민등록번호를 탐지한다", () => {

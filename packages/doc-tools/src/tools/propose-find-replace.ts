@@ -22,9 +22,12 @@
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import JSZip from "jszip";
+import type { SpliceEdit } from "kordoc";
+import { applySplices, buildRangeSplices, scanSectionXml } from "kordoc";
 import { z } from "zod";
+import { collectParasInDocOrder } from "../hwpx-splice.js";
 import { parse } from "../kordoc-parse.js";
-import { hwpStructuralGuard, resolveSafePath } from "../security.js";
+import { hwpStructuralGuard, isZipBinary, resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
@@ -254,6 +257,62 @@ function countOccurrences(str: string, sub: string): number {
 }
 
 // ─────────────────────────────────────────────────────────
+// kordoc splice 프리미티브 기반 치환 (1순위 경로)
+//
+// scanSectionXml 로 섹션 소스맵(본문·표·머리말/꼬리말 문단 + t-도메인 좌표)을 얻고,
+// buildRangeSplices 로 매칭 범위만 run/charPr·tab/br 보존하며 치환한다.
+// 정규식 직접 패치(replaceInSectionXml)와 달리 여러 서식 런에 나뉜 텍스트도 t-도메인
+// 좌표로 매칭되며, 엔티티/내부 태그로 오프셋 정합이 깨지는 문단은 buildRangeSplices 가
+// null 을 반환하므로 그때만 구 정규식 경로로 폴백한다.
+// ─────────────────────────────────────────────────────────
+
+/**
+ * 한 섹션 XML에 splice 기반 치환을 시도한다.
+ *
+ * - 매칭은 문단 t-도메인 텍스트(`para.text`, 엔티티 디코딩)에서 평문으로 수행한다.
+ *   replace 는 buildRangeSplices 가 내부에서 XML-이스케이프하므로 평문 그대로 넘긴다.
+ * - 어느 매칭이든 buildRangeSplices 가 null 을 반환하면(오프셋 정합 불가) 즉시 null 을
+ *   반환해 호출자가 구 정규식 경로로 폴백하게 한다(섹션 단위 all-or-nothing).
+ *
+ * @returns { xml, count } 또는 null(폴백 필요)
+ */
+function replaceSectionViaSplices(
+  xml: string,
+  find: string,
+  replace: string,
+  caseSensitive: boolean,
+  replaceAll: boolean,
+  alreadyReplaced: number,
+): { xml: string; count: number } | null {
+  if (find.length === 0) return { xml, count: 0 };
+  if (!replaceAll && alreadyReplaced > 0) return { xml, count: 0 };
+
+  const scan = scanSectionXml(xml, 0);
+  const paras = collectParasInDocOrder(scan);
+  const needle = caseSensitive ? find : find.toLowerCase();
+  const splices: SpliceEdit[] = [];
+  let count = 0;
+
+  for (const p of paras) {
+    if (!replaceAll && alreadyReplaced + count >= 1) break;
+    const hay = caseSensitive ? p.text : p.text.toLowerCase();
+    let idx = hay.indexOf(needle);
+    while (idx !== -1) {
+      if (!replaceAll && alreadyReplaced + count >= 1) break;
+      const s = buildRangeSplices(p, xml, idx, idx + find.length, replace);
+      if (s === null) return null; // 오프셋 정합 불가 — 섹션 전체를 구 경로로 폴백
+      splices.push(...s);
+      count++;
+      if (!replaceAll) break;
+      idx = hay.indexOf(needle, idx + needle.length);
+    }
+  }
+
+  if (count === 0) return { xml, count: 0 };
+  return { xml: applySplices(xml, splices), count };
+}
+
+// ─────────────────────────────────────────────────────────
 // ZIP 처리
 // ─────────────────────────────────────────────────────────
 
@@ -295,7 +354,11 @@ async function applyFindReplaceToHwpx(
 
   for (let si = 0; si < sectionFiles.length; si++) {
     const srcXml = sectionXmls[si] ?? "";
-    const { xml: newXml, count } = replaceInSectionXml(
+
+    // 1순위: kordoc splice 프리미티브. 폴백 신호(null) 시 구 정규식 경로.
+    let newXml: string;
+    let count: number;
+    const spliced = replaceSectionViaSplices(
       srcXml,
       find,
       replace,
@@ -303,6 +366,21 @@ async function applyFindReplaceToHwpx(
       replaceAll,
       totalCount,
     );
+    if (spliced !== null) {
+      newXml = spliced.xml;
+      count = spliced.count;
+    } else {
+      const fallback = replaceInSectionXml(
+        srcXml,
+        find,
+        replace,
+        caseSensitive,
+        replaceAll,
+        totalCount,
+      );
+      newXml = fallback.xml;
+      count = fallback.count;
+    }
     newSectionXmls.push(newXml);
     totalCount += count;
 
@@ -417,8 +495,8 @@ export const proposeFindReplaceTool: ToolDefinition<ProposeFindReplaceInput> = {
       return structuralGuard;
     }
 
-    // ZIP 매직 바이트 검증 (PK = 0x504B) — 손상된 파일 등 비-ZIP .hwpx 거부
-    if (originalBuf[0] !== 0x50 || originalBuf[1] !== 0x4b) {
+    // ZIP 매직 바이트 검증 (PK = 0x504B) — kordoc isZipFile 위임. 비-ZIP .hwpx 거부
+    if (!isZipBinary(originalBytes)) {
       return (
         "오류: 파일이 유효한 .hwpx(ZIP) 포맷이 아닙니다. " +
         "파일이 손상되었거나 구형 .hwp(OLE 바이너리) 포맷일 수 있습니다. " +

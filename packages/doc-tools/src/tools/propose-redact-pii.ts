@@ -10,10 +10,12 @@
 import { readFile } from "node:fs/promises";
 import { basename, extname } from "node:path";
 import type { PiiFinding } from "@kodocagent/shared";
-import { redactText } from "@kodocagent/shared";
+import { detectPii, redactRanges, redactText } from "@kodocagent/shared";
 import JSZip from "jszip";
+import { scanSectionXml } from "kordoc";
 import { z } from "zod";
-import { hwpStructuralGuard, resolveSafePath } from "../security.js";
+import { applyRangeSplicesToSection, collectParasInDocOrder } from "../hwpx-splice.js";
+import { hwpStructuralGuard, isZipBinary, resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
@@ -59,7 +61,37 @@ function mergeFindings(allFindings: PiiFinding[][]): PiiFinding[] {
 // ─────────────────────────────────────────────────────────
 
 /**
- * .hwpx ZIP 버퍼에서 모든 section*.xml의 <hp:t> 노드 내용에 PII 마스킹을 적용하고
+ * 폴백: 한 섹션 XML의 <hp:t> 노드 단위로 PII를 마스킹한다.
+ * (splice 경로에서 오프셋 정합이 깨지는 문단이 있을 때만 사용 — 구 동작 보존.)
+ */
+function redactSectionViaNodes(srcXml: string): { xml: string; changed: boolean } {
+  const tNodeRe = /<hp:t>([\s\S]*?)<\/hp:t>/g;
+  let offset = 0;
+  let result = srcXml;
+  let changed = false;
+
+  let m = tNodeRe.exec(srcXml);
+  while (m !== null) {
+    const content = m[1] as string;
+    if (content.length > 0) {
+      const { text: redacted } = redactText(content);
+      if (redacted !== content) {
+        // PII chars are not XML-special so operate on raw node content directly
+        const openTagLen = "<hp:t>".length;
+        const contentStart = m.index + offset + openTagLen;
+        const contentEnd = contentStart + content.length;
+        result = result.substring(0, contentStart) + redacted + result.substring(contentEnd);
+        offset += redacted.length - content.length;
+        changed = true;
+      }
+    }
+    m = tNodeRe.exec(srcXml);
+  }
+  return { xml: result, changed };
+}
+
+/**
+ * .hwpx ZIP 버퍼에서 모든 section*.xml에 PII 마스킹을 적용하고
  * 수정된 ZIP 버퍼와 탐지 결과를 반환한다.
  */
 async function applyRedactToHwpx(hwpxBuffer: Uint8Array): Promise<{
@@ -81,45 +113,32 @@ async function applyRedactToHwpx(hwpxBuffer: Uint8Array): Promise<{
     sectionXmls.push(xml);
   }
 
-  // 섹션별 <hp:t> 노드 마스킹
+  // 섹션별 마스킹 — kordoc splice 우선, 폴백은 <hp:t> 노드 단위
   const newSectionXmls: string[] = [];
   const allFindings: PiiFinding[][] = [];
   let anyChanged = false;
 
   for (const srcXml of sectionXmls) {
-    const tNodeRe = /<hp:t>([\s\S]*?)<\/hp:t>/g;
-    const sectionFindings: PiiFinding[][] = [];
-    let offset = 0;
-    let result = srcXml;
-
-    let m = tNodeRe.exec(srcXml);
-    while (m !== null) {
-      const content = m[1] as string;
-      if (content.length === 0) {
-        m = tNodeRe.exec(srcXml);
-        continue;
-      }
-
-      const { text: redacted, findings } = redactText(content);
-      if (redacted !== content) {
-        // PII chars are not XML-special so operate on raw node content directly
-        const openTagLen = "<hp:t>".length;
-        const contentStart = m.index + offset + openTagLen;
-        const contentEnd = contentStart + content.length;
-
-        result = result.substring(0, contentStart) + redacted + result.substring(contentEnd);
-        offset += redacted.length - content.length;
-        anyChanged = true;
-      }
-      if (findings.length > 0) {
-        sectionFindings.push(findings);
-      }
-
-      m = tNodeRe.exec(srcXml);
+    // 탐지 결과는 문단 t-도메인 텍스트 기준으로 수집한다(여러 서식 런에 나뉜 PII도 포착).
+    const scan = scanSectionXml(srcXml, 0);
+    for (const p of collectParasInDocOrder(scan)) {
+      const findings = detectPii(p.text);
+      if (findings.length > 0) allFindings.push(findings);
     }
 
-    newSectionXmls.push(result);
-    allFindings.push(...sectionFindings);
+    // 1순위: splice 범위 치환(런/charPr·tab/br 보존, 서식 분리 PII도 마스킹).
+    const spliced = applyRangeSplicesToSection(srcXml, (text) =>
+      redactRanges(text).map((r) => ({ start: r.start, end: r.end, replacement: r.replacement })),
+    );
+    if (spliced !== null) {
+      newSectionXmls.push(spliced.xml);
+      if (spliced.count > 0) anyChanged = true;
+    } else {
+      // 폴백: 오프셋 정합 불가 문단이 있는 섹션은 구 <hp:t> 노드 경로로 처리.
+      const fb = redactSectionViaNodes(srcXml);
+      newSectionXmls.push(fb.xml);
+      if (fb.changed) anyChanged = true;
+    }
   }
 
   if (!anyChanged) {
@@ -222,8 +241,8 @@ export const proposeRedactPiiTool: ToolDefinition<ProposeRedactPiiInput> = {
         return structuralGuard;
       }
 
-      // ZIP 매직 바이트 검증 (PK = 0x504B) — 손상된 파일 등 비-ZIP .hwpx 거부
-      if (originalBuf[0] !== 0x50 || originalBuf[1] !== 0x4b) {
+      // ZIP 매직 바이트 검증 (PK = 0x504B) — kordoc isZipFile 위임. 비-ZIP .hwpx 거부
+      if (!isZipBinary(originalBytes)) {
         return (
           "오류: 파일이 유효한 .hwpx(ZIP) 포맷이 아닙니다. " +
           "파일이 손상되었거나 구형 .hwp(OLE 바이너리) 포맷일 수 있습니다."

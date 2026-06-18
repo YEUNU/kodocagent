@@ -9,8 +9,40 @@
 import { mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import JSZip from "jszip";
+import { markdownToHwpx, parse } from "kordoc";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { proposeRedactPiiTool } from "./propose-redact-pii.js";
+
+/** markdownToHwpx로 .hwpx 파일을 만들고 경로를 반환한다. */
+async function saveHwpx(dir: string, name: string, md: string): Promise<string> {
+  const buf = await markdownToHwpx(md);
+  const filePath = join(dir, name);
+  await writeFile(filePath, new Uint8Array(buf as ArrayBuffer));
+  return filePath;
+}
+
+/** HWPX의 section0.xml을 새 내용으로 교체한다(크로스런 픽스처 조립용). */
+async function rewriteSectionXml(
+  filePath: string,
+  transform: (xml: string) => string,
+): Promise<void> {
+  const buf = await readFile(filePath);
+  const zip = await JSZip.loadAsync(new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength));
+  const entry = zip.file("Contents/section0.xml");
+  if (!entry) throw new Error("section0.xml 없음");
+  zip.file("Contents/section0.xml", transform(await entry.async("string")));
+  const out = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+  await writeFile(filePath, new Uint8Array(out as unknown as ArrayBuffer));
+}
+
+async function reparseMarkdown(filePath: string): Promise<string> {
+  const buf = await readFile(filePath);
+  const re = await parse(
+    buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer,
+  );
+  return re.success ? re.markdown : "";
+}
 
 const TEST_DIR_BASE = join(tmpdir(), `kodocagent-test-redact-pii-${Date.now()}`);
 
@@ -109,4 +141,57 @@ describe("proposeRedactPiiTool", () => {
     expect(msg).toContain("오류");
     expect(msg).toContain(".hwpx");
   });
+});
+
+// ─────────────────────────────────────────────────────────
+// .hwpx 마스킹 (kordoc splice 경로) — 구조 보존 + 서식 분리 PII
+// ─────────────────────────────────────────────────────────
+
+describe("proposeRedactPiiTool — .hwpx splice 마스킹", () => {
+  it(".hwpx 본문 PII를 마스킹하고 커밋 후 재파싱에 원문 없음·마스킹 있음", async () => {
+    const md = "# 연락처\n\n전화: 010-1234-5678 / 이메일: user@example.com\n";
+    const filePath = await saveHwpx(testDir, "contact.hwpx", md);
+
+    const result = await proposeRedactPiiTool.propose?.({ input: { path: "contact.hwpx" }, ctx });
+    expect(typeof result).not.toBe("string");
+    const outcome = result as Exclude<typeof result, string | undefined>;
+    expect(outcome.proposal.kind).toBe("redact-pii");
+    // diff에 원문 PII 미노출
+    expect(outcome.proposal.diff).not.toContain("1234-5678");
+    expect(outcome.proposal.diff).not.toContain("user@example");
+
+    await outcome.commit();
+    const markdown = await reparseMarkdown(filePath);
+    expect(markdown).not.toContain("010-1234-5678");
+    expect(markdown).not.toContain("user@example.com");
+    expect(markdown).toContain("010-****-5678");
+  }, 15000);
+
+  it("여러 hp:t 런에 나뉜 전화번호도 경계를 가로질러 마스킹한다(splice 경로)", async () => {
+    const md = "# 연락처\n\n대표번호 010-1234-5678 입니다.\n";
+    const filePath = await saveHwpx(testDir, "crossrun-pii.hwpx", md);
+
+    // "010-1234-5678" 을 "010-1234" | "-5678" 두 런으로 분할 → 노드 단위로는 매칭 불가
+    await rewriteSectionXml(filePath, (xml) => {
+      const one = "<hp:t>대표번호 010-1234-5678 입니다.</hp:t>";
+      if (!xml.includes(one)) throw new Error("전제: 단일 hp:t 미발견");
+      const two =
+        '<hp:t>대표번호 010-1234</hp:t></hp:run><hp:run charPrIDRef="0">' +
+        "<hp:t>-5678 입니다.</hp:t>";
+      return xml.replace(one, two);
+    });
+
+    const result = await proposeRedactPiiTool.propose?.({
+      input: { path: "crossrun-pii.hwpx" },
+      ctx,
+    });
+    // 제안 객체 반환 = 크로스런 PII가 탐지·마스킹됨(구 노드 경로면 PII 미발견 노-op이었을 것)
+    expect(typeof result).not.toBe("string");
+    const outcome = result as Exclude<typeof result, string | undefined>;
+
+    await outcome.commit();
+    const markdown = await reparseMarkdown(filePath);
+    expect(markdown).not.toContain("010-1234-5678");
+    expect(markdown).toContain("010-****-5678");
+  }, 15000);
 });

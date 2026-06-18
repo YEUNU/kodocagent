@@ -10,33 +10,46 @@
 import { realpath } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { KodocError } from "@kodocagent/shared";
+import { isOldHwpFile, isZipFile } from "kordoc";
 
 // ─────────────────────────────────────────────────────────
-// HWP 구조 편집 가드
+// HWP 구조 편집 가드 — 포맷 감지는 kordoc API에 위임
+// (kordoc-api-first 원칙: 매직바이트 감지를 자체 구현하지 않고 kordoc 사용)
 // ─────────────────────────────────────────────────────────
 
 /**
- * OLE2/CFB 파일 시그니처 (HWP5 바이너리 매직 바이트).
- * D0 CF 11 E0 A1 B1 1A E1 — 모든 OLE 복합 바이너리 파일의 시작값.
+ * Uint8Array의 선두 헤더만 kordoc 감지 함수용 ArrayBuffer로 복사한다.
+ *
+ * kordoc의 is*File()은 매직바이트(선두 8바이트 이내)만 읽으므로 전체 파일을
+ * 복사할 필요가 없다. Node Buffer.subarray는 풀링된 ArrayBuffer를 공유하므로
+ * `new Uint8Array(view)`로 정확한 크기의 새 버퍼에 복사한다(풀 오염 회피).
  */
-const OLE2_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1] as const;
-
-/**
- * ZIP 시그니처 (PK 매직 바이트).
- * HWPX는 ZIP 기반 포맷이며 첫 두 바이트가 0x50 0x4B("PK")이어야 한다.
- */
-const ZIP_MAGIC_0 = 0x50; // 'P'
-const ZIP_MAGIC_1 = 0x4b; // 'K'
+function headerBuffer(bytes: Uint8Array, n = 64): ArrayBuffer {
+  return new Uint8Array(bytes.subarray(0, Math.min(n, bytes.length))).buffer;
+}
 
 /**
  * 파일이 OLE2/CFB 바이너리(구형 .hwp)인지 콘텐츠 기반으로 감지한다.
+ * kordoc `isOldHwpFile`에 위임 (OLE2 시그니처 D0 CF 11 E0 … 검사).
  *
  * @param bytes 파일 바이트 (최소 8 바이트 이상이어야 정확하게 감지됨)
  * @returns     OLE2 시그니처가 맞으면 true
  */
 export function isOle2Binary(bytes: Uint8Array): boolean {
-  if (bytes.length < OLE2_MAGIC.length) return false;
-  return OLE2_MAGIC.every((b, i) => bytes[i] === b);
+  if (bytes.length < 8) return false;
+  return isOldHwpFile(headerBuffer(bytes));
+}
+
+/**
+ * 파일이 ZIP(.hwpx 등) 시그니처("PK", 0x50 0x4B)인지 감지한다.
+ * kordoc `isZipFile`에 위임.
+ *
+ * @param bytes 파일 바이트
+ * @returns     ZIP 시그니처가 맞으면 true
+ */
+export function isZipBinary(bytes: Uint8Array): boolean {
+  if (bytes.length < 4) return false;
+  return isZipFile(headerBuffer(bytes));
 }
 
 /**
@@ -63,7 +76,7 @@ export function hwpStructuralGuard(ext: string, bytes: Uint8Array): string | nul
 
   // .hwpx 확장자이고 ZIP 시그니처가 있으면 정상 .hwpx로 간주 — 가드 미발동
   // (OLE2 바이트지만 확장자가 .hwpx인 경우는 손상/잘못된 파일로 가드 발동)
-  if (!isHwpExt && bytes[0] === ZIP_MAGIC_0 && bytes[1] === ZIP_MAGIC_1) return null;
+  if (!isHwpExt && isZipBinary(bytes)) return null;
 
   return (
     "이 작업(표·셀·양식·찾기바꾸기 등 구조 편집)은 `.hwpx` 문서에서 지원됩니다. " +

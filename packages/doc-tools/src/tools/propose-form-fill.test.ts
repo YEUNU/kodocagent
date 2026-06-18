@@ -102,7 +102,11 @@ describe("proposeFormFillTool — fillHwpx 채우기", () => {
 
     // diff 에 새 값, 경고에 미매칭 라벨
     expect(result.proposal.diff).toContain("홍길동");
-    expect(result.proposal.warnings.join(" ")).toContain("없는라벨");
+    const warnText = result.proposal.warnings.join(" ");
+    expect(warnText).toContain("없는라벨");
+    // extractFormSchema 안내 — 채울 수 있는 실제 필드(성명)와 타입을 제시해 자가교정 유도
+    expect(warnText).toContain("채울 수 있는 필드");
+    expect(warnText).toContain("성명");
 
     // 커밋 → 결과 파일 재파싱에 값 반영
     await result.commit();

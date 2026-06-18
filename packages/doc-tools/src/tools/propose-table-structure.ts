@@ -37,7 +37,7 @@ import { extname } from "node:path";
 import JSZip from "jszip";
 import { z } from "zod";
 import { parse } from "../kordoc-parse.js";
-import { hwpStructuralGuard, resolveSafePath } from "../security.js";
+import { hwpStructuralGuard, isZipBinary, resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import { detectStructuralLoss } from "../structural-loss.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
@@ -1304,8 +1304,8 @@ export const proposeTableStructureTool: ToolDefinition<ProposeTableStructureInpu
       return structuralGuard;
     }
 
-    // ZIP 매직 바이트 검증 (PK = 0x504B) — 손상된 파일 등 비-ZIP .hwpx 거부
-    if (originalBuf[0] !== 0x50 || originalBuf[1] !== 0x4b) {
+    // ZIP 매직 바이트 검증 (PK = 0x504B) — kordoc isZipFile 위임. 비-ZIP .hwpx 거부
+    if (!isZipBinary(originalBytes)) {
       return (
         "오류: 파일이 유효한 .hwpx(ZIP) 포맷이 아닙니다. " +
         "파일이 손상되었거나 구형 .hwp(OLE 바이너리) 포맷입니다. " +

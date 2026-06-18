@@ -34,6 +34,7 @@ export {
 } from "./staging.js";
 export { listBackupsTool, restoreBackupTool } from "./tools/backups.js";
 export { compareDocumentsTool } from "./tools/compare-documents.js";
+export { exportDocumentTool } from "./tools/export-document.js";
 export { findInDocumentTool } from "./tools/find-in-document.js";
 export { listFormObjectsTool, proposeFormObjectTool } from "./tools/form-objects.js";
 export { listFilesTool } from "./tools/list-files.js";
@@ -53,6 +54,7 @@ export type { ProposeOutcome, ToolContext, ToolDefinition } from "./types.js";
 
 import { listBackupsTool, restoreBackupTool } from "./tools/backups.js";
 import { compareDocumentsTool } from "./tools/compare-documents.js";
+import { exportDocumentTool } from "./tools/export-document.js";
 import { findInDocumentTool } from "./tools/find-in-document.js";
 import { listFormObjectsTool, proposeFormObjectTool } from "./tools/form-objects.js";
 import { listFilesTool } from "./tools/list-files.js";
@@ -83,6 +85,7 @@ export function createDocTools(_ctx: { cwd: string }) {
     readFileTool,
     scanPiiTool,
     findInDocumentTool,
+    exportDocumentTool,
     proposeEditTool,
     proposeFormFillTool,
     proposeCellEditTool,

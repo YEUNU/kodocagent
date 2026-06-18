@@ -13,15 +13,10 @@
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import JSZip from "jszip";
+import { scanSectionXml } from "kordoc";
 import { z } from "zod";
-import { resolveSafePath } from "../security.js";
+import { isZipBinary, resolveSafePath } from "../security.js";
 import type { ToolContext, ToolDefinition } from "../types.js";
-import {
-  collectDirectTcRanges,
-  findTopLevelTableRange,
-  readOwnTextFromTc,
-  tokenizeHwpxXml,
-} from "./propose-cell-edit.js";
 
 // ─────────────────────────────────────────────────────────
 // 스키마
@@ -53,14 +48,6 @@ export type Hit =
       text: string;
     };
 
-// ─────────────────────────────────────────────────────────
-// XML 이스케이프 해제 (propose-find-replace의 unescapeXml과 동일)
-// ─────────────────────────────────────────────────────────
-
-function unescapeXml(text: string): string {
-  return text.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
-}
-
 /**
  * 매칭 주변 ~60자 윈도우 텍스트를 만든다.
  */
@@ -84,126 +71,45 @@ function windowText(text: string, query: string, caseSensitive: boolean, maxLen 
 /**
  * 섹션 XML 문자열 배열에서 query를 탐색하여 Hit 목록을 반환한다.
  *
- * tableIndex / row / col 좌표는 propose_cell_edit의 applyEditsToHwpx와
- * 완전히 동일한 로직으로 계산된다:
- *   - 각 섹션 XML에서 tokenizeHwpxXml → depth=0 tbl_open 카운팅
- *   - globalOffset += localCount 로 섹션 간 연속 인덱스
- *   - row = cellAddr rowAddr, col = cellAddr colAddr (0-based)
- *
- * 본문 매칭은 tbl 깊이=0인 구간의 <hp:t>...</hp:t> 노드만 대상으로 한다.
+ * kordoc-api-first 원칙: 자체 토크나이저 대신 kordoc `scanSectionXml`을 사용한다.
+ *   - 표 셀: ScanTable.cellByAnchor "r,c" → tableIndex / row / col (propose_cell_edit과 동일 좌표계)
+ *   - tableIndex: 섹션 간 연속(globalOffset 누적), 최상위 표만(kordoc 블록 순서)
+ *   - 본문: scan.bodyParagraphs + 비가시 영역(머리말/꼬리말 등) excludedParagraphs
  */
 export function findInSectionXmls(xmls: string[], query: string, caseSensitive: boolean): Hit[] {
   const hits: Hit[] = [];
+  const needle = caseSensitive ? query : query.toLowerCase();
+  const includes = (text: string): boolean =>
+    (caseSensitive ? text : text.toLowerCase()).includes(needle);
   let globalOffset = 0;
 
   for (let si = 0; si < xmls.length; si++) {
     const xml = xmls[si] ?? "";
-    const tokens = tokenizeHwpxXml(xml);
+    const scan = scanSectionXml(xml, 0);
 
-    // ── 최상위 표 수 계산 (propose-cell-edit lines 718-727과 동일) ──
-    let localCount = 0;
-    {
-      let depth = 0;
-      for (const tok of tokens) {
-        if (tok.kind === "tbl_open") {
-          if (depth === 0) localCount++;
-          depth++;
-        } else if (tok.kind === "tbl_close") {
-          depth--;
-        }
-      }
-    }
-
-    // ── 표 셀 탐색 ──
-    for (let ti = 0; ti < localCount; ti++) {
-      const range = findTopLevelTableRange(tokens, ti);
-      if (!range) continue;
-
-      const cells = collectDirectTcRanges(tokens, range.start, range.end);
-      // cellAddr 토큰을 빠르게 조회하기 위해 범위 안 토큰만 미리 필터링
-      const tblTokens = tokens.filter((t) => t.pos >= range.start && t.pos < range.end);
-
-      for (const cell of cells) {
-        const cellText = readOwnTextFromTc(xml, tokens, cell.start, cell.end);
-
-        const compare = caseSensitive ? cellText : cellText.toLowerCase();
-        const compareQuery = caseSensitive ? query : query.toLowerCase();
-        if (!compare.includes(compareQuery)) continue;
-
-        // row / col: cellAddr 토큰에서 읽기
-        const cellTokens = tblTokens.filter((t) => t.pos >= cell.start && t.pos < cell.end);
-        const addrTok = cellTokens.find((t) => t.kind === "cell_addr");
-        if (addrTok === undefined) continue;
-        const row = addrTok.rowAddr ?? 0;
-        const col = addrTok.colAddr ?? 0;
-
+    // ── 표 셀 탐색 (최상위 표만, cellByAnchor 좌표) ──
+    for (let ti = 0; ti < scan.tables.length; ti++) {
+      const table = scan.tables[ti];
+      if (table === undefined) continue;
+      for (const [key, cell] of table.cellByAnchor) {
+        const cellText = cell.paragraphs.map((p) => p.text).join("");
+        if (!includes(cellText)) continue;
+        const parts = key.split(",");
+        const row = Number(parts[0]);
+        const col = Number(parts[1]);
         const truncated = cellText.length > 60 ? `${cellText.slice(0, 57)}…` : cellText;
-
-        hits.push({
-          kind: "표",
-          tableIndex: globalOffset + ti,
-          row,
-          col,
-          text: truncated,
-        });
+        hits.push({ kind: "표", tableIndex: globalOffset + ti, row, col, text: truncated });
       }
     }
 
-    // ── 본문 텍스트 탐색 (tbl 깊이 = 0인 구간만) ──
-    // <hp:t>...</hp:t> 노드를 직접 스캔. 표 깊이를 추적하여
-    // 표 안의 텍스트는 이미 위에서 처리했으므로 여기서는 깊이=0만.
-    {
-      // tbl_open/tbl_close 토큰으로 깊이 구간을 계산한 뒤
-      // 깊이=0 구간의 <hp:t>...</hp:t>를 정규식으로 스캔한다.
-      // 구간을 [start, end) 쌍으로 수집.
-      const bodySegments: Array<{ start: number; end: number }> = [];
-      let tblDepth = 0;
-      let segStart = 0;
-
-      for (const tok of tokens) {
-        if (tok.kind === "tbl_open") {
-          if (tblDepth === 0) {
-            // 표 시작 전까지가 본문
-            if (tok.pos > segStart) {
-              bodySegments.push({ start: segStart, end: tok.pos });
-            }
-          }
-          tblDepth++;
-        } else if (tok.kind === "tbl_close") {
-          tblDepth--;
-          if (tblDepth === 0) {
-            segStart = tok.end;
-          }
-        }
-      }
-      // 마지막 표 이후 본문
-      if (segStart < xml.length) {
-        bodySegments.push({ start: segStart, end: xml.length });
-      }
-
-      const tRe = /<hp:t>([\s\S]*?)<\/hp:t>/g;
-      for (const seg of bodySegments) {
-        const slice = xml.slice(seg.start, seg.end);
-        tRe.lastIndex = 0;
-        let m = tRe.exec(slice);
-        while (m !== null) {
-          const rawText = m[1] ?? "";
-          const decodedText = unescapeXml(rawText);
-          const compare = caseSensitive ? decodedText : decodedText.toLowerCase();
-          const compareQuery = caseSensitive ? query : query.toLowerCase();
-          if (compare.includes(compareQuery)) {
-            hits.push({
-              kind: "본문",
-              section: si,
-              text: windowText(decodedText, query, caseSensitive),
-            });
-          }
-          m = tRe.exec(slice);
-        }
+    // ── 본문 + 비가시 영역(머리말/꼬리말 등) 텍스트 탐색 (표 셀 제외) ──
+    for (const p of [...scan.bodyParagraphs, ...scan.excludedParagraphs]) {
+      if (p.text.length > 0 && includes(p.text)) {
+        hits.push({ kind: "본문", section: si, text: windowText(p.text, query, caseSensitive) });
       }
     }
 
-    globalOffset += localCount;
+    globalOffset += scan.tables.length;
   }
 
   return hits;
@@ -281,8 +187,8 @@ export const findInDocumentTool: ToolDefinition<FindInDocumentInput> = {
       return `오류: 파일을 읽을 수 없습니다: ${input.path}. 경로를 확인하세요.`;
     }
 
-    // ZIP 매직 바이트 검증 (PK = 0x504B)
-    if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+    // ZIP 매직 바이트 검증 (PK = 0x504B) — kordoc isZipFile 위임
+    if (!isZipBinary(bytes)) {
       return (
         "오류: 파일이 유효한 .hwpx(ZIP) 포맷이 아닙니다. " +
         "파일이 손상되었거나 구형 .hwp(OLE 바이너리) 포맷입니다. " +

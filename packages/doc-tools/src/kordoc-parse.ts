@@ -23,7 +23,7 @@
 import { readFile } from "node:fs/promises";
 import JSZip from "jszip";
 import type { ParseOptions, ParseResult } from "kordoc";
-import { parse as kordocParse } from "kordoc";
+import { isZipFile, parse as kordocParse } from "kordoc";
 
 // kordoc 도형/이미지 대체텍스트 제거 정규식의 키워드 집합 — kordoc dist 의 실제 정규식
 // 전 변형에서 추출한 **완전한 44종**(kordoc 순서 유지). 누락 키워드가 있으면 가드가
@@ -172,7 +172,9 @@ export function restoreOverStrippedShapeText(markdown: string, paragraphTexts: s
 }
 
 function isZip(bytes: Uint8Array): boolean {
-  return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b;
+  // kordoc isZipFile 위임 (ArrayBuffer 입력 — subarray 풀 공유 회피용 복사)
+  if (bytes.length < 4) return false;
+  return isZipFile(new Uint8Array(bytes.subarray(0, 4)).buffer);
 }
 
 async function resolveHwpxBytes(input: string | ArrayBuffer | Buffer): Promise<Uint8Array | null> {

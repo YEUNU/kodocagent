@@ -62,3 +62,45 @@ export function redactText(text: string): { text: string; findings: PiiFinding[]
   }
   return { text: result, findings };
 }
+
+/** PII 마스킹 범위 — 원문 텍스트의 [start, end) 를 replacement(마스킹값)로 치환. */
+export interface RedactRange {
+  start: number;
+  end: number;
+  replacement: string;
+  type: string;
+}
+
+/**
+ * 텍스트에서 PII 매치의 치환 범위를 반환한다 — section XML splice 패치용.
+ *
+ * redactText 가 전체 마스킹 문자열만 주는 것과 달리, 각 매치의 원문 좌표
+ * [start, end) 와 마스킹값을 준다. 여러 패턴이 겹치는 매치는 앞선(시작이 빠르고
+ * 더 긴) 것을 남기고 제거한다(splice 겹침 오류 방지).
+ */
+export function redactRanges(text: string): RedactRange[] {
+  if (!text) return [];
+  const ranges: RedactRange[] = [];
+  for (const { type, re, mask } of PATTERNS) {
+    for (const m of text.matchAll(new RegExp(re.source, re.flags))) {
+      if (m.index === undefined) continue;
+      ranges.push({
+        start: m.index,
+        end: m.index + m[0].length,
+        replacement: mask(m[0]),
+        type,
+      });
+    }
+  }
+  // 시작 오름차순(동률이면 더 긴 것 우선) → 겹치는 뒤 매치 제거
+  ranges.sort((a, b) => a.start - b.start || b.end - a.end);
+  const out: RedactRange[] = [];
+  let lastEnd = -1;
+  for (const r of ranges) {
+    if (r.start >= lastEnd) {
+      out.push(r);
+      lastEnd = r.end;
+    }
+  }
+  return out;
+}

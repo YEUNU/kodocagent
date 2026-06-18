@@ -11,6 +11,6 @@ export {
 } from "./config.js";
 export { KORDOC_ERROR_MESSAGES, KodocError, kordocErrorMessage } from "./errors.js";
 export { KODOC_HOME, KODOC_PATHS, projectMcpConfigPath } from "./paths.js";
-export type { PiiFinding } from "./pii.js";
-export { detectPii, redactText, summarizePii } from "./pii.js";
+export type { PiiFinding, RedactRange } from "./pii.js";
+export { detectPii, redactRanges, redactText, summarizePii } from "./pii.js";
 export type { ApprovalHandler, ApprovalResult, Proposal, ProposalKind } from "./proposal.js";
