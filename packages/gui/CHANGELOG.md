@@ -1,5 +1,15 @@
 # @kodocagent/gui
 
+## 0.3.0
+
+### Minor Changes
+
+- G2 시각 승인: 승인 다이얼로그를 `Proposal.kind`별 렌더로 확장(코어 무변경 — 기존 `proposal.diff` 문자열만 파싱, CLI 영향 없음).
+  - **표 변경**(cell-edit·form-fill·form-object): 마크다운 표 diff를 실제 HTML 표로 렌더, "이후/새 값" 열 초록 강조.
+  - **개인정보**(redact-pii): 정직성 배너 + 유형·건수·마스킹 결과 칩(원문 값 미표시).
+  - **텍스트**(edit·find-replace·sheet-edit·table-structure·export·restore): 컬러 유니파이드 diff(+초록/−빨강/@@ 헤더). 포맷 변환·경고 배너 + 안전 문구.
+  - dev 전용 `?demoApproval=<kind>` 승인 미리보기(프로덕션 빌드에서 제거). 실 Electron `capturePage`로 kind별 렌더 육안 확인.
+
 ## 0.2.0
 
 ### Minor Changes

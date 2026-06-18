@@ -87,6 +87,45 @@ export function App(): React.ReactElement {
       });
   }, []);
 
+  // dev 전용: ?demoApproval=<kind> 로 승인 다이얼로그 미리보기 (프로덕션 빌드에서 제거됨)
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const k = new URLSearchParams(window.location.search).get("demoApproval");
+    if (!k) return;
+    const samples: Record<string, Partial<Proposal>> = {
+      "cell-edit": {
+        kind: "cell-edit",
+        targetPath: "예산보고서.hwpx",
+        summary: "금액 셀에 천 단위 콤마를 적용합니다.",
+        diff: "| 표·셀 | 이전 | 이후 |\n| --- | --- | --- |\n| B3 | 1500000 | 1,500,000 |\n| B4 | 820000 | 820,000 |\n| B5 | 3200000 | 3,200,000 |",
+      },
+      "redact-pii": {
+        kind: "redact-pii",
+        targetPath: "채용지원서.hwpx",
+        summary: "발견된 개인정보 4건을 마스킹합니다.",
+        diff: "개인정보 4건 비식별 처리\n- 이름: 2건 → 홍**, 김**\n- 전화번호: 1건 → 010-****-1234\n- 주민등록번호: 1건 → ******-*******",
+      },
+      edit: {
+        kind: "edit",
+        targetPath: "계약서.hwpx",
+        summary: "계약 일자와 금액 문구를 수정합니다.",
+        warnings: ["일부 복합 서식은 단순화될 수 있습니다."],
+        willConvertFormat: ".hwp → .hwpx",
+        diff: "@@ 제1조 (목적) @@\n 본 계약의 내용은 다음과 같다.\n-계약 일자: 2025년 1월 1일\n+계약 일자: 2026년 6월 18일\n-계약 금액: 일금 오백만원정\n+계약 금액: 일금 칠백만원정",
+      },
+      "form-fill": {
+        kind: "form-fill",
+        targetPath: "민원신청서.hwpx",
+        summary: "신청서 양식 필드를 채웁니다.",
+        diff: "| 라벨 | 이전 값 | 새 값 |\n| --- | --- | --- |\n| 성명 | (없음) | 홍길동 |\n| 신청일 | (없음) | 2026-06-18 |\n| 연락처 | (없음) | 010-1234-5678 |",
+      },
+    };
+    const s = samples[k];
+    if (s) {
+      setPendingProposal({ id: "demo", stagedPath: "(데모)", warnings: [], ...s } as Proposal);
+    }
+  }, []);
+
   // cwd 변경 → 파일 목록 새로고침, 미리보기 초기화
   useEffect(() => {
     if (typeof window.kodoc === "undefined") return;
