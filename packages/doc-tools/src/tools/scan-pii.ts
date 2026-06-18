@@ -10,7 +10,7 @@ import { extname } from "node:path";
 import { detectPii } from "@kodocagent/shared";
 import { z } from "zod";
 import { parse } from "../kordoc-parse.js";
-import { assertFileSizeWithinLimit, resolveSafePath } from "../security.js";
+import { assertFileSizeWithinLimit, assertZipNotBomb, resolveSafePath } from "../security.js";
 import { decodeTextFile } from "../text-encoding.js";
 import type { ToolContext, ToolDefinition } from "../types.js";
 
@@ -66,6 +66,18 @@ export const scanPiiTool: ToolDefinition<ScanPiiInput> = {
         return `오류: 파일을 읽을 수 없습니다: ${msg}`;
       }
     } else {
+      // 압축 폭탄 가드 — ZIP 포맷(.hwpx/.docx/.xlsx)은 parse 직전에 버퍼로 검사
+      const ZIP_EXTS_PII = new Set([".hwpx", ".docx", ".xlsx"]);
+      if (ZIP_EXTS_PII.has(ext)) {
+        try {
+          const zipBuf = await readFile(safePath);
+          assertZipNotBomb(zipBuf);
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
+          return `오류: ${msg}`;
+        }
+      }
+
       let parseResult: Awaited<ReturnType<typeof parse>>;
       try {
         parseResult = await parse(safePath);

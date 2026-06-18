@@ -17,6 +17,7 @@ import { z } from "zod";
 import { applyRangeSplicesToSection, collectParasInDocOrder } from "../hwpx-splice.js";
 import {
   assertFileSizeWithinLimit,
+  assertZipNotBomb,
   hwpStructuralGuard,
   isZipBinary,
   resolveSafePath,
@@ -261,6 +262,14 @@ export const proposeRedactPiiTool: ToolDefinition<ProposeRedactPiiInput> = {
           "오류: 파일이 유효한 .hwpx(ZIP) 포맷이 아닙니다. " +
           "파일이 손상되었거나 구형 .hwp(OLE 바이너리) 포맷일 수 있습니다."
         );
+      }
+
+      // 압축 폭탄 가드 — JSZip.loadAsync 직전
+      try {
+        assertZipNotBomb(originalBytes);
+      } catch (err) {
+        if (err instanceof Error) return `오류: ${err.message}`;
+        throw err;
       }
 
       let patchResult: Awaited<ReturnType<typeof applyRedactToHwpx>>;

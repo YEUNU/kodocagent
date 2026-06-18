@@ -30,6 +30,7 @@ import { applySplices, buildParagraphSplices, scanSectionXml } from "kordoc";
 import { z } from "zod";
 import {
   assertFileSizeWithinLimit,
+  assertZipNotBomb,
   hwpStructuralGuard,
   isZipBinary,
   resolveSafePath,
@@ -625,6 +626,14 @@ export const proposeCellEditTool: ToolDefinition<ProposeCellEditInput> = {
         "파일이 손상되었거나 구형 .hwp(OLE 바이너리) 포맷입니다. " +
         "한글 프로그램에서 .hwpx로 저장 후 다시 시도하세요."
       );
+    }
+
+    // 압축 폭탄 가드 — JSZip.loadAsync 직전
+    try {
+      assertZipNotBomb(originalBytes);
+    } catch (err) {
+      if (err instanceof Error) return `오류: ${err.message}`;
+      throw err;
     }
 
     // 레이블 기반 편집을 좌표로 해석하기 위해 섹션 정보를 먼저 읽는다

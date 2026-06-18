@@ -21,6 +21,7 @@ import JSZip from "jszip";
 import { z } from "zod";
 import {
   assertFileSizeWithinLimit,
+  assertZipNotBomb,
   hwpStructuralGuard,
   isZipBinary,
   resolveSafePath,
@@ -643,6 +644,12 @@ function validateHwpxBuffer(ext: string, buffer: Uint8Array): string | null {
       "파일이 손상되었거나 구형 .hwp(OLE 바이너리) 포맷입니다."
     );
   }
+  // 압축 폭탄 가드 — JSZip.loadAsync 직전
+  try {
+    assertZipNotBomb(buffer);
+  } catch (err) {
+    return err instanceof Error ? `오류: ${err.message}` : "오류: 알 수 없는 오류";
+  }
   return null;
 }
 
@@ -911,7 +918,7 @@ export const proposeFormObjectTool: ToolDefinition<ProposeFormObjectInput> = {
       const si = sectionFiles.indexOf(re.target.sectionFile);
       if (si < 0) continue;
       if (!sectionEditMap.has(si)) sectionEditMap.set(si, []);
-      sectionEditMap.get(si)!.push({
+      sectionEditMap.get(si)?.push({
         target: re.target,
         set: re.set,
         expected: re.expected,

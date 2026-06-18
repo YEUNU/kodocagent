@@ -29,6 +29,7 @@ import { collectParasInDocOrder } from "../hwpx-splice.js";
 import { parse } from "../kordoc-parse.js";
 import {
   assertFileSizeWithinLimit,
+  assertZipNotBomb,
   hwpStructuralGuard,
   isZipBinary,
   resolveSafePath,
@@ -529,6 +530,14 @@ export const proposeFindReplaceTool: ToolDefinition<ProposeFindReplaceInput> = {
         "파일이 손상되었거나 구형 .hwp(OLE 바이너리) 포맷일 수 있습니다. " +
         "한글 프로그램에서 .hwpx로 저장 후 다시 시도하세요."
       );
+    }
+
+    // 압축 폭탄 가드 — JSZip.loadAsync 직전
+    try {
+      assertZipNotBomb(originalBytes);
+    } catch (err) {
+      if (err instanceof Error) return `오류: ${err.message}`;
+      throw err;
     }
 
     // XML 직접 패치 치환 수행

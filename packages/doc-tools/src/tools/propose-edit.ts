@@ -17,7 +17,12 @@ import { compare, patchHwp, patchHwpx } from "kordoc";
 import { z } from "zod";
 import { parse } from "../kordoc-parse.js";
 import { markdownToDocx } from "../md-to-docx.js";
-import { assertFileSizeWithinLimit, resolveSafePath } from "../security.js";
+import {
+  assertFileSizeWithinLimit,
+  assertZipNotBomb,
+  isZipBinary,
+  resolveSafePath,
+} from "../security.js";
 import {
   backupFile,
   commitStaged,
@@ -27,6 +32,32 @@ import {
 } from "../staging.js";
 import { decodeTextFile } from "../text-encoding.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
+
+/**
+ * 원본 마크다운 대비 신규 내용이 이 비율 미만이면 잘린 내용으로 전체 교체 위험 경고를 추가한다.
+ * 원본이 이 길이 이상일 때만 검사(짧은 문서는 정상적인 대폭 삭제일 수 있음).
+ */
+const TRUNCATION_REPLACE_MIN_ORIGINAL_LENGTH = 2000;
+const TRUNCATION_REPLACE_RATIO_THRESHOLD = 0.5;
+
+/**
+ * 잘린 내용으로 전체 교체 시 뒷부분 영구 소실 위험 경고를 생성한다.
+ * 원본이 충분히 길고(>=MIN) 신규가 그 절반 미만일 때만 경고(아니면 null).
+ * 정상적인 대량 삭제일 수도 있으므로 단정하지 않고 가능성으로 안내한다.
+ */
+function truncationReplaceWarning(originalLen: number, newLen: number): string | null {
+  if (
+    originalLen < TRUNCATION_REPLACE_MIN_ORIGINAL_LENGTH ||
+    newLen >= originalLen * TRUNCATION_REPLACE_RATIO_THRESHOLD
+  ) {
+    return null;
+  }
+  return (
+    `새 내용이 원본의 절반 미만입니다(원본 약 ${originalLen}자 → 신규 ${newLen}자). ` +
+    "의도한 대량 삭제가 아니라면, read_document가 80,000자에서 잘렸을 때 그 잘린 내용으로 " +
+    "전체를 교체한 것일 수 있습니다(뒷부분 영구 삭제). read_document의 pages 옵션으로 나눠 읽고 편집하세요."
+  );
+}
 
 export const proposeEditSchema = z.object({
   path: z.string().describe("수정할 문서 경로 (cwd 기준 상대 경로 또는 절대 경로)"),
@@ -78,6 +109,26 @@ export const proposeEditTool: ToolDefinition<ProposeEditInput> = {
     let stagedData: Uint8Array;
     let originalMarkdown = "";
 
+    // 압축 폭탄 가드 — ZIP 포맷(.hwpx/.docx)은 parse/patchHwpx 직전에 검사
+    if (
+      isZipBinary(
+        new Uint8Array(originalBuffer.buffer, originalBuffer.byteOffset, originalBuffer.byteLength),
+      )
+    ) {
+      try {
+        assertZipNotBomb(
+          new Uint8Array(
+            originalBuffer.buffer,
+            originalBuffer.byteOffset,
+            originalBuffer.byteLength,
+          ),
+        );
+      } catch (err) {
+        if (err instanceof Error) return `오류: ${err.message}`;
+        throw err;
+      }
+    }
+
     // 원본 마크다운 추출 (diff용)
     const originalResult = await parse(originalBuffer.buffer as ArrayBuffer);
     if (originalResult.success) {
@@ -128,9 +179,26 @@ export const proposeEditTool: ToolDefinition<ProposeEditInput> = {
       for (const s of patchResult.skipped) {
         warnings.push(`일부 변경이 적용되지 않았습니다(${s.reason ?? "사유 미상"}). ${skipGuide}`);
       }
+
+      // 잘린 내용으로 전체 교체 시 뒷부분 영구 소실 경고
+      {
+        const truncWarn = truncationReplaceWarning(
+          originalMarkdown.length,
+          input.newMarkdown.length,
+        );
+        if (truncWarn) warnings.push(truncWarn);
+      }
     } else if (ext === ".docx") {
       // DOCX: md→docx 재생성 (서식 손실 경고)
       warnings.push("DOCX 재생성: 복잡한 서식(머리글/각주/스타일)은 손실될 수 있습니다.");
+      // 잘린 내용으로 전체 교체 시 뒷부분 영구 소실 경고
+      {
+        const truncWarn = truncationReplaceWarning(
+          originalMarkdown.length,
+          input.newMarkdown.length,
+        );
+        if (truncWarn) warnings.push(truncWarn);
+      }
       const docxBuffer = await markdownToDocx(input.newMarkdown);
       stagedData = new Uint8Array(docxBuffer);
     } else if (ext === ".md" || ext === ".txt") {

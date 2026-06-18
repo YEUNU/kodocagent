@@ -10,7 +10,7 @@ import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import ExcelJS from "exceljs";
 import { z } from "zod";
-import { assertFileSizeWithinLimit, resolveSafePath } from "../security.js";
+import { assertFileSizeWithinLimit, assertZipNotBomb, resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
@@ -68,6 +68,14 @@ export const proposeSheetEditTool: ToolDefinition<ProposeSheetEditInput> = {
       originalBuffer = await readFile(safePath);
     } catch {
       return `오류: 파일을 읽을 수 없습니다: ${input.path}. 경로를 확인하세요.`;
+    }
+
+    // 압축 폭탄 가드 — exceljs xlsx.load 직전 (.xlsx는 ZIP 포맷)
+    try {
+      assertZipNotBomb(originalBuffer);
+    } catch (err) {
+      if (err instanceof Error) return `오류: ${err.message}`;
+      throw err;
     }
 
     // exceljs로 워크북 로드

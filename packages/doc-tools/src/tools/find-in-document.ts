@@ -15,7 +15,12 @@ import { extname } from "node:path";
 import JSZip from "jszip";
 import { scanSectionXml } from "kordoc";
 import { z } from "zod";
-import { assertFileSizeWithinLimit, isZipBinary, resolveSafePath } from "../security.js";
+import {
+  assertFileSizeWithinLimit,
+  assertZipNotBomb,
+  isZipBinary,
+  resolveSafePath,
+} from "../security.js";
 import type { ToolContext, ToolDefinition } from "../types.js";
 
 // ─────────────────────────────────────────────────────────
@@ -202,6 +207,14 @@ export const findInDocumentTool: ToolDefinition<FindInDocumentInput> = {
         "파일이 손상되었거나 구형 .hwp(OLE 바이너리) 포맷입니다. " +
         "한글 프로그램에서 .hwpx로 저장 후 다시 시도하세요."
       );
+    }
+
+    // 압축 폭탄 가드 — JSZip 해제 직전 (해제 크기 합산 검사, 해제는 안 함)
+    try {
+      assertZipNotBomb(bytes);
+    } catch (err) {
+      if (err instanceof Error) return `오류: ${err.message}`;
+      throw err;
     }
 
     // ZIP 열기

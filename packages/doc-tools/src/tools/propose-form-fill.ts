@@ -18,7 +18,13 @@ import { kordocErrorMessage } from "@kodocagent/shared";
 import { extractFormSchema, fillHwpx } from "kordoc";
 import { z } from "zod";
 import { parse } from "../kordoc-parse.js";
-import { assertFileSizeWithinLimit, hwpStructuralGuard, resolveSafePath } from "../security.js";
+import {
+  assertFileSizeWithinLimit,
+  assertZipNotBomb,
+  hwpStructuralGuard,
+  isZipBinary,
+  resolveSafePath,
+} from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
@@ -79,6 +85,26 @@ export const proposeFormFillTool: ToolDefinition<ProposeFormFillInput> = {
     );
     if (structuralGuard !== null) {
       return structuralGuard;
+    }
+
+    // 압축 폭탄 가드 — .hwpx(ZIP) 포맷일 때 kordoc fillHwpx/parse 직전
+    if (
+      isZipBinary(
+        new Uint8Array(originalBuffer.buffer, originalBuffer.byteOffset, originalBuffer.byteLength),
+      )
+    ) {
+      try {
+        assertZipNotBomb(
+          new Uint8Array(
+            originalBuffer.buffer,
+            originalBuffer.byteOffset,
+            originalBuffer.byteLength,
+          ),
+        );
+      } catch (err) {
+        if (err instanceof Error) return `오류: ${err.message}`;
+        throw err;
+      }
     }
 
     // 원본 파싱

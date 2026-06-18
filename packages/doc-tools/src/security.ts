@@ -48,6 +48,109 @@ export async function assertFileSizeWithinLimit(
 }
 
 // ─────────────────────────────────────────────────────────
+// ZIP 압축 폭탄(decompression bomb) 가드
+// ─────────────────────────────────────────────────────────
+
+/** 압축 해제 크기 기본 한도 — 1 GB */
+const MAX_UNCOMPRESSED_ZIP_BYTES = 1024 * 1024 * 1024;
+
+/** ZIP End of Central Directory 시그니처 (리틀 엔디언 0x06054b50) */
+const EOCD_SIG = 0x06054b50;
+/** ZIP Central Directory File Header 시그니처 (리틀 엔디언 0x02014b50) */
+const CDFH_SIG = 0x02014b50;
+/** EOCD 최소 크기(주석 없음) */
+const EOCD_MIN_SIZE = 22;
+/** EOCD 탐색 최대 범위 (주석 최대 65535 바이트 + EOCD 22바이트) */
+const EOCD_SCAN_MAX = 65535 + EOCD_MIN_SIZE;
+
+/**
+ * ZIP 중앙 디렉터리 메타데이터만 읽어 압축 해제 크기 합산이 한도를 초과하는지 검사한다.
+ * 파일을 실제로 해제하지 않으므로 안전하다.
+ *
+ * - ZIP 시그니처(PK)가 없으면 ZIP이 아닌 것으로 간주하고 통과시킨다(비-ZIP은 kordoc가 처리).
+ * - ZIP64 엔트리(uncompressed size == 0xFFFFFFFF)는 비정상 .hwpx 파일에서 나타날 수 없으므로
+ *   즉시 KodocError를 던진다.
+ * - 파싱 중 범위를 벗어나는 오프셋 등 손상된 ZIP 구조는 throw 대신 return으로 관대하게 처리해
+ *   kordoc가 이후 단계에서 적절한 오류를 반환하도록 위임한다.
+ *
+ * @param buf            검사할 파일 버퍼
+ * @param maxUncompressed 압축 해제 크기 합산 한도 (기본값: 1 GB)
+ * @throws KodocError — 합산이 한도를 초과하거나 ZIP64 엔트리가 감지된 경우
+ */
+export function assertZipNotBomb(
+  buf: Buffer | Uint8Array,
+  maxUncompressed = MAX_UNCOMPRESSED_ZIP_BYTES,
+): void {
+  const len = buf.length;
+  // 최소 EOCD 크기에도 미치지 못하면 ZIP이 아니므로 통과
+  if (len < EOCD_MIN_SIZE) return;
+
+  // ZIP 시그니처 "PK" 확인 (선두 2바이트)
+  if (buf[0] !== 0x50 || buf[1] !== 0x4b) return;
+
+  const view = new DataView(buf.buffer, buf.byteOffset, len);
+
+  // ── EOCD 탐색 (파일 끝에서 역방향) ──────────────────────────
+  // EOCD는 파일의 마지막 EOCD_SCAN_MAX 바이트 안에 반드시 존재한다.
+  const scanStart = Math.max(0, len - EOCD_SCAN_MAX);
+  let eocdOffset = -1;
+  for (let i = len - EOCD_MIN_SIZE; i >= scanStart; i--) {
+    if (view.getUint32(i, true) === EOCD_SIG) {
+      eocdOffset = i;
+      break;
+    }
+  }
+  // EOCD를 찾지 못하면 ZIP 구조가 손상된 것 — 관대하게 통과 (kordoc에 위임)
+  if (eocdOffset < 0) return;
+
+  // EOCD 파싱: 중앙 디렉터리 시작 오프셋(+16, 4바이트).
+  // 주의: EOCD의 엔트리 수(+10)는 위조 가능하므로 신뢰하지 않는다 — CDFH 시그니처가
+  // 이어지는 동안 중앙 디렉터리를 끝까지 순회해 "모든" 엔트리를 합산한다.
+  if (eocdOffset + 22 > len) return; // 범위 초과 — 손상된 ZIP, 관대하게 통과
+  const cdOffset = view.getUint32(eocdOffset + 16, true);
+
+  // 중앙 디렉터리 오프셋이 범위를 벗어나면 관대하게 통과
+  if (cdOffset + 46 > len) return;
+
+  // ── 중앙 디렉터리 순회 (entryCount 미신뢰, CDFH 시그니처 체인 추적) ──────────
+  let pos = cdOffset;
+  let totalUncompressed = 0;
+  const MAX_ENTRIES = 1_000_000; // 무한 루프 방지용 안전 상한
+
+  for (let i = 0; i < MAX_ENTRIES; i++) {
+    // 헤더(46바이트)를 못 읽거나 시그니처가 CDFH가 아니면 중앙 디렉터리 끝
+    if (pos + 46 > len) break;
+    if (view.getUint32(pos, true) !== CDFH_SIG) break;
+
+    // uncompressed size: 헤더 시작 +24, 4바이트 리틀 엔디언
+    const uncompressedSize = view.getUint32(pos + 24, true);
+
+    // ZIP64 마커(0xFFFFFFFF): 일반 .hwpx에는 존재하지 않으므로 비정상 파일로 간주
+    if (uncompressedSize === 0xffffffff) {
+      throw new KodocError(
+        "문서 압축 해제 크기가 너무 큽니다(손상되었거나 비정상 파일).",
+        "신뢰할 수 있는 원본인지 확인하세요.",
+      );
+    }
+
+    totalUncompressed += uncompressedSize;
+    if (totalUncompressed > maxUncompressed) {
+      const maxGb = Math.round(maxUncompressed / (1024 * 1024 * 1024));
+      throw new KodocError(
+        `문서 압축 해제 크기가 너무 큽니다(합산 ${Math.round(totalUncompressed / (1024 * 1024))}MB, 최대 ${maxGb}GB).`,
+        "신뢰할 수 있는 원본인지 확인하세요.",
+      );
+    }
+
+    // 다음 헤더로 이동: 46바이트 고정부 + 파일명(+28) + 추가필드(+30) + 주석(+32)
+    const fileNameLen = view.getUint16(pos + 28, true);
+    const extraLen = view.getUint16(pos + 30, true);
+    const commentLen = view.getUint16(pos + 32, true);
+    pos += 46 + fileNameLen + extraLen + commentLen;
+  }
+}
+
+// ─────────────────────────────────────────────────────────
 // HWP 구조 편집 가드 — 포맷 감지는 kordoc API에 위임
 // (kordoc-api-first 원칙: 매직바이트 감지를 자체 구현하지 않고 kordoc 사용)
 // ─────────────────────────────────────────────────────────

@@ -14,7 +14,7 @@ import { extname } from "node:path";
 import { kordocErrorMessage } from "@kodocagent/shared";
 import { z } from "zod";
 import { parse } from "../kordoc-parse.js";
-import { assertFileSizeWithinLimit, resolveSafePath } from "../security.js";
+import { assertFileSizeWithinLimit, assertZipNotBomb, resolveSafePath } from "../security.js";
 import { decodeTextFile } from "../text-encoding.js";
 import type { ToolContext, ToolDefinition } from "../types.js";
 
@@ -214,10 +214,22 @@ export const readDocumentTool: ToolDefinition<ReadDocumentInput> = {
       }
 
       const truncationNotice = truncated
-        ? `\n\n---\n\n⚠️ 내용이 너무 길어 약 80,000자에서 잘렸습니다. (평문 텍스트 파일이라 페이지 단위 분할 읽기는 지원되지 않습니다)`
+        ? `\n\n---\n\n⚠️ 내용이 너무 길어 약 80,000자에서 잘렸습니다. (평문 텍스트 파일이라 페이지 단위 분할 읽기는 지원되지 않습니다) 이 잘린 내용으로 propose_edit 전체 교체를 하면 뒷부분이 삭제됩니다 — pages 옵션으로 나눠 편집하세요.`
         : "";
 
       return `${meta}${body}${truncationNotice}`;
+    }
+
+    // 압축 폭탄 가드 — ZIP 포맷(.hwpx/.docx/.xlsx)은 parse 직전에 버퍼로 검사
+    const ZIP_EXTS = new Set([".hwpx", ".docx", ".xlsx"]);
+    if (ZIP_EXTS.has(ext)) {
+      try {
+        const zipBuf = await readFile(safePath);
+        assertZipNotBomb(zipBuf);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return `오류: ${msg}`;
+      }
     }
 
     const result = await parse(safePath, input.pages ? { pages: input.pages } : undefined);
@@ -250,7 +262,7 @@ export const readDocumentTool: ToolDefinition<ReadDocumentInput> = {
 
     const meta = metaLines.length > 0 ? `${metaLines.join("\n")}\n\n---\n\n` : "";
     const truncationNotice = truncated
-      ? `\n\n---\n\n⚠️ 내용이 너무 길어 약 80,000자에서 잘렸습니다. 페이지 범위(pages 옵션)를 지정하여 부분적으로 읽을 수 있습니다.`
+      ? `\n\n---\n\n⚠️ 내용이 너무 길어 약 80,000자에서 잘렸습니다. 페이지 범위(pages 옵션)를 지정하여 부분적으로 읽을 수 있습니다. 이 잘린 내용으로 propose_edit 전체 교체를 하면 뒷부분이 삭제됩니다 — pages 옵션으로 나눠 편집하세요.`
       : "";
 
     return `${meta}${body}${truncationNotice}`;
