@@ -11,7 +11,7 @@
  */
 
 import type { ApprovalHandler, Proposal } from "@kodocagent/shared";
-import { detectPii, summarizePii } from "@kodocagent/shared";
+import { detectPii, KodocError, summarizePii } from "@kodocagent/shared";
 import type { Schema, ToolSet } from "ai";
 import { tool } from "ai";
 import type { z } from "zod";
@@ -63,6 +63,25 @@ export interface ToolDefinition<TInput = unknown> {
  * core는 UI 비종속이므로 콜백을 통해 세션이 이벤트를 발행한다.
  */
 export type ApprovalEventEmitter = (proposal: Proposal) => void;
+
+/**
+ * 기존 파일을 덮어쓰는 kind 목록.
+ * 신규 파일 생성(new-document, new-spreadsheet), 읽기 전용(export), restore는 제외.
+ */
+const OVERWRITE_KINDS = new Set([
+  "edit",
+  "cell-edit",
+  "find-replace",
+  "table-structure",
+  "sheet-edit",
+  "form-fill",
+  "form-object",
+  "redact-pii",
+]);
+
+/** 열린 파일 경고 문구 */
+const OPEN_FILE_WARN =
+  "이 문서가 한컴오피스·한글뷰어 등에서 열려 있다면 닫은 뒤 적용하세요. 열린 채로 적용하면 변경 내용이 화면에 바로 보이지 않거나, 프로그램에서 저장할 때 덮어써질 수 있습니다.";
 
 /**
  * 툴 레지스트리 — 툴을 등록하고 AI SDK v6 포맷으로 변환한다.
@@ -174,6 +193,14 @@ export class ToolRegistry {
               ];
             }
 
+            // 기존 문서를 덮어쓰는 제안에는 열린 파일 경고를 추가
+            if (
+              OVERWRITE_KINDS.has(proposal.kind) &&
+              !(proposal.warnings ?? []).includes(OPEN_FILE_WARN)
+            ) {
+              proposal.warnings = [...(proposal.warnings ?? []), OPEN_FILE_WARN];
+            }
+
             // 2단계: approval-required 이벤트 발행 (UI용)
             getEventEmitter()?.(proposal);
 
@@ -198,7 +225,9 @@ export class ToolRegistry {
               return commitMsg;
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : String(err);
-              return `저장 오류: ${msg}`;
+              // KodocError는 hint를 포함할 수 있으므로 별도 노출
+              const hint = err instanceof KodocError && err.hint ? `\n[해결 방법] ${err.hint}` : "";
+              return `저장 오류: ${msg}${hint}`;
             }
           }
 

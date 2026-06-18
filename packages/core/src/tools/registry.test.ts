@@ -265,3 +265,100 @@ describe("register 정합성 검증", () => {
     ).toThrow(/propose가 없습니다/);
   });
 });
+
+describe("열린 파일 경고 (OVERWRITE_KINDS)", () => {
+  /** 공통 헬퍼: kind가 다른 간단한 propose 툴을 등록하고 실행한다 */
+  async function runWithKind(kind: Proposal["kind"]): Promise<string> {
+    const registry = new ToolRegistry();
+    const proposal: Proposal = {
+      id: "prop-warn-01",
+      kind,
+      targetPath: "/target/file.hwpx",
+      stagedPath: "/staging/file.hwpx",
+      summary: "테스트",
+      diff: "",
+      warnings: [],
+    };
+
+    registry.register({
+      name: `tool_${kind}`,
+      description: "경고 테스트",
+      inputSchema: z.object({}),
+      requiresApproval: true,
+      propose: async (): Promise<ProposeOutcome> => ({
+        proposal,
+        commit: vi.fn().mockResolvedValue("저장 완료"),
+      }),
+    });
+
+    registry.setApprovalHandler(async () => ({ approved: true }));
+    registry.setContext(ctx);
+
+    const tools = registry.toAiSdkTools();
+    const result = await tools[`tool_${kind}`]!.execute!(
+      {},
+      { toolCallId: "tc-warn", messages: [], abortSignal: undefined },
+    );
+    return String(result);
+  }
+
+  it("edit kind → 열린 파일 경고가 결과에 포함된다", async () => {
+    const result = await runWithKind("edit");
+    expect(result).toContain("한컴오피스·한글뷰어");
+  });
+
+  it("find-replace kind → 열린 파일 경고가 결과에 포함된다", async () => {
+    const result = await runWithKind("find-replace");
+    expect(result).toContain("한컴오피스·한글뷰어");
+  });
+
+  it("new-document kind → 열린 파일 경고가 결과에 포함되지 않는다", async () => {
+    const result = await runWithKind("new-document");
+    expect(result).not.toContain("한컴오피스·한글뷰어");
+  });
+
+  it("export kind → 열린 파일 경고가 결과에 포함되지 않는다", async () => {
+    const result = await runWithKind("export");
+    expect(result).not.toContain("한컴오피스·한글뷰어");
+  });
+
+  it("경고가 이미 있으면 중복 추가되지 않는다", async () => {
+    const OPEN_FILE_WARN =
+      "이 문서가 한컴오피스·한글뷰어 등에서 열려 있다면 닫은 뒤 적용하세요. 열린 채로 적용하면 변경 내용이 화면에 바로 보이지 않거나, 프로그램에서 저장할 때 덮어써질 수 있습니다.";
+
+    const registry = new ToolRegistry();
+    const proposal: Proposal = {
+      id: "prop-warn-dup",
+      kind: "edit",
+      targetPath: "/target/file.hwpx",
+      stagedPath: "/staging/file.hwpx",
+      summary: "중복 방지 테스트",
+      diff: "",
+      warnings: [OPEN_FILE_WARN], // 이미 경고 포함
+    };
+
+    registry.register({
+      name: "tool_dup_warn",
+      description: "중복 경고 테스트",
+      inputSchema: z.object({}),
+      requiresApproval: true,
+      propose: async (): Promise<ProposeOutcome> => ({
+        proposal,
+        commit: vi.fn().mockResolvedValue("저장 완료"),
+      }),
+    });
+
+    registry.setApprovalHandler(async () => ({ approved: true }));
+    registry.setContext(ctx);
+
+    const tools = registry.toAiSdkTools();
+    await tools["tool_dup_warn"]!.execute!(
+      {},
+      { toolCallId: "tc-dup", messages: [], abortSignal: undefined },
+    );
+
+    // proposal.warnings에 동일 문자열이 1번만 있어야 함
+    const count = proposal.warnings.filter((w) => w === OPEN_FILE_WARN).length;
+    expect(count).toBe(1);
+  });
+});

@@ -13,7 +13,7 @@
 
 import { copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
-import { KODOC_PATHS } from "@kodocagent/shared";
+import { KODOC_PATHS, KodocError } from "@kodocagent/shared";
 import { createTwoFilesPatch } from "diff";
 
 /** 세션당 스테이징 카운터 (증분 번호, 메모리 유지) */
@@ -97,11 +97,51 @@ export async function backupFile(
 }
 
 /**
+ * errno 코드를 사용자 친화적 한국어 메시지로 변환한다.
+ * 알 수 없는 코드는 null 반환 → 호출자가 원본 오류를 그대로 던짐.
+ *
+ * @param code  NodeJS.ErrnoException.code (예: "EBUSY")
+ * @returns     { message, hint } 또는 null
+ */
+export function commitErrorMessage(
+  code: string | undefined,
+): { message: string; hint: string } | null {
+  switch (code) {
+    case "EBUSY":
+    case "EPERM":
+    case "EACCES":
+    case "ETXTBSY":
+      return {
+        message: "파일을 저장하지 못했습니다(다른 프로그램에서 사용 중이거나 권한 없음).",
+        hint: "한컴오피스·한글뷰어 등에서 이 파일을 열어 두었다면 닫은 뒤 다시 시도하세요. 쓰기 권한도 확인하세요.",
+      };
+    case "ENOSPC":
+      return {
+        message: "저장 공간이 부족해 파일을 저장하지 못했습니다.",
+        hint: "디스크 여유 공간을 확보한 뒤 다시 시도하세요.",
+      };
+    case "EROFS":
+      return {
+        message: "읽기 전용 위치라 파일을 저장할 수 없습니다.",
+        hint: "쓰기 가능한 폴더로 옮긴 뒤 다시 시도하세요.",
+      };
+    default:
+      return null;
+  }
+}
+
+/**
  * 스테이징된 파일을 타겟 경로에 원자적으로 쓴다.
  * temp 파일을 타겟과 같은 볼륨에 생성하고 rename().
  *
+ * 실패 시:
+ * - 임시 파일(tmpPath)을 best-effort 정리한다.
+ * - EBUSY/EPERM/EACCES/ETXTBSY/ENOSPC/EROFS → KodocError(한국어 메시지 + 해결 힌트)
+ * - 그 외 → 원본 오류 그대로 rethrow
+ *
  * @param stagedPath  스테이징 파일 절대 경로
  * @param targetPath  최종 저장 경로
+ * @throws KodocError  파일이 잠겨 있거나 디스크가 꽉 찼거나 읽기 전용 위치인 경우
  */
 export async function commitStaged(stagedPath: string, targetPath: string): Promise<void> {
   const targetDir = dirname(targetPath);
@@ -110,8 +150,20 @@ export async function commitStaged(stagedPath: string, targetPath: string): Prom
   // 같은 볼륨에 temp 파일 생성 (rename이 원자적으로 동작하려면 같은 파일시스템이어야 함)
   const tmpPath = `${targetPath}.tmp-${process.pid}-${Date.now()}`;
   const data = await readFile(stagedPath);
-  await writeFile(tmpPath, data);
-  await rename(tmpPath, targetPath);
+
+  try {
+    await writeFile(tmpPath, data);
+    await rename(tmpPath, targetPath);
+  } catch (err: unknown) {
+    // temp 파일 best-effort 정리 (실패해도 무시)
+    await rm(tmpPath, { force: true }).catch(() => undefined);
+
+    const errInfo = commitErrorMessage((err as NodeJS.ErrnoException).code);
+    if (errInfo) {
+      throw new KodocError(errInfo.message, errInfo.hint);
+    }
+    throw err;
+  }
 }
 
 /**

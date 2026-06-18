@@ -8,12 +8,14 @@
 import { mkdir, readFile, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { KodocError } from "@kodocagent/shared";
 import { describe, expect, it } from "vitest";
 import {
   backupFile,
   cleanAllStaging,
   cleanOldBackups,
   cleanSessionStaging,
+  commitErrorMessage,
   commitStaged,
   markdownDiff,
   resolveOutputPath,
@@ -100,6 +102,41 @@ describe("backupFile", () => {
   });
 });
 
+describe("commitErrorMessage", () => {
+  it("EBUSY → 사용 중/권한 없음 메시지 반환", () => {
+    const result = commitErrorMessage("EBUSY");
+    expect(result).not.toBeNull();
+    expect(result!.message).toContain("다른 프로그램에서 사용 중");
+    expect(result!.hint).toContain("한컴오피스");
+  });
+
+  it("EACCES → 사용 중/권한 없음 메시지 반환 (EBUSY와 동일)", () => {
+    const result = commitErrorMessage("EACCES");
+    expect(result).not.toBeNull();
+    expect(result!.message).toContain("다른 프로그램에서 사용 중");
+  });
+
+  it("ENOSPC → 저장 공간 부족 메시지 반환", () => {
+    const result = commitErrorMessage("ENOSPC");
+    expect(result).not.toBeNull();
+    expect(result!.message).toContain("저장 공간이 부족");
+    expect(result!.hint).toContain("디스크");
+  });
+
+  it("EROFS → 읽기 전용 메시지 반환", () => {
+    const result = commitErrorMessage("EROFS");
+    expect(result).not.toBeNull();
+    expect(result!.message).toContain("읽기 전용");
+    expect(result!.hint).toContain("쓰기 가능한 폴더");
+  });
+
+  it("알 수 없는 코드 → null 반환", () => {
+    expect(commitErrorMessage("ENOENT")).toBeNull();
+    expect(commitErrorMessage("ETIMEDOUT")).toBeNull();
+    expect(commitErrorMessage(undefined)).toBeNull();
+  });
+});
+
 describe("commitStaged", () => {
   it("스테이징 파일을 타겟 경로에 원자적으로 쓴다", async () => {
     const stagingDir = await makeTmpDir("staged");
@@ -127,6 +164,15 @@ describe("commitStaged", () => {
 
     const content = await readFile(targetPath, "utf-8");
     expect(content).toBe("새 디렉터리 테스트");
+  });
+
+  it("존재하지 않는 스테이징 파일이면 일반 오류를 던진다 (KodocError 아님)", async () => {
+    const targetDir = await makeTmpDir("commit-err-target");
+    await expect(
+      commitStaged("/nonexistent/staged.hwpx", join(targetDir, "out.hwpx")),
+    ).rejects.toSatisfy(
+      (e: unknown) => e instanceof Error && !(e instanceof KodocError),
+    );
   });
 });
 
