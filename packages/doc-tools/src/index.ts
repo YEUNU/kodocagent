@@ -26,6 +26,9 @@ export const SUPPORTED_WRITE_EXTENSIONS = [".hwpx", ".docx", ".xlsx", ".md", ".t
 /** .hwp 편집 결과는 .hwpx로 저장된다 (HWP 5.0 바이너리 쓰기 미지원 — SPEC §0 결정 5) */
 export const HWP_WRITE_CONVERSION = { from: ".hwp", to: ".hwpx" } as const;
 
+export { renderHtml } from "kordoc";
+// 미리보기/렌더용 — GUI 등 소비자가 동일한 robust parse + renderHtml 을 쓰도록 재노출
+export { parse } from "./kordoc-parse.js";
 export { resolveSafePath } from "./security.js";
 export {
   cleanAllStaging,

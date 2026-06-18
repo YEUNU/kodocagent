@@ -8,6 +8,8 @@
  * 보안 원칙: API 키·키 파일 내용을 렌더러/IPC로 전달 금지 (boolean만).
  */
 
+import { readdir } from "node:fs/promises";
+import { extname, isAbsolute } from "node:path";
 import type { AgentEvent, AgentSessionOptions } from "@kodocagent/core";
 import {
   AgentSession,
@@ -18,7 +20,14 @@ import {
   SessionStore,
   ToolRegistry,
 } from "@kodocagent/core";
-import { createDocTools } from "@kodocagent/doc-tools";
+import {
+  createDocTools,
+  parse,
+  renderHtml,
+  resolveSafePath,
+  SUPPORTED_READ_EXTENSIONS,
+  SUPPORTED_WRITE_EXTENSIONS,
+} from "@kodocagent/doc-tools";
 import type { KodocConfig, Proposal } from "@kodocagent/shared";
 import { resolveApiKey } from "@kodocagent/shared";
 
@@ -31,6 +40,25 @@ export interface ConfigSnapshot {
   model: string | null;
   hasKeys: Record<string, boolean>;
 }
+
+/** 좌측 파일 패널 항목 (IPC 직렬화) */
+export interface FileEntry {
+  name: string;
+  /** cwd 기준 상대 경로 */
+  path: string;
+  ext: string;
+  kind: "doc" | "sheet" | "other";
+  /** v1에서 편집(쓰기) 가능 여부 */
+  writable: boolean;
+}
+
+/** 문서 미리보기 결과 — renderHtml HTML 또는 오류 */
+export type DocPreviewResult =
+  | { ok: true; html: string; markdown: string }
+  | { ok: false; error: string };
+
+const READ_EXTS: readonly string[] = SUPPORTED_READ_EXTENSIONS;
+const WRITE_EXTS: readonly string[] = SUPPORTED_WRITE_EXTENSIONS;
 
 type ApprovalResolver = (result: { approved: boolean; reason?: string }) => void;
 
@@ -127,6 +155,53 @@ export class AgentBridge {
 
   getCwd(): string {
     return this.cwd;
+  }
+
+  /**
+   * 현재 작업 폴더의 지원 문서 목록 (좌측 파일 패널).
+   * 읽기 가능한 확장자만, 한국어 정렬.
+   */
+  async listFiles(): Promise<FileEntry[]> {
+    try {
+      const entries = await readdir(this.cwd, { withFileTypes: true });
+      const out: FileEntry[] = [];
+      for (const e of entries) {
+        if (!e.isFile()) continue;
+        const ext = extname(e.name).toLowerCase();
+        if (!READ_EXTS.includes(ext)) continue;
+        const kind: FileEntry["kind"] =
+          ext === ".xlsx" || ext === ".xls"
+            ? "sheet"
+            : ext === ".md" || ext === ".txt"
+              ? "other"
+              : "doc";
+        // .hwp 는 편집 시 .hwpx 로 변환되므로 쓰기 가능으로 본다
+        const writable = WRITE_EXTS.includes(ext) || ext === ".hwp";
+        out.push({ name: e.name, path: e.name, ext, kind, writable });
+      }
+      out.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+      return out;
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * 문서를 읽어 미리보기 HTML 렌더 (kordoc parse → renderHtml).
+   * cwd 상대 경로는 resolveSafePath 경계 검사, 절대 경로(드롭 파일)는 읽기 전용 허용.
+   * 원본은 절대 변경하지 않는다.
+   */
+  async previewDocument(p: string): Promise<DocPreviewResult> {
+    try {
+      const safePath = isAbsolute(p) ? p : await resolveSafePath(this.cwd, p);
+      const result = await parse(safePath);
+      if (!result.success || typeof result.markdown !== "string") {
+        return { ok: false, error: "문서를 읽을 수 없습니다 (지원하지 않는 형식이거나 손상됨)." };
+      }
+      return { ok: true, html: renderHtml(result.markdown), markdown: result.markdown };
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
   }
 
   /**

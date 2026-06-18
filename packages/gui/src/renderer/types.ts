@@ -20,6 +20,22 @@ export type AssistantPart =
   | { type: "tool-call"; toolName: string; argSummary: string; callId: string }
   | { type: "usage"; inputTokens: number; outputTokens: number };
 
+/** 좌측 파일 패널 항목 */
+export interface FileEntry {
+  name: string;
+  /** cwd 기준 상대 경로 */
+  path: string;
+  ext: string;
+  kind: "doc" | "sheet" | "other";
+  /** v1에서 편집(쓰기) 가능 여부 (.hwpx/.docx/.xlsx 등) */
+  writable: boolean;
+}
+
+/** 문서 미리보기 결과 — renderHtml HTML 또는 오류 */
+export type DocPreviewResult =
+  | { ok: true; html: string; markdown: string }
+  | { ok: false; error: string };
+
 /** 툴콜 인자에서 핵심 경로 인자를 추출해 요약 문자열 생성 */
 export function formatToolCallSummary(toolName: string, args: unknown): string {
   const MAX_LEN = 50;
@@ -81,6 +97,16 @@ export interface KodocApi {
   cwd: {
     select: () => Promise<string | null>;
     onChange: (cb: (cwd: string) => void) => () => void;
+  };
+  files: {
+    /** 현재 작업 폴더의 지원 문서 목록 */
+    list: () => Promise<FileEntry[]>;
+  };
+  doc: {
+    /** 문서를 읽어 미리보기 HTML 렌더 (cwd 상대 또는 절대 경로) */
+    preview: (path: string) => Promise<DocPreviewResult>;
+    /** 드롭된 파일의 절대 경로 추출 (sandbox-safe, preload webUtils) */
+    pathForFile: (file: File) => string;
   };
 }
 

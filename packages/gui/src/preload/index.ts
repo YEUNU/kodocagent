@@ -7,8 +7,8 @@
  * - API 키/민감 데이터를 IPC로 전달하지 않음
  */
 
-import { contextBridge, ipcRenderer } from "electron";
-import type { SerializedAgentEvent } from "../main/agent-bridge.js";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
+import type { DocPreviewResult, FileEntry, SerializedAgentEvent } from "../main/agent-bridge.js";
 
 export interface KodocApi {
   chat: {
@@ -40,6 +40,16 @@ export interface KodocApi {
     select: () => Promise<string | null>;
     /** cwd 변경 이벤트 구독 */
     onChange: (cb: (cwd: string) => void) => () => void;
+  };
+  files: {
+    /** 현재 작업 폴더의 지원 문서 목록 */
+    list: () => Promise<FileEntry[]>;
+  };
+  doc: {
+    /** 문서를 읽어 미리보기 HTML 렌더 */
+    preview: (path: string) => Promise<DocPreviewResult>;
+    /** 드롭된 파일의 절대 경로 (sandbox-safe) */
+    pathForFile: (file: File) => string;
   };
 }
 
@@ -81,6 +91,13 @@ const api: KodocApi = {
         ipcRenderer.removeListener("cwd:changed", handler);
       };
     },
+  },
+  files: {
+    list: () => ipcRenderer.invoke("files:list"),
+  },
+  doc: {
+    preview: (path: string) => ipcRenderer.invoke("doc:preview", path),
+    pathForFile: (file: File) => webUtils.getPathForFile(file),
   },
 };
 

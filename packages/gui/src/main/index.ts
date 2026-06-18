@@ -21,9 +21,9 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 600,
     title: "kodocagent",
-    backgroundColor: "#1a1a2e",
+    backgroundColor: "#15171e",
     webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
+      preload: join(__dirname, "../preload/index.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -124,6 +124,21 @@ function registerIpc(): void {
   /** session.new */
   ipcMain.on("session:new", () => {
     bridge?.resetSession().catch(() => {});
+  });
+
+  /** files.list — 작업 폴더 문서 목록 */
+  ipcMain.handle("files:list", async () => {
+    return (await bridge?.listFiles()) ?? [];
+  });
+
+  /** doc.preview — 문서 HTML 렌더 (읽기 전용) */
+  ipcMain.handle("doc:preview", async (_event, path: string) => {
+    return (
+      (await bridge?.previewDocument(path)) ?? {
+        ok: false as const,
+        error: "세션이 초기화되지 않았습니다.",
+      }
+    );
   });
 
   /** cwd.select — 폴더 선택 다이얼로그 */

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import type { Proposal } from "../types.js";
 
 interface ApprovalDialogProps {
@@ -6,156 +6,197 @@ interface ApprovalDialogProps {
   onRespond: (proposalId: string, approved: boolean, reason?: string) => void;
 }
 
-export function ApprovalDialog({ proposal, onRespond }: ApprovalDialogProps): React.ReactElement {
-  const [showReasonInput, setShowReasonInput] = useState(false);
-  const [reason, setReason] = useState("");
+const KIND_LABEL: Record<string, string> = {
+  edit: "문서 수정",
+  "find-replace": "찾기·바꾸기",
+  "cell-edit": "표 셀 수정",
+  "table-structure": "표 구조 변경",
+  "sheet-edit": "시트 셀 수정",
+  "redact-pii": "개인정보 가리기",
+  "form-fill": "양식 채우기",
+  "form-object": "양식 객체",
+  export: "내보내기",
+  restore: "되돌리기",
+  "new-document": "새 문서",
+  "new-spreadsheet": "새 스프레드시트",
+};
 
-  const handleApprove = useCallback(() => {
-    onRespond(proposal.id, true);
-  }, [proposal.id, onRespond]);
-
-  const handleReject = useCallback(() => {
-    onRespond(proposal.id, false);
-  }, [proposal.id, onRespond]);
-
-  const handleRejectWithReason = useCallback(() => {
-    if (!showReasonInput) {
-      setShowReasonInput(true);
-      return;
-    }
-    onRespond(proposal.id, false, reason.trim() || undefined);
-  }, [proposal.id, onRespond, showReasonInput, reason]);
-
-  const handleCancelReason = useCallback(() => {
-    setShowReasonInput(false);
-    setReason("");
-  }, []);
-
-  const kindLabel: Record<string, string> = {
-    edit: "문서 수정",
-    "form-fill": "폼 채우기",
-    "sheet-edit": "시트 수정",
-    "new-document": "새 문서 생성",
-    "new-spreadsheet": "새 스프레드시트 생성",
-  };
-
+function DocIcon(): React.ReactElement {
   return (
-    <div className="approval-overlay" role="dialog" aria-modal="true" aria-label="변경 승인">
-      <div className="approval-dialog">
-        <header className="approval-dialog__header">
-          <h2 className="approval-dialog__title">
-            {kindLabel[proposal.kind] ?? proposal.kind} — 승인 요청
-          </h2>
-          <div className="approval-dialog__target">
-            <span className="approval-dialog__label">대상 파일:</span>
-            <code className="approval-dialog__path">{proposal.targetPath}</code>
-          </div>
-          {proposal.willConvertFormat && (
-            <div className="approval-dialog__convert">
-              <span className="approval-dialog__warn-icon">⚠</span>
-              포맷 변환: {proposal.willConvertFormat}
-            </div>
-          )}
-          {proposal.warnings.length > 0 && (
-            <ul className="approval-dialog__warnings">
-              {proposal.warnings.map((w) => (
-                <li key={w} className="approval-dialog__warning-item">
-                  <span className="approval-dialog__warn-icon">⚠</span>
-                  {w}
-                </li>
-              ))}
-            </ul>
-          )}
-        </header>
-
-        <div className="approval-dialog__summary">
-          <strong>변경 요약:</strong>
-          <p>{proposal.summary}</p>
-        </div>
-
-        <div className="approval-dialog__diff-wrapper">
-          <div className="approval-dialog__diff-label">변경 내용 (diff)</div>
-          <pre className="approval-dialog__diff">{renderDiff(proposal.diff)}</pre>
-        </div>
-
-        {showReasonInput && (
-          <div className="approval-dialog__reason">
-            <label htmlFor="reject-reason" className="approval-dialog__reason-label">
-              거절 사유:
-            </label>
-            <textarea
-              id="reject-reason"
-              className="approval-dialog__reason-input"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="거절 사유를 입력하세요 (선택 사항)"
-              rows={3}
-              // biome-ignore lint/a11y/noAutofocus: 거절 사유 입력 시 즉시 포커스 — 의도된 UX
-              autoFocus
-            />
-            <div className="approval-dialog__reason-actions">
-              <button
-                type="button"
-                className="approval-dialog__btn approval-dialog__btn--reject"
-                onClick={handleRejectWithReason}
-              >
-                거절 확인
-              </button>
-              <button
-                type="button"
-                className="approval-dialog__btn approval-dialog__btn--secondary"
-                onClick={handleCancelReason}
-              >
-                취소
-              </button>
-            </div>
-          </div>
-        )}
-
-        {!showReasonInput && (
-          <div className="approval-dialog__actions">
-            <button
-              type="button"
-              className="approval-dialog__btn approval-dialog__btn--approve"
-              onClick={handleApprove}
-            >
-              승인
-            </button>
-            <button
-              type="button"
-              className="approval-dialog__btn approval-dialog__btn--reject"
-              onClick={handleReject}
-            >
-              거절
-            </button>
-            <button
-              type="button"
-              className="approval-dialog__btn approval-dialog__btn--secondary"
-              onClick={handleRejectWithReason}
-            >
-              거절 + 사유 입력
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+    <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+      <path d="M9 13h6M9 17h5" />
+    </svg>
   );
 }
 
-/** diff 텍스트를 라인별로 파싱해 컬러 span 배열 반환 */
-function renderDiff(diff: string): React.ReactNode {
-  if (!diff) return <span className="diff-line diff-line--context">(변경 내용 없음)</span>;
+function AlertIcon(): React.ReactElement {
+  return (
+    <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 4 2.8 20h18.4z" />
+      <path d="M12 10v4M12 17h.01" />
+    </svg>
+  );
+}
+
+function LockIcon(): React.ReactElement {
+  return (
+    <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
+
+function XIcon(): React.ReactElement {
+  return (
+    <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  );
+}
+
+function CheckIcon(): React.ReactElement {
+  return (
+    <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 12.5 10 17 19 7" />
+    </svg>
+  );
+}
+
+function renderDiffLines(diff: string): React.ReactNode {
+  if (!diff) {
+    return (
+      <span className="diff__line diff__line--ctx" key="empty">
+        (변경 내용 없음){"\n"}
+      </span>
+    );
+  }
   return diff.split("\n").map((line, i) => {
-    let cls = "diff-line diff-line--context";
-    if (line.startsWith("+")) cls = "diff-line diff-line--add";
-    else if (line.startsWith("-")) cls = "diff-line diff-line--remove";
-    else if (line.startsWith("@@")) cls = "diff-line diff-line--hunk";
+    let cls = "diff__line diff__line--ctx";
+    if (line.startsWith("+")) cls = "diff__line diff__line--add";
+    else if (line.startsWith("-")) cls = "diff__line diff__line--remove";
+    else if (line.startsWith("@@")) cls = "diff__line diff__line--hunk";
     return (
       // biome-ignore lint/suspicious/noArrayIndexKey: diff 라인은 정렬 없음 — index가 안정 키
-      <span key={i} className={cls}>
+      <span className={cls} key={i}>
         {line}
         {"\n"}
       </span>
     );
   });
+}
+
+export function ApprovalDialog({ proposal, onRespond }: ApprovalDialogProps): React.ReactElement {
+  const [showReason, setShowReason] = useState(false);
+  const [reason, setReason] = useState("");
+
+  const { id, kind, targetPath, summary, diff, warnings, willConvertFormat } = proposal;
+  const kindLabel = KIND_LABEL[kind] ?? kind;
+
+  function handleApprove() {
+    onRespond(id, true);
+  }
+
+  function handleRejectConfirm() {
+    onRespond(id, false, reason.trim() || undefined);
+  }
+
+  function handleCancelReason() {
+    setShowReason(false);
+    setReason("");
+  }
+
+  return (
+    <div className="modal-scrim" role="dialog" aria-modal="true">
+      <div className="modal">
+        <div className="modal__header">
+          <div className="modal__title">{kindLabel} — 승인 요청</div>
+          <div className="row gap-4" style={{ marginTop: "8px" }}>
+            <span className="chip chip--tool">
+              <DocIcon />
+              {targetPath}
+            </span>
+          </div>
+          {willConvertFormat && (
+            <div className="banner banner--warn" style={{ marginTop: "8px" }}>
+              <AlertIcon />
+              포맷 변환: {willConvertFormat}
+            </div>
+          )}
+          {warnings.map((w, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: 경고 목록은 정렬 없음
+            <div className="banner banner--warn" key={i} style={{ marginTop: "8px" }}>
+              <AlertIcon />
+              {w}
+            </div>
+          ))}
+        </div>
+
+        <div className="modal__body">
+          <div className="h-section">변경 요약</div>
+          <p className="t-sm">{summary}</p>
+
+          <div className="h-section">변경 내용</div>
+          <pre className="diff">{renderDiffLines(diff)}</pre>
+
+          <span className="safe-note">
+            <LockIcon />
+            승인 전까지 원본은 바뀌지 않습니다
+          </span>
+
+          {showReason && (
+            <div style={{ marginTop: "16px" }}>
+              <label className="field-label" htmlFor="reject-reason">
+                거절 사유 (선택)
+              </label>
+              <textarea
+                id="reject-reason"
+                className="field"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="거절 사유를 입력하세요"
+                rows={3}
+                // biome-ignore lint/a11y/noAutofocus: 거절 사유 입력 시 즉시 포커스 — 의도된 UX
+                autoFocus
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="modal__footer">
+          <div className="modal__footer-actions">
+            {!showReason ? (
+              <>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => setShowReason(true)}
+                >
+                  <XIcon />
+                  거절
+                </button>
+                <button type="button" className="btn btn--approve" onClick={handleApprove}>
+                  <CheckIcon />
+                  승인
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="btn btn--ghost" onClick={handleCancelReason}>
+                  <XIcon />
+                  취소
+                </button>
+                <button type="button" className="btn btn--danger" onClick={handleRejectConfirm}>
+                  <XIcon />
+                  거절 확인
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
