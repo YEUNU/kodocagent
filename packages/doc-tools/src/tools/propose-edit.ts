@@ -25,6 +25,7 @@ import {
   resolveOutputPath,
   stageFile,
 } from "../staging.js";
+import { decodeTextFile } from "../text-encoding.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
 export const proposeEditSchema = z.object({
@@ -133,7 +134,16 @@ export const proposeEditTool: ToolDefinition<ProposeEditInput> = {
       const docxBuffer = await markdownToDocx(input.newMarkdown);
       stagedData = new Uint8Array(docxBuffer);
     } else if (ext === ".md" || ext === ".txt") {
-      // 텍스트 파일: 그대로
+      // 텍스트 파일: 원본 인코딩 감지 후 UTF-8로 저장
+      const { text: decodedOriginal, encoding: srcEncoding } = decodeTextFile(originalBuffer);
+      // 평문은 parse()가 UNSUPPORTED라 originalMarkdown이 비어 diff가 전체 추가로 보인다.
+      // 디코딩한 원문을 diff 기준선으로 사용해 실제 변경만 드러나게 한다.
+      if (!originalMarkdown) originalMarkdown = decodedOriginal;
+      if (srcEncoding !== "utf-8") {
+        warnings.push(
+          `원본 파일이 ${srcEncoding} 인코딩이지만 UTF-8로 저장됩니다(한글이 깨지지 않으나 인코딩이 바뀝니다).`,
+        );
+      }
       stagedData = new TextEncoder().encode(input.newMarkdown);
     } else {
       return `오류: 지원하지 않는 파일 형식입니다: ${ext}. .hwp, .hwpx, .docx, .md, .txt만 수정 가능합니다.`;

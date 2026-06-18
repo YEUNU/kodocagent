@@ -15,6 +15,7 @@ import { kordocErrorMessage } from "@kodocagent/shared";
 import { z } from "zod";
 import { parse } from "../kordoc-parse.js";
 import { assertFileSizeWithinLimit, resolveSafePath } from "../security.js";
+import { decodeTextFile } from "../text-encoding.js";
 import type { ToolContext, ToolDefinition } from "../types.js";
 
 /** 반환 마크다운 최대 길이 (약 80k 문자) */
@@ -185,20 +186,24 @@ export const readDocumentTool: ToolDefinition<ReadDocumentInput> = {
       return `오류: ${msg}`;
     }
 
-    // 평문 텍스트 파일은 kordoc 없이 직접 UTF-8로 읽어 반환한다.
+    // 평문 텍스트 파일은 kordoc 없이 직접 읽어 반환한다.
     const ext = extname(safePath).toLowerCase();
     if (PLAIN_TEXT_EXTS.has(ext)) {
-      let raw: string;
+      let buf: Buffer;
       try {
-        raw = await readFile(safePath, "utf-8");
+        buf = await readFile(safePath);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         return `오류: 파일을 읽을 수 없습니다: ${msg}`;
       }
 
+      const { text: raw, encoding } = decodeTextFile(buf);
+
       // 파일 형식 레이블 (MD 또는 TXT)
       const formatLabel = ext === ".md" || ext === ".markdown" ? "MD" : "TXT";
-      const meta = `**파일 형식**: ${formatLabel}\n\n---\n\n`;
+      const encodingNote =
+        encoding !== "utf-8" ? `\n**인코딩**: ${encoding} (UTF-8로 변환해 표시)` : "";
+      const meta = `**파일 형식**: ${formatLabel}${encodingNote}\n\n---\n\n`;
 
       // outline/search 모드 적용 후 캡 처리
       let body = applyReadMode(raw, input.outline, input.search);

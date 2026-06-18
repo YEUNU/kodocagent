@@ -5,6 +5,7 @@
 import { readFile as fsReadFile, stat } from "node:fs/promises";
 import { z } from "zod";
 import { resolveSafePath } from "../security.js";
+import { decodeTextFile } from "../text-encoding.js";
 import type { ToolContext, ToolDefinition } from "../types.js";
 
 /** 최대 읽기 크기 (256KB) */
@@ -99,14 +100,24 @@ export const readFileTool: ToolDefinition<ReadFileInput> = {
       return `오류: '${ext}' 형식은 텍스트 파일로 읽을 수 없습니다. 문서 파일이라면 read_document 툴을 사용하세요.`;
     }
 
-    let content: string;
+    let buf: Buffer;
     try {
-      content = await fsReadFile(safePath, "utf-8");
+      buf = await fsReadFile(safePath);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       return `오류: 파일을 읽을 수 없습니다: ${msg}`;
     }
 
-    return content;
+    const { text, encoding } = decodeTextFile(buf);
+
+    // .md/.txt 파일만 비-UTF-8 인코딩 메타를 노출한다 (에이전트 round-trip 인식용)
+    if (
+      encoding !== "utf-8" &&
+      (ext === ".md" || ext === ".markdown" || ext === ".txt" || ext === ".text")
+    ) {
+      return `**인코딩**: ${encoding} (UTF-8로 변환해 표시)\n\n${text}`;
+    }
+
+    return text;
   },
 };

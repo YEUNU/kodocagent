@@ -22,6 +22,7 @@ import {
   resolveSafePath,
 } from "../security.js";
 import { backupFile, commitStaged, resolveOutputPath, stageFile } from "../staging.js";
+import { decodeTextFile } from "../text-encoding.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
 // ─────────────────────────────────────────────────────────
@@ -310,7 +311,8 @@ export const proposeRedactPiiTool: ToolDefinition<ProposeRedactPiiInput> = {
     // ── .md / .txt 처리 ───────────────────────────────────
     let originalText: string;
     try {
-      originalText = await readFile(safePath, "utf-8");
+      const buf = await readFile(safePath);
+      originalText = decodeTextFile(buf).text;
     } catch {
       return `오류: 파일을 읽을 수 없습니다: ${input.path}`;
     }

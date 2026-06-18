@@ -130,6 +130,9 @@ importers:
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0
+      iconv-lite:
+        specifier: ^0.7.2
+        version: 0.7.2
       jszip:
         specifier: ^3.10.1
         version: 3.10.1

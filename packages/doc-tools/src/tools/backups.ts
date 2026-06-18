@@ -15,6 +15,7 @@ import { KODOC_PATHS } from "@kodocagent/shared";
 import { z } from "zod";
 import { resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, markdownDiff, stageFile } from "../staging.js";
+import { decodeTextFile } from "../text-encoding.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
 // ─────────────────────────────────────────────────────────
@@ -291,11 +292,12 @@ export const restoreBackupTool: ToolDefinition<RestoreBackupInput> = {
     if (isText) {
       let currentText = "";
       try {
-        currentText = await readFile(safePath, "utf-8");
+        // 현재 파일이 EUC-KR/CP949일 수 있으므로 인코딩 감지 후 디코딩(미리보기 mojibake 방지)
+        currentText = decodeTextFile(await readFile(safePath)).text;
       } catch {
         currentText = "";
       }
-      const backupText = backupBytes.toString("utf-8");
+      const backupText = decodeTextFile(backupBytes).text;
       diff = markdownDiff(currentText, backupText, targetBase);
     } else {
       // 바이너리: 인간 요약

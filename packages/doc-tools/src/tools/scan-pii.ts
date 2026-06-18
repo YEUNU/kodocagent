@@ -11,6 +11,7 @@ import { detectPii } from "@kodocagent/shared";
 import { z } from "zod";
 import { parse } from "../kordoc-parse.js";
 import { assertFileSizeWithinLimit, resolveSafePath } from "../security.js";
+import { decodeTextFile } from "../text-encoding.js";
 import type { ToolContext, ToolDefinition } from "../types.js";
 
 /** 평문 텍스트 확장자 집합 (소문자) — kordoc 없이 직접 읽는다 */
@@ -58,7 +59,8 @@ export const scanPiiTool: ToolDefinition<ScanPiiInput> = {
     let text: string;
     if (PLAIN_TEXT_EXTS.has(ext)) {
       try {
-        text = await readFile(safePath, "utf-8");
+        const buf = await readFile(safePath);
+        text = decodeTextFile(buf).text;
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         return `오류: 파일을 읽을 수 없습니다: ${msg}`;
