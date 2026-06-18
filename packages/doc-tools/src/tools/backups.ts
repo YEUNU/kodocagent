@@ -347,7 +347,7 @@ export const restoreBackupTool: ToolDefinition<RestoreBackupInput> = {
         warnings,
       },
       commit: async (): Promise<string> => {
-        const safetyBackup = await backupFile(safePath);
+        const safetyBackup = await backupFile(safePath, undefined, { summary });
         await commitStaged(stagedPath, safePath);
         const safetyNote = safetyBackup ? ` (복원 전 현재 상태 백업: ${safetyBackup})` : "";
         return `복원 완료: ${safePath} ← ${chosenBackupPath}${safetyNote}`;

@@ -175,7 +175,7 @@ export const proposeEditTool: ToolDefinition<ProposeEditInput> = {
       },
       commit: async (): Promise<string> => {
         // 백업 (원본이 있을 때만)
-        const backupPath = await backupFile(safePath);
+        const backupPath = await backupFile(safePath, undefined, { summary: input.summary });
         // 원자적 쓰기
         await commitStaged(stagedPath, outputPath);
         const backupInfo = backupPath ? ` (백업: ${backupPath})` : "";

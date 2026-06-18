@@ -280,7 +280,7 @@ export const proposeRedactPiiTool: ToolDefinition<ProposeRedactPiiInput> = {
           willConvertFormat,
         },
         commit: async (): Promise<string> => {
-          const backupPath = await backupFile(outputPath);
+          const backupPath = await backupFile(outputPath, undefined, { summary: summaryText });
           await commitStaged(stagedPath, outputPath);
           const backupInfo = backupPath ? ` (백업: ${backupPath})` : "";
           return `개인정보 비식별 완료: ${outputPath}${backupInfo}`;
@@ -320,7 +320,7 @@ export const proposeRedactPiiTool: ToolDefinition<ProposeRedactPiiInput> = {
         willConvertFormat,
       },
       commit: async (): Promise<string> => {
-        const backupPath = await backupFile(outputPath);
+        const backupPath = await backupFile(outputPath, undefined, { summary: summaryText });
         await commitStaged(stagedPath, outputPath);
         const backupInfo = backupPath ? ` (백업: ${backupPath})` : "";
         return `개인정보 비식별 완료: ${outputPath}${backupInfo}`;

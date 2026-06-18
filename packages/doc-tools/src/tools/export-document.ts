@@ -109,6 +109,7 @@ export const exportDocumentTool: ToolDefinition<ExportDocumentInput> = {
         : `[PDF 내보내기] ${input.path} → ${input.outputPath} (${stagedData.byteLength.toLocaleString()} bytes)`;
 
     const proposalId = crypto.randomUUID();
+    const opSummary = input.summary ?? `${input.path} → ${format.toUpperCase()} 내보내기`;
 
     return {
       proposal: {
@@ -116,12 +117,12 @@ export const exportDocumentTool: ToolDefinition<ExportDocumentInput> = {
         kind: "export",
         targetPath: outPath,
         stagedPath,
-        summary: input.summary ?? `${input.path} → ${format.toUpperCase()} 내보내기`,
+        summary: opSummary,
         diff: preview,
         warnings,
       },
       commit: async (): Promise<string> => {
-        const backupPath = await backupFile(outPath); // 기존 출력 파일이 있으면 백업
+        const backupPath = await backupFile(outPath, undefined, { summary: opSummary }); // 기존 출력 파일이 있으면 백업
         await commitStaged(stagedPath, outPath);
         const backupInfo = backupPath ? ` (기존 파일 백업: ${backupPath})` : "";
         return `내보내기 완료: ${outPath}${backupInfo}`;

@@ -61,7 +61,11 @@ export async function stageFile(
  * @param baseDir     테스트 시 KODOC_PATHS.backups 대체 경로 (선택)
  * @returns           백업 파일 경로 (파일이 없으면 null)
  */
-export async function backupFile(targetPath: string, baseDir?: string): Promise<string | null> {
+export async function backupFile(
+  targetPath: string,
+  baseDir?: string,
+  meta?: { summary?: string },
+): Promise<string | null> {
   // 파일이 존재하는지 확인
   try {
     await readFile(targetPath);
@@ -78,6 +82,17 @@ export async function backupFile(targetPath: string, baseDir?: string): Promise<
   const backupPath = join(backupsRoot, `${ts}-${name}`);
 
   await copyFile(targetPath, backupPath);
+
+  // 작업 메타데이터 사이드카(되돌리기 타임라인 표시용). 선행 점(.)으로 시작해
+  // 백업 목록 정규식(^<ts>-<name>$)에 걸리지 않으므로 list_backups는 영향받지 않는다.
+  if (meta?.summary) {
+    await writeFile(
+      join(backupsRoot, `.${ts}-${name}.meta.json`),
+      JSON.stringify({ summary: meta.summary }),
+      "utf-8",
+    ).catch(() => undefined); // best-effort: 사이드카 실패가 백업을 깨지 않는다
+  }
+
   return backupPath;
 }
 

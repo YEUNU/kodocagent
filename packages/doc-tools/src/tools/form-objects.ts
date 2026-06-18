@@ -1009,7 +1009,7 @@ export const proposeFormObjectTool: ToolDefinition<ProposeFormObjectInput> = {
         willConvertFormat,
       },
       commit: async (): Promise<string> => {
-        const backupPath = await backupFile(safePath);
+        const backupPath = await backupFile(safePath, undefined, { summary: input.summary });
         await commitStaged(stagedPath, outputPath);
         const backupInfo = backupPath ? ` (백업: ${backupPath})` : "";
         return `저장 완료: ${outputPath}${backupInfo}`;

@@ -122,6 +122,7 @@ export const proposeSheetEditTool: ToolDefinition<ProposeSheetEditInput> = {
     const stagedPath = await stageFile(ctx.sessionId, outputPath, stagedData);
 
     const proposalId = crypto.randomUUID();
+    const opSummary = input.summary;
 
     return {
       proposal: {
@@ -129,13 +130,13 @@ export const proposeSheetEditTool: ToolDefinition<ProposeSheetEditInput> = {
         kind: "sheet-edit",
         targetPath: outputPath,
         stagedPath,
-        summary: input.summary,
+        summary: opSummary,
         diff,
         warnings: [],
         willConvertFormat,
       },
       commit: async (): Promise<string> => {
-        const backupPath = await backupFile(outputPath);
+        const backupPath = await backupFile(outputPath, undefined, { summary: opSummary });
         await commitStaged(stagedPath, outputPath);
         const backupInfo = backupPath ? ` (백업: ${backupPath})` : "";
         return `저장 완료: ${outputPath}${backupInfo}`;
