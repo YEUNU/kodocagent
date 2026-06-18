@@ -42,7 +42,7 @@ const HELP_TEXT = `
 슬래시 명령:
   /model   — 프로바이더/모델 전환
   /context — 현재 컨텍스트 사용량 표시
-  /usage   — 누적 API 사용량·추정 비용 표시 (/cost)
+  /usage   — 누적 API 사용량(토큰) 표시
   /clear   — 새 세션 시작
   /help    — 이 도움말 표시
   /exit    — 종료
@@ -209,14 +209,14 @@ export async function runChat(opts: {
         printContextUsage(lastContextTokens, config.maxContextTokens);
         continue;
       }
-      if (trimmed.toLowerCase() === "/usage" || trimmed.toLowerCase() === "/cost") {
+      if (trimmed.toLowerCase() === "/usage") {
         if (cumulativeInputTokens === 0 && cumulativeOutputTokens === 0) {
           process.stdout.write(
             chalk.dim("아직 API 사용 기록이 없습니다 — 대화를 시작하면 누적됩니다.\n"),
           );
         } else {
           process.stdout.write(
-            `${formatCumulativeUsage(config, cumulativeInputTokens, cumulativeOutputTokens)}\n`,
+            `${formatCumulativeUsage(cumulativeInputTokens, cumulativeOutputTokens)}\n`,
           );
         }
         continue;
@@ -346,7 +346,7 @@ export async function runChat(opts: {
               )}\n`,
             );
             process.stdout.write(
-              `${formatCumulativeUsage(config, cumulativeInputTokens, cumulativeOutputTokens)}\n`,
+              `${formatCumulativeUsage(cumulativeInputTokens, cumulativeOutputTokens)}\n`,
             );
           }
         } else if (event.type === "error") {
@@ -367,7 +367,7 @@ export async function runChat(opts: {
   // 세션 종료 요약 — 이번 세션의 누적 API 사용량·추정 비용
   if (cumulativeInputTokens > 0 || cumulativeOutputTokens > 0) {
     process.stdout.write(
-      `${formatCumulativeUsage(config, cumulativeInputTokens, cumulativeOutputTokens)}\n`,
+      `${formatCumulativeUsage(cumulativeInputTokens, cumulativeOutputTokens)}\n`,
     );
   }
   // 정상 종료 (/exit, EOF): 세션 스테이징 정리 후 연결 종료
