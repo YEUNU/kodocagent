@@ -67,6 +67,53 @@ describe("resolveSafePath", () => {
     const result = await resolveSafePath(testDir, ".");
     expect(result).toBe(realTestDir);
   });
+
+  // ── Windows 예약 파일명 / 후행 점·공백 가드 (OS 무관 로직) ──────────────
+  it("Windows 예약명(NUL, 확장자 없음)은 거절된다", async () => {
+    await expect(resolveSafePath(testDir, "NUL")).rejects.toThrow("사용할 수 없는 파일명입니다");
+  });
+
+  it("Windows 예약명(소문자 con)은 거절된다", async () => {
+    await expect(resolveSafePath(testDir, "con")).rejects.toThrow("사용할 수 없는 파일명입니다");
+  });
+
+  it("Windows 예약명(확장자 포함 CON.txt)은 거절된다", async () => {
+    await expect(resolveSafePath(testDir, "CON.txt")).rejects.toThrow("사용할 수 없는 파일명");
+  });
+
+  it("Windows 예약명(COM1, LPT9)은 거절된다", async () => {
+    await expect(resolveSafePath(testDir, "COM1")).rejects.toThrow("사용할 수 없는 파일명");
+    await expect(resolveSafePath(testDir, "lpt9.hwpx")).rejects.toThrow("사용할 수 없는 파일명");
+  });
+
+  it("후행 점(.)으로 끝나는 파일명은 거절된다", async () => {
+    await expect(resolveSafePath(testDir, "report.")).rejects.toThrow("사용할 수 없는 파일명");
+  });
+
+  it("후행 공백으로 끝나는 파일명은 거절된다", async () => {
+    await expect(resolveSafePath(testDir, "report ")).rejects.toThrow("사용할 수 없는 파일명");
+  });
+
+  it("예약명 거절 시 hint에 Windows 안내가 포함된다", async () => {
+    const { KodocError } = await import("@kodocagent/shared");
+    await expect(resolveSafePath(testDir, "PRN")).rejects.toSatisfy(
+      (e) =>
+        e instanceof KodocError &&
+        typeof (e as InstanceType<typeof KodocError>).hint === "string" &&
+        (e as InstanceType<typeof KodocError>).hint?.includes("Windows 예약") === true,
+    );
+  });
+
+  it("정상 파일명(예약 접두어를 포함하나 예약명이 아닌 경우)은 통과한다", async () => {
+    // CONTRACT는 CON으로 시작하지만 예약명이 아니다 → 허용
+    const result = await resolveSafePath(testDir, "CONTRACT.hwpx");
+    expect(result).toBe(join(realTestDir, "CONTRACT.hwpx"));
+  });
+
+  it("정상 파일명(report.hwpx)은 통과한다", async () => {
+    const result = await resolveSafePath(testDir, "report.hwpx");
+    expect(result).toBe(join(realTestDir, "report.hwpx"));
+  });
 });
 
 describe("assertFileSizeWithinLimit", () => {

@@ -45,4 +45,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
-      - run: pnpm audit --prod || true
+      # prod 의존성 취약점 게이트 — pnpm-workspace.yaml overrides(uuid/undici)로 0건 유지.
+      # 새 취약점이 들어오면 CI가 실패하므로 override 또는 의존성 갱신으로 해소할 것.
+      - run: pnpm audit --prod

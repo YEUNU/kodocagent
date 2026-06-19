@@ -21,10 +21,15 @@ import { Command } from "commander";
 import { runChat } from "./chat.js";
 import { runClean } from "./clean-cmd.js";
 import { configSet, configShow } from "./config-cmd.js";
+import { installFatalHandlers, setActiveSessionId } from "./fatal-cleanup.js";
 import { mcpList, mcpTest } from "./mcp-cmd.js";
 import { needsOnboarding, runOnboarding } from "./onboarding.js";
 import { checkForUpdate, runUpdate } from "./update.js";
 import { cliVersion } from "./version.js";
+
+// 최상위 미처리 예외 그물 — 인터랙티브 진입 전 가장 이른 시점에 등록.
+// (락 해제·스테이징 정리 후 한국어 메시지로 종료; 정상 종료의 finally 정리와 idempotent하게 공존)
+installFatalHandlers();
 
 // Windows: stdout UTF-8 강제
 if (process.platform === "win32") {
@@ -310,6 +315,8 @@ async function runSingleTurn(prompt: string): Promise<void> {
     model: config.model ?? "(기본값)",
     createdAt: new Date().toISOString(),
   });
+  // 미처리 예외 그물이 이 세션의 스테이징을 정리할 수 있도록 등록
+  setActiveSessionId(store.id);
 
   const tools = new ToolRegistry();
   // 단발 질의(--print)는 읽기 전용 — 승인이 필요한 쓰기(propose_*/write_new_*) 툴은 등록하지 않는다
@@ -353,6 +360,7 @@ async function runSingleTurn(prompt: string): Promise<void> {
   await mcpManager.disconnect();
   // 단발 질의 종료 시 세션 스테이징 정리 (실패는 무시)
   cleanSessionStaging(store.id).catch(() => {});
+  setActiveSessionId(null); // 정상 정리 완료 — 그물의 중복 정리 방지
 }
 
 program.parse();

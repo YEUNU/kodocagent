@@ -27,6 +27,7 @@ import type { KodocConfig } from "@kodocagent/shared";
 import { KNOWN_MODELS, PROVIDERS, type Provider, resolveApiKey } from "@kodocagent/shared";
 import chalk from "chalk";
 import { createCliApprovalHandler } from "./approve.js";
+import { setActiveSessionId } from "./fatal-cleanup.js";
 import { formatCumulativeUsage } from "./usage.js";
 
 /** 슬래시 커맨드 도움말 */
@@ -129,6 +130,8 @@ export async function runChat(opts: {
   } else {
     store = await createNewStore(config, cwd);
   }
+  // 미처리 예외 그물이 이 세션의 스테이징을 정리할 수 있도록 등록
+  setActiveSessionId(store.id);
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -372,6 +375,7 @@ export async function runChat(opts: {
   }
   // 정상 종료 (/exit, EOF): 세션 스테이징 정리 후 연결 종료
   await cleanSessionStaging(store.id).catch(() => {});
+  setActiveSessionId(null); // 정상 정리 완료 — 그물의 중복 정리 방지
   await mcpManager.disconnect();
   // stdio MCP 서버(npx 자식 프로세스)가 이벤트 루프를 붙잡아 종료가 지연되는 경우가 있어
   // 정리 완료 후 명시적으로 프로세스를 종료한다 (SIGINT 경로와 동일 정책).

@@ -278,5 +278,36 @@ export async function resolveSafePath(cwd: string, p: string): Promise<string> {
     );
   }
 
+  // Windows 파일명 호환성 가드 — macOS/Linux에서 만든 이름이 Windows에서 깨지지 않게.
+  // (resolveSafePath는 OS 무관 로직이므로 어느 플랫폼에서든 동일하게 거부한다.)
+  assertWindowsSafeBasename(basename(real));
+
   return real;
+}
+
+/** Windows 예약 디바이스명 (대소문자 무시, 확장자 유무 무관) */
+const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
+
+/**
+ * 파일명이 Windows에서 안전한지 검증한다.
+ *
+ * - 예약 디바이스명(CON/PRN/AUX/NUL/COM1..9/LPT1..9)은 확장자가 붙어도 거부한다.
+ * - basename이 점(.) 또는 공백으로 끝나면 거부한다(Windows는 무음으로 절단해 다른 파일을 덮어쓸 수 있음).
+ *
+ * @param name 검증할 basename (디렉터리 구분자 제외)
+ * @throws KodocError — 예약명이거나 후행 점·공백인 경우
+ */
+function assertWindowsSafeBasename(name: string): void {
+  if (WINDOWS_RESERVED_NAME.test(name)) {
+    throw new KodocError(
+      `사용할 수 없는 파일명입니다: ${name}`,
+      "Windows 예약 이름(CON/PRN/NUL 등)이나 점·공백으로 끝나는 이름은 피하세요.",
+    );
+  }
+  if (name.length > 0 && (name.endsWith(".") || name.endsWith(" "))) {
+    throw new KodocError(
+      `사용할 수 없는 파일명입니다: ${name}`,
+      "Windows 예약 이름(CON/PRN/NUL 등)이나 점·공백으로 끝나는 이름은 피하세요.",
+    );
+  }
 }
