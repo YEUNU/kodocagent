@@ -191,6 +191,47 @@ describe("redactText", () => {
   });
 });
 
+// ─────────────────────────────────────────────────────────
+// L5: 이메일 ReDoS 안전성 + 정상 매칭 유지
+// ─────────────────────────────────────────────────────────
+
+describe("L5 — 이메일 패턴 ReDoS 안전성 + 정확성", () => {
+  it("서브도메인 포함 정상 이메일을 탐지한다", () => {
+    const findings = detectPii("user@mail.example.co.kr");
+    const email = findings.find((f) => f.type === "이메일");
+    expect(email).toBeDefined();
+  });
+
+  it("악성 입력('a@' + 'a.'반복 + TLD없음)이 이메일로 탐지되지 않는다", () => {
+    // ReDoS 유발 패턴: 'a@' + 'a.' 반복 (TLD 없음)
+    const malicious = `a@${"a.".repeat(30)}`;
+    const findings = detectPii(malicious);
+    const email = findings.find((f) => f.type === "이메일");
+    // 유효한 TLD가 없으므로 매칭되지 않아야 한다
+    expect(email).toBeUndefined();
+  });
+
+  it("대용량 악성 입력도 선형 시간에 처리된다 (ReDoS 회귀 가드)", () => {
+    // 2차 백트래킹이 남아 있으면 n이 커질수록 시간이 제곱으로 폭증한다.
+    // 수량자 상한 덕에 약 100KB 입력도 수 ms 내 완료되어야 한다(유효 TLD 없음 → 미매칭).
+    const malicious = `a@${"a.".repeat(50000)}`;
+    const start = performance.now();
+    const findings = detectPii(malicious);
+    const elapsed = performance.now() - start;
+    expect(findings.find((f) => f.type === "이메일")).toBeUndefined();
+    // 선형이면 수 ms, 2차면 수 초. 넉넉히 1초 상한으로 회귀를 잡는다.
+    expect(elapsed).toBeLessThan(1000);
+  });
+
+  it("기존 이메일 탐지가 여전히 정상 동작한다 (회귀)", () => {
+    const text = "연락처: admin@example.com, support@sub.domain.org";
+    const findings = detectPii(text);
+    const email = findings.find((f) => f.type === "이메일");
+    expect(email).toBeDefined();
+    expect(email?.count).toBe(2);
+  });
+});
+
 describe("summarizePii", () => {
   it("탐지 결과를 한 줄 요약으로 반환한다", () => {
     const findings = detectPii("010-1234-5678 user@example.com");

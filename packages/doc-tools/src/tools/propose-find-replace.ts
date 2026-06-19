@@ -82,23 +82,34 @@ export function unescapeXml(text: string): string {
   return text.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 }
 
-/** 두 문자열의 공통 접두/접미 길이를 빼서 변경 구간 주변만 잘라낸 스니펫을 만든다. */
+/** 두 문자열의 공통 접두/접미 길이를 빼서 변경 구간 주변만 잘라낸 스니펫을 만든다.
+ * 코드포인트 단위로 비교·슬라이스하여 서로게이트 쌍(이모지 등) 경계에서 고립 서로게이트가
+ * 생기지 않도록 한다. */
 export function makeChangeSnippet(
   before: string,
   after: string,
   ctx = 24,
 ): { before: string; after: string } {
+  // 코드포인트 배열로 변환 (스프레드 이터레이터: 서로게이트 쌍을 하나로)
+  const bCP = [...before];
+  const aCP = [...after];
+
   let p = 0;
-  while (p < before.length && p < after.length && before[p] === after[p]) p++;
-  const maxSuffix = Math.min(before.length - p, after.length - p);
+  while (p < bCP.length && p < aCP.length && bCP[p] === aCP[p]) p++;
+  const maxSuffix = Math.min(bCP.length - p, aCP.length - p);
   let s = 0;
-  while (s < maxSuffix && before[before.length - 1 - s] === after[after.length - 1 - s]) s++;
-  const slice = (str: string) => {
+  while (s < maxSuffix && bCP[bCP.length - 1 - s] === aCP[aCP.length - 1 - s]) s++;
+
+  const sliceCP = (codePoints: string[]) => {
     const start = Math.max(0, p - ctx);
-    const end = Math.min(str.length, str.length - s + ctx);
-    return (start > 0 ? "…" : "") + str.slice(start, end) + (end < str.length ? "…" : "");
+    const end = Math.min(codePoints.length, codePoints.length - s + ctx);
+    return (
+      (start > 0 ? "…" : "") +
+      codePoints.slice(start, end).join("") +
+      (end < codePoints.length ? "…" : "")
+    );
   };
-  return { before: slice(before), after: slice(after) };
+  return { before: sliceCP(bCP), after: sliceCP(aCP) };
 }
 
 /** 치환 전/후 섹션 XML에서 내용이 바뀐 <hp:t> 노드를 찾아 표시용 스니펫 목록을 만든다. */

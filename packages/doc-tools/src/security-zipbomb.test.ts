@@ -143,7 +143,7 @@ describe("assertZipNotBomb", () => {
 
   it("EOCD 엔트리 수를 위조해도 모든 CDFH를 합산해 폭탄을 차단한다(개수 미신뢰)", async () => {
     const hwpxBuf = await markdownToHwpx("# 테스트\n\n여러 엔트리를 가진 문서");
-    let buf = Buffer.from(hwpxBuf);
+    let buf: Buffer = Buffer.from(hwpxBuf);
     // 두 엔트리를 각각 600MB로 조작(개별로는 1GB 한도 미만, 합치면 1.2GB로 초과)
     buf = patchCdfhUncompressedSize(buf, 600 * 1024 * 1024, 0);
     buf = patchCdfhUncompressedSize(buf, 600 * 1024 * 1024, 1);

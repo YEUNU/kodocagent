@@ -888,6 +888,49 @@ describe("Capability A+B 통합 테스트 — 레이블 모드로 빈 셀 채우
 });
 
 // ─────────────────────────────────────────────────────────
+// L1: NFC/NFD 정규화 라벨 매칭
+// ─────────────────────────────────────────────────────────
+
+describe("L1 — NFC/NFD 정규화 라벨 매칭 (resolveLabelTarget)", () => {
+  it("NFD로 조합된 셀 텍스트를 NFC 입력 라벨로 찾을 수 있다", () => {
+    // "성명" NFD: 자모 분리 형태로 셀에 저장
+    const nfcLabel = "성명"; // NFC
+    const nfdCellText = nfcLabel.normalize("NFD"); // NFD로 분리
+    // NFD 셀과 NFC 셀이 실제로 다른 코드유닛임을 확인
+    expect(nfdCellText).not.toBe(nfcLabel);
+
+    const labelTc = makeSimpleTcXml(0, 0, [nfdCellText]);
+    const valueTc = makeSimpleTcXml(1, 0, [""]);
+    const tbl = makeSimpleTblXml(1, [labelTc, valueTc]);
+    const xml = makeSectionXml([tbl]);
+
+    // NFC 입력으로 NFD 셀을 찾아야 한다
+    const result = resolveLabelTarget(xml, nfcLabel, "right");
+    expect("error" in result).toBe(false);
+    if (!("error" in result)) {
+      expect(result.col).toBe(1);
+    }
+  });
+
+  it("NFC로 저장된 셀을 NFD 입력 라벨로 찾을 수 있다", () => {
+    const nfcCellText = "주소"; // NFC
+    const nfdLabel = nfcCellText.normalize("NFD"); // NFD 입력
+
+    const labelTc = makeSimpleTcXml(0, 0, [nfcCellText]);
+    const valueTc = makeSimpleTcXml(1, 0, [""]);
+    const tbl = makeSimpleTblXml(1, [labelTc, valueTc]);
+    const xml = makeSectionXml([tbl]);
+
+    // NFD 입력으로 NFC 셀을 찾아야 한다
+    const result = resolveLabelTarget(xml, nfdLabel, "right");
+    expect("error" in result).toBe(false);
+    if (!("error" in result)) {
+      expect(result.col).toBe(1);
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────
 // OLE2 .hwp 바이너리 가드
 // ─────────────────────────────────────────────────────────
 

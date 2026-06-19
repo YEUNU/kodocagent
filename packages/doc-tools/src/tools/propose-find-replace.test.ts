@@ -791,3 +791,73 @@ describe("⑨ proposeFindReplaceTool — find===replace 조기 반환", () => {
     }
   }, 15000);
 });
+
+// ─────────────────────────────────────────────────────────
+// L2: makeChangeSnippet 이모지/서로게이트 안전성
+// ─────────────────────────────────────────────────────────
+
+describe("L2 — makeChangeSnippet 이모지/서로게이트 쌍 안전성", () => {
+  /** 문자열에 고립 서로게이트(U+D800–U+DFFF)가 있으면 true */
+  function hasLoneSurrogate(s: string): boolean {
+    for (let i = 0; i < s.length; i++) {
+      const code = s.charCodeAt(i);
+      if (code >= 0xd800 && code <= 0xdfff) {
+        // 서로게이트 쌍 확인
+        if (code >= 0xd800 && code <= 0xdbff) {
+          // 상위 서로게이트: 다음 문자가 하위 서로게이트여야 함
+          const next = s.charCodeAt(i + 1);
+          if (next < 0xdc00 || next > 0xdfff) return true;
+          i++; // 쌍을 함께 건너뜀
+        } else {
+          // 하위 서로게이트 단독
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  it("단일 이모지(U+1F600)가 변경 경계 근처일 때 고립 서로게이트 없음", () => {
+    const before = "안녕하세요 😀 반갑습니다";
+    const after = "안녕하세요 😀 환영합니다";
+    const { before: snipB, after: snipA } = makeChangeSnippet(before, after);
+    expect(hasLoneSurrogate(snipB)).toBe(false);
+    expect(hasLoneSurrogate(snipA)).toBe(false);
+  });
+
+  it("이모지가 변경 내용 자체일 때 스니펫에 고립 서로게이트 없음", () => {
+    const before = "텍스트A 변경 텍스트B";
+    const after = "텍스트A 😀🎉 텍스트B";
+    const { before: snipB, after: snipA } = makeChangeSnippet(before, after);
+    expect(hasLoneSurrogate(snipB)).toBe(false);
+    expect(hasLoneSurrogate(snipA)).toBe(false);
+    // after 스니펫에 이모지가 온전히 포함되어야 함
+    expect(snipA).toContain("😀");
+  });
+
+  it("ZWJ 시퀀스(👨‍👩‍👧) 근처 변경 시 고립 서로게이트 없음", () => {
+    const before = "가족: 👨‍👩‍👧 입니다";
+    const after = "가족: 👨‍👩‍👧 였습니다";
+    const { before: snipB, after: snipA } = makeChangeSnippet(before, after);
+    expect(hasLoneSurrogate(snipB)).toBe(false);
+    expect(hasLoneSurrogate(snipA)).toBe(false);
+  });
+
+  it("ctx=0일 때도 이모지 경계에서 고립 서로게이트 없음", () => {
+    const before = "A😀B";
+    const after = "A🎉B";
+    const { before: snipB, after: snipA } = makeChangeSnippet(before, after, 0);
+    expect(hasLoneSurrogate(snipB)).toBe(false);
+    expect(hasLoneSurrogate(snipA)).toBe(false);
+  });
+
+  it("ASCII만 포함된 경우 기존 동작 유지 (회귀)", () => {
+    const before = "hello world";
+    const after = "hello earth";
+    const { before: snipB, after: snipA } = makeChangeSnippet(before, after, 5);
+    expect(snipB).toContain("world");
+    expect(snipA).toContain("earth");
+    expect(hasLoneSurrogate(snipB)).toBe(false);
+    expect(hasLoneSurrogate(snipA)).toBe(false);
+  });
+});

@@ -138,6 +138,24 @@ export const proposeSheetEditTool: ToolDefinition<ProposeSheetEditInput> = {
           `${update.sheet}!${update.cell}에는 수식(=${fv.formula})이 있습니다. ` +
             `값을 입력하면 수식이 사라지고 고정 값으로 대체됩니다.`,
         );
+      } else if (cell.type === ExcelJS.ValueType.Date) {
+        const d = cell.value as Date;
+        // ExcelJS는 엑셀 직렬값을 UTC instant로 디코드한다(순수 날짜 = UTC 자정).
+        // 서버 로컬 TZ로 포맷하면 날짜가 하루 밀리거나 가짜 시간이 붙으므로 UTC 기준으로 표시.
+        const hasTime = d.getUTCHours() !== 0 || d.getUTCMinutes() !== 0 || d.getUTCSeconds() !== 0;
+        oldValue = new Intl.DateTimeFormat("ko-KR", {
+          timeZone: "UTC",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          ...(hasTime ? { hour: "2-digit", minute: "2-digit", second: "2-digit" } : {}),
+        }).format(d);
+      } else if (cell.type === ExcelJS.ValueType.RichText) {
+        const rtv = cell.value as ExcelJS.CellRichTextValue;
+        oldValue = rtv.richText.map((r) => r.text).join("");
+      } else if (cell.type === ExcelJS.ValueType.Hyperlink) {
+        const hv = cell.value as ExcelJS.CellHyperlinkValue;
+        oldValue = `${hv.text} (${hv.hyperlink})`;
       } else {
         oldValue = String(cell.value);
       }

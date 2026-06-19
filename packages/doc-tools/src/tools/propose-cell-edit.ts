@@ -195,7 +195,12 @@ export function applyCellEditsToSectionXml(
 
     const currentText = cellOwnText(cell);
 
-    if (edit.expectedText !== undefined && edit.expectedText !== currentText) {
+    // expectedText 낙관적-동시성 가드도 NFC 정규화 후 비교(NFD/NFC 불일치로 정당한 편집이
+    // 헛발 실패하는 것 방지 — 라벨 매칭과 동일한 한글 정규화 처리).
+    if (
+      edit.expectedText !== undefined &&
+      edit.expectedText.normalize("NFC") !== currentText.normalize("NFC")
+    ) {
       results[ei] = {
         success: false,
         oldText: currentText,
@@ -283,7 +288,7 @@ function findLabelMatchesInScan(
     const table = tables[ti];
     if (table === undefined) continue;
     for (const [key, cell] of table.cellByAnchor) {
-      if (cellOwnText(cell).trim() === trimmedLabel) {
+      if (cellOwnText(cell).trim().normalize("NFC") === trimmedLabel.normalize("NFC")) {
         const { row, col } = parseAnchor(key);
         out.push({ tableIndex: ti, row, col, colSpan: cell.colSpan, rowSpan: cell.rowSpan });
       }
@@ -320,7 +325,7 @@ export function resolveLabelTarget(
 ): LabelTargetResult {
   const scan = scanSectionXml(xml, 0);
   const tables = scan.tables;
-  const trimmedLabel = label.trim();
+  const trimmedLabel = label.trim().normalize("NFC");
 
   const startIdx = searchTableIndex ?? 0;
   const endIdx = searchTableIndex !== undefined ? searchTableIndex : tables.length - 1;
@@ -391,13 +396,17 @@ async function readSections(
 /**
  * .hwpx 파일의 모든 섹션 XML에서 편집을 적용하고 새 ZIP 버퍼를 반환한다.
  * tableIndex는 전체 섹션에 걸쳐 연속적이다 (section0 → section1 → …).
+ *
+ * zip과 sections를 외부에서 전달받아 ZIP 이중 해제를 방지한다.
  */
 async function applyEditsToHwpx(
   hwpxBuffer: Uint8Array,
   edits: CellEditRequest[],
+  preloadedZip?: JSZip,
+  preloadedSections?: Array<{ name: string; xml: string; tblCount: number; globalOffset: number }>,
 ): Promise<{ buffer: Uint8Array; results: CellEditResult[] }> {
-  const zip = await JSZip.loadAsync(hwpxBuffer);
-  const sections = await readSections(zip);
+  const zip = preloadedZip ?? (await JSZip.loadAsync(hwpxBuffer));
+  const sections = preloadedSections ?? (await readSections(zip));
   const totalTables = sections.reduce((a, s) => a + s.tblCount, 0);
 
   // 섹션별 편집 분배 (전역 tableIndex → 섹션 내 상대 인덱스)
@@ -479,7 +488,7 @@ function resolveLabelAcrossSections(
   direction: "right" | "below",
   scopedGlobalTableIndex?: number,
 ): { tableIndex: number; row: number; col: number } | { error: string } {
-  const trimmedLabel = label.trim();
+  const trimmedLabel = label.trim().normalize("NFC");
   interface GlobalMatch {
     globalTableIndex: number;
     row: number;
@@ -636,9 +645,10 @@ export const proposeCellEditTool: ToolDefinition<ProposeCellEditInput> = {
       throw err;
     }
 
-    // 레이블 기반 편집을 좌표로 해석하기 위해 섹션 정보를 먼저 읽는다
-    const zipForLabel = await JSZip.loadAsync(new Uint8Array(originalBuffer.buffer as ArrayBuffer));
-    const sections = await readSections(zipForLabel);
+    // 레이블 기반 편집을 좌표로 해석하고 applyEditsToHwpx가 재사용할 수 있도록
+    // ZIP을 한 번만 loadAsync한다 (동일 버퍼 이중 해제 방지).
+    const sharedZip = await JSZip.loadAsync(new Uint8Array(originalBuffer.buffer as ArrayBuffer));
+    const sections = await readSections(sharedZip);
 
     // 편집 항목을 좌표 기반으로 정규화
     const resolvedEdits: Array<{
@@ -712,6 +722,8 @@ export const proposeCellEditTool: ToolDefinition<ProposeCellEditInput> = {
     const { buffer: newBuffer, results } = await applyEditsToHwpx(
       new Uint8Array(originalBuffer.buffer as ArrayBuffer),
       editRequests,
+      sharedZip,
+      sections,
     );
 
     // 실패한 편집 확인

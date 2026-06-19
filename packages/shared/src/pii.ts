@@ -25,7 +25,9 @@ const PATTERNS: Array<{ type: string; re: RegExp; mask: (m: string) => string }>
   },
   {
     type: "이메일",
-    re: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
+    // 모든 수량자에 상한을 둬 백트래킹을 상수로 제한(ReDoS 방지). 실제 이메일은
+    // 로컬 ≤64, 도메인 라벨 ≤10개·각 ≤63자, TLD ≤24자에 모두 들어간다.
+    re: /\b[A-Za-z0-9._%+-]{1,64}@(?:[A-Za-z0-9-]{1,63}\.){1,10}[A-Za-z]{2,24}\b/g,
     mask: (m) => {
       const [u, d] = m.split("@");
       return `${u?.[0] ?? ""}***@${d}`;

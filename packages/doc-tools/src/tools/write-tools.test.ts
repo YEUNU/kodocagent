@@ -488,3 +488,109 @@ describe("① propose_edit commit — 포맷 변환 시 outputPath도 백업", a
     expect(newBackups.length).toBeGreaterThanOrEqual(1);
   }, 30000);
 });
+
+// ─────────────────────────────────────────────────────────
+// M7: Date / RichText / Hyperlink 셀 이전 값 표시
+// ─────────────────────────────────────────────────────────
+
+describe("propose_sheet_edit — M7 Date/RichText/Hyperlink 이전 값 표시", () => {
+  it("날짜 셀 이전 값이 한국어 날짜 형식으로 표시된다 (영어 로케일 문자열 아님)", async () => {
+    const ctx = await makeCtx();
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Sheet1");
+    // 날짜 셀: 2024년 3월 15일
+    const d = new Date(2024, 2, 15); // month is 0-based
+    sheet.getCell("A1").value = d;
+    sheet.getCell("A1").numFmt = "yyyy-mm-dd";
+    const xlsxBuf = await workbook.xlsx.writeBuffer();
+    const fixturePath = join(ctx.cwd, "date.xlsx");
+    await writeFile(fixturePath, new Uint8Array(xlsxBuf as unknown as ArrayBuffer));
+
+    const result = await proposeSheetEditTool.propose!({
+      input: {
+        path: "date.xlsx",
+        updates: [{ sheet: "Sheet1", cell: "A1", value: "2025-01-01" }],
+        summary: "날짜 변경",
+      },
+      ctx,
+    });
+
+    expect(typeof result).not.toBe("string");
+    const outcome = result as {
+      proposal: import("@kodocagent/shared").Proposal;
+      commit: () => Promise<string>;
+    };
+    // 이전 값이 영어 로케일 문자열(예: "Fri Mar 15 2024...")이 아니어야 한다
+    expect(outcome.proposal.diff).not.toMatch(
+      /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/,
+    );
+    // 한국어 로케일 형식(년, 월, 일)이 포함되어야 한다
+    expect(outcome.proposal.diff).toMatch(/\d{4}/); // 연도
+    // [object Object] 가 없어야 한다
+    expect(outcome.proposal.diff).not.toContain("[object Object]");
+  }, 20000);
+
+  it("RichText 셀 이전 값이 텍스트로 표시된다 ([object Object] 아님)", async () => {
+    const ctx = await makeCtx();
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Sheet1");
+    sheet.getCell("A1").value = {
+      richText: [
+        { text: "굵은", font: { bold: true } },
+        { text: "텍스트", font: { bold: false } },
+      ],
+    };
+    const xlsxBuf = await workbook.xlsx.writeBuffer();
+    const fixturePath = join(ctx.cwd, "richtext.xlsx");
+    await writeFile(fixturePath, new Uint8Array(xlsxBuf as unknown as ArrayBuffer));
+
+    const result = await proposeSheetEditTool.propose!({
+      input: {
+        path: "richtext.xlsx",
+        updates: [{ sheet: "Sheet1", cell: "A1", value: "일반 텍스트" }],
+        summary: "RichText 셀 변경",
+      },
+      ctx,
+    });
+
+    expect(typeof result).not.toBe("string");
+    const outcome = result as {
+      proposal: import("@kodocagent/shared").Proposal;
+      commit: () => Promise<string>;
+    };
+    expect(outcome.proposal.diff).not.toContain("[object Object]");
+    expect(outcome.proposal.diff).toContain("굵은");
+    expect(outcome.proposal.diff).toContain("텍스트");
+  }, 20000);
+
+  it("Hyperlink 셀 이전 값이 텍스트와 URL로 표시된다", async () => {
+    const ctx = await makeCtx();
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Sheet1");
+    sheet.getCell("A1").value = {
+      text: "홈페이지",
+      hyperlink: "https://example.com",
+    };
+    const xlsxBuf = await workbook.xlsx.writeBuffer();
+    const fixturePath = join(ctx.cwd, "hyperlink.xlsx");
+    await writeFile(fixturePath, new Uint8Array(xlsxBuf as unknown as ArrayBuffer));
+
+    const result = await proposeSheetEditTool.propose!({
+      input: {
+        path: "hyperlink.xlsx",
+        updates: [{ sheet: "Sheet1", cell: "A1", value: "새 링크" }],
+        summary: "하이퍼링크 변경",
+      },
+      ctx,
+    });
+
+    expect(typeof result).not.toBe("string");
+    const outcome = result as {
+      proposal: import("@kodocagent/shared").Proposal;
+      commit: () => Promise<string>;
+    };
+    expect(outcome.proposal.diff).not.toContain("[object Object]");
+    expect(outcome.proposal.diff).toContain("홈페이지");
+    expect(outcome.proposal.diff).toContain("https://example.com");
+  }, 20000);
+});
