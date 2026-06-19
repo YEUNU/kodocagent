@@ -399,6 +399,8 @@ describe("proposeCellEditTool 통합 테스트", () => {
     // diff 포함 확인
     expect(outcome.proposal.diff).toContain("김철수");
     expect(outcome.proposal.kind).toBe("cell-edit");
+    // read 시점 mtime을 lost-update 베이스라인으로 실어 보낸다
+    expect(typeof outcome.proposal.sourceMtimeMs).toBe("number");
 
     // 6. commit
     const commitMsg = await outcome.commit();

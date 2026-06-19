@@ -452,4 +452,58 @@ describe("가드 A — mtime lost-update 방지", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("proposal.sourceMtimeMs(read 시점 mtime)를 베이스라인으로 우선 사용해 read~stat 윈도우 외부편집을 감지한다", async () => {
+    // propose 내부 read 시점과 registry stat 사이에 외부 편집이 끼어든 상황을
+    // 시뮬레이션: 도구는 "read 시점"의 (옛) mtime을 sourceMtimeMs로 실어 보내지만
+    // 파일의 실제 mtime은 이미 더 최신이다. stat 폴백이라면 못 잡지만,
+    // sourceMtimeMs 우선 사용이면 commit 직전 재확인에서 불일치가 감지되어 중단된다.
+    const dir = join(tmpdir(), `mtime-test-srcmtime-${Date.now()}`);
+    await mkdir(dir, { recursive: true });
+    try {
+      const srcFile = join(dir, "source.hwpx");
+      await writeFile(srcFile, "original content", "utf-8");
+
+      // 파일의 실제 mtime보다 5초 과거의 값을 read 시점 mtime으로 가정
+      const staleMtimeMs = Date.now() - 5000;
+
+      const registry = new ToolRegistry();
+      const commitFn = vi.fn().mockResolvedValue("저장 완료");
+      registry.register({
+        name: "srcmtime_test_tool",
+        description: "sourceMtimeMs 테스트",
+        inputSchema: z.object({}),
+        requiresApproval: true,
+        propose: async (): Promise<ProposeOutcome> => ({
+          proposal: {
+            id: "srcmtime-prop-001",
+            kind: "edit",
+            targetPath: srcFile,
+            stagedPath: srcFile,
+            summary: "테스트",
+            diff: "",
+            warnings: [],
+            sourcePath: srcFile,
+            sourceMtimeMs: staleMtimeMs,
+          } satisfies Proposal,
+          commit: commitFn,
+        }),
+      });
+      registry.setContext({ cwd: dir, sessionId: "test-srcmtime" });
+      // 승인 핸들러는 파일을 건드리지 않는다 (외부 편집은 이미 read 전후에 발생한 셈)
+      registry.setApprovalHandler(async () => ({ approved: true }));
+
+      const tools = registry.toAiSdkTools();
+      const result = await tools["srcmtime_test_tool"]!.execute!(
+        {},
+        { toolCallId: "tc-srcmtime-1", messages: [], abortSignal: undefined },
+      );
+
+      // 베이스라인(staleMtimeMs)과 파일 실제 mtime이 다르므로 commit이 중단되어야 함
+      expect(commitFn).not.toHaveBeenCalled();
+      expect(String(result)).toContain("변경되어");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });

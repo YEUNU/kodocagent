@@ -22,7 +22,7 @@
  *   B. 레이블 기반 셀 타겟팅: label + direction으로 인접 셀을 찾아 편집(병합 span 반영).
  */
 
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
 import JSZip from "jszip";
 import type { ScanCell, ScanTable, SpliceEdit } from "kordoc";
@@ -612,10 +612,12 @@ export const proposeCellEditTool: ToolDefinition<ProposeCellEditInput> = {
       throw err;
     }
 
-    // 파일 읽기
+    // 파일 읽기 — 읽기 직후 mtime을 캡처해 lost-update 베이스라인으로 사용
     let originalBuffer: Buffer;
+    let sourceMtimeMs: number | undefined;
     try {
       originalBuffer = await readFile(safePath);
+      sourceMtimeMs = (await stat(safePath)).mtimeMs;
     } catch {
       return `오류: 파일을 읽을 수 없습니다: ${input.path}. 경로를 확인하거나 read_document로 먼저 확인하세요.`;
     }
@@ -771,6 +773,7 @@ export const proposeCellEditTool: ToolDefinition<ProposeCellEditInput> = {
         warnings: [],
         willConvertFormat,
         sourcePath: safePath,
+        sourceMtimeMs,
       },
       commit: async (): Promise<string> => {
         const backupPath = await backupFile(safePath, undefined, { summary: input.summary });

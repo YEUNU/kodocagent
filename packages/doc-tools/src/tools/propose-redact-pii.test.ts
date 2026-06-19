@@ -88,6 +88,8 @@ describe("proposeRedactPiiTool", () => {
 
     expect(outcome.proposal.kind).toBe("redact-pii");
     expect(outcome.proposal.targetPath).toContain(filename);
+    // read 시점 mtime을 lost-update 베이스라인으로 실어 보낸다
+    expect(typeof outcome.proposal.sourceMtimeMs).toBe("number");
 
     // diff에 원문 PII가 없어야 한다
     const diff = outcome.proposal.diff;
@@ -156,6 +158,8 @@ describe("proposeRedactPiiTool — .hwpx splice 마스킹", () => {
     expect(typeof result).not.toBe("string");
     const outcome = result as Exclude<typeof result, string | undefined>;
     expect(outcome.proposal.kind).toBe("redact-pii");
+    // read 시점 mtime을 lost-update 베이스라인으로 실어 보낸다
+    expect(typeof outcome.proposal.sourceMtimeMs).toBe("number");
     // diff에 원문 PII 미노출
     expect(outcome.proposal.diff).not.toContain("1234-5678");
     expect(outcome.proposal.diff).not.toContain("user@example");

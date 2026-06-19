@@ -32,7 +32,7 @@
  * .hwpx 전용 — .hwp 거부 (ZIP 매직 검증 포함).
  */
 
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
 import JSZip from "jszip";
 import { z } from "zod";
@@ -1298,10 +1298,12 @@ export const proposeTableStructureTool: ToolDefinition<ProposeTableStructureInpu
       throw err;
     }
 
-    // 파일 읽기
+    // 파일 읽기 — 읽기 직후 mtime을 캡처해 lost-update 베이스라인으로 사용
     let originalBuf: Buffer;
+    let sourceMtimeMs: number | undefined;
     try {
       originalBuf = await readFile(safePath);
+      sourceMtimeMs = (await stat(safePath)).mtimeMs;
     } catch {
       return `오류: 파일을 읽을 수 없습니다: ${input.path}. 경로를 확인하세요.`;
     }
@@ -1478,6 +1480,7 @@ export const proposeTableStructureTool: ToolDefinition<ProposeTableStructureInpu
         warnings,
         willConvertFormat,
         sourcePath: safePath,
+        sourceMtimeMs,
       },
       commit: async (): Promise<string> => {
         const backupPath = await backupFile(safePath, undefined, { summary: input.summary });

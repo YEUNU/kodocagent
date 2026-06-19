@@ -6,7 +6,7 @@
  * diff: 셀 변경 표 (시트!셀: '이전' → '이후')
  */
 
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
 import ExcelJS from "exceljs";
 import { z } from "zod";
@@ -62,10 +62,12 @@ export const proposeSheetEditTool: ToolDefinition<ProposeSheetEditInput> = {
       throw err;
     }
 
-    // 원본 파일 읽기
+    // 원본 파일 읽기 — 읽기 직후 mtime을 캡처해 lost-update 베이스라인으로 사용
     let originalBuffer: Buffer;
+    let sourceMtimeMs: number | undefined;
     try {
       originalBuffer = await readFile(safePath);
+      sourceMtimeMs = (await stat(safePath)).mtimeMs;
     } catch {
       return `오류: 파일을 읽을 수 없습니다: ${input.path}. 경로를 확인하세요.`;
     }
@@ -200,6 +202,7 @@ export const proposeSheetEditTool: ToolDefinition<ProposeSheetEditInput> = {
         warnings,
         willConvertFormat,
         sourcePath: safePath,
+        sourceMtimeMs,
       },
       commit: async (): Promise<string> => {
         // 소스 백업 (원본 .xls/.xlsx 파일)

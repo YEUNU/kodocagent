@@ -123,6 +123,8 @@ describe("propose_edit .hwpx 라운드트립", () => {
     // diff에 변경된 줄이 포함됨
     expect(outcome.proposal.diff).toContain("-");
     expect(outcome.proposal.diff).toContain("+");
+    // read 시점 mtime을 lost-update 베이스라인으로 실어 보낸다
+    expect(typeof outcome.proposal.sourceMtimeMs).toBe("number");
 
     // 승인 → commit()
     const commitMsg = await outcome.commit();

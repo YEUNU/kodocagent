@@ -7,7 +7,7 @@
  * 원문 PII 값은 diff나 응답에 절대 노출하지 않는다.
  */
 
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { basename, extname } from "node:path";
 import type { PiiFinding } from "@kodocagent/shared";
 import { detectPii, redactRanges, redactText } from "@kodocagent/shared";
@@ -237,9 +237,12 @@ export const proposeRedactPiiTool: ToolDefinition<ProposeRedactPiiInput> = {
 
     // ── .hwpx / .hwp 처리 ─────────────────────────────────
     if (ext === ".hwpx" || ext === ".hwp") {
+      // 읽기 직후 mtime을 캡처해 lost-update 베이스라인으로 사용
       let originalBuf: Buffer;
+      let sourceMtimeMs: number | undefined;
       try {
         originalBuf = await readFile(safePath);
+        sourceMtimeMs = (await stat(safePath)).mtimeMs;
       } catch {
         return `오류: 파일을 읽을 수 없습니다: ${input.path}`;
       }
@@ -302,6 +305,7 @@ export const proposeRedactPiiTool: ToolDefinition<ProposeRedactPiiInput> = {
           warnings: [],
           willConvertFormat,
           sourcePath: safePath,
+          sourceMtimeMs,
         },
         commit: async (): Promise<string> => {
           // 소스 백업 (원본 .hwp/.hwpx)
@@ -318,9 +322,12 @@ export const proposeRedactPiiTool: ToolDefinition<ProposeRedactPiiInput> = {
     }
 
     // ── .md / .txt 처리 ───────────────────────────────────
+    // 읽기 직후 mtime을 캡처해 lost-update 베이스라인으로 사용
     let originalText: string;
+    let sourceMtimeMs: number | undefined;
     try {
       const buf = await readFile(safePath);
+      sourceMtimeMs = (await stat(safePath)).mtimeMs;
       originalText = decodeTextFile(buf).text;
     } catch {
       return `오류: 파일을 읽을 수 없습니다: ${input.path}`;
@@ -349,6 +356,7 @@ export const proposeRedactPiiTool: ToolDefinition<ProposeRedactPiiInput> = {
         warnings: [],
         willConvertFormat,
         sourcePath: safePath,
+        sourceMtimeMs,
       },
       commit: async (): Promise<string> => {
         // 소스 백업

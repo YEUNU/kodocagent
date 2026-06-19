@@ -206,11 +206,17 @@ export class ToolRegistry {
             // per-call 로컬 변수 (모듈 전역 금지 — 동시 호출 레이스 방지)
             let baselineMtimeMs: number | null = null;
             if (proposal.sourcePath) {
-              try {
-                const s = await stat(proposal.sourcePath);
-                baselineMtimeMs = s.mtimeMs;
-              } catch {
-                // 파일이 없거나 접근 불가 → null 유지 (검사 스킵)
+              // 도구가 read 시점 mtime을 실어 보냈으면 그것을 우선 사용해
+              // propose 내부 read~여기 stat 사이의 lost-update 윈도우를 제거한다.
+              if (typeof proposal.sourceMtimeMs === "number") {
+                baselineMtimeMs = proposal.sourceMtimeMs;
+              } else {
+                try {
+                  const s = await stat(proposal.sourcePath);
+                  baselineMtimeMs = s.mtimeMs;
+                } catch {
+                  // 파일이 없거나 접근 불가 → null 유지 (검사 스킵)
+                }
               }
             }
 

@@ -11,7 +11,7 @@
  * 불변 원칙: commit() 내부에서만 타겟에 쓴다.
  */
 
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
 import { compare, patchHwp, patchHwpx } from "kordoc";
 import { z } from "zod";
@@ -97,10 +97,12 @@ export const proposeEditTool: ToolDefinition<ProposeEditInput> = {
       throw err;
     }
 
-    // 원본 파일 읽기
+    // 원본 파일 읽기 — 읽기 직후 mtime을 캡처해 lost-update 베이스라인으로 사용
     let originalBuffer: Buffer;
+    let sourceMtimeMs: number | undefined;
     try {
       originalBuffer = await readFile(safePath);
+      sourceMtimeMs = (await stat(safePath)).mtimeMs;
     } catch {
       return `오류: 파일을 읽을 수 없습니다: ${input.path}. 경로를 확인하거나 read_document로 먼저 확인하세요.`;
     }
@@ -260,6 +262,7 @@ export const proposeEditTool: ToolDefinition<ProposeEditInput> = {
         warnings,
         willConvertFormat,
         sourcePath: safePath,
+        sourceMtimeMs,
       },
       commit: async (): Promise<string> => {
         // 백업 (원본이 있을 때만)

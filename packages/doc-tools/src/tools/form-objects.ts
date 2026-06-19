@@ -15,7 +15,7 @@
  *   hp:edit      — <hp:text> 자식 내용 (Edit)
  */
 
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
 import JSZip from "jszip";
 import { z } from "zod";
@@ -823,9 +823,12 @@ export const proposeFormObjectTool: ToolDefinition<ProposeFormObjectInput> = {
       throw err;
     }
 
+    // 읽기 직후 mtime을 캡처해 lost-update 베이스라인으로 사용
     let originalBuffer: Buffer;
+    let sourceMtimeMs: number | undefined;
     try {
       originalBuffer = await readFile(safePath);
+      sourceMtimeMs = (await stat(safePath)).mtimeMs;
     } catch {
       return `오류: 파일을 읽을 수 없습니다: ${input.path}`;
     }
@@ -1028,6 +1031,7 @@ export const proposeFormObjectTool: ToolDefinition<ProposeFormObjectInput> = {
         warnings: [],
         willConvertFormat,
         sourcePath: safePath,
+        sourceMtimeMs,
       },
       commit: async (): Promise<string> => {
         const backupPath = await backupFile(safePath, undefined, { summary: input.summary });

@@ -354,12 +354,15 @@ describe("proposeFindReplaceTool — 기본 치환 (단락)", () => {
       targetPath: string;
       willConvertFormat: string | undefined;
       warnings: string[];
+      sourceMtimeMs: number | undefined;
     };
     expect(proposal.diff).toContain("원본텍스트");
     expect(proposal.diff).toContain("바뀐텍스트");
     // 새 포맷: "N곳 교체: ..." 헤더 + numbered 스니펫 라인
     expect(proposal.diff).toContain("곳 교체:");
     expect(proposal.kind).toBe("find-replace");
+    // read 시점 mtime을 lost-update 베이스라인으로 실어 보낸다
+    expect(typeof proposal.sourceMtimeMs).toBe("number");
 
     // .hwpx 입력 → 출력도 .hwpx (포맷 변환 없음)
     expect(extname(proposal.targetPath).toLowerCase()).toBe(".hwpx");

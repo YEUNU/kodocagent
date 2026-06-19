@@ -33,6 +33,11 @@ export interface Proposal {
    * 신규 생성(new-document/new-spreadsheet)·export·restore에는 설정하지 않는다.
    */
   sourcePath?: string;
+  /**
+   * propose() 내부에서 원본을 read 한 바로 그 시점의 mtimeMs.
+   * lost-update 베이스라인으로 우선 사용(없으면 registry가 stat 폴백).
+   */
+  sourceMtimeMs?: number;
 }
 
 export interface ApprovalResult {
