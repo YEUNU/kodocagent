@@ -34,6 +34,7 @@ import type { KodocConfig, Proposal, Provider, SetupValues } from "@kodocagent/s
 import {
   acquireInstanceLock,
   KODOC_PATHS,
+  logger,
   PROVIDERS,
   resolveApiKey,
   SetupValuesSchema,
@@ -417,7 +418,7 @@ export class AgentBridge {
     const resolver = this.pendingApprovals.get(proposalId);
     if (!resolver) {
       // 미지의 id는 무시
-      console.warn(`[AgentBridge] 알 수 없는 proposalId 무시: ${proposalId}`);
+      logger.warn("알 수 없는 proposalId 무시", { component: "AgentBridge", proposalId });
       return;
     }
     this.pendingApprovals.delete(proposalId);

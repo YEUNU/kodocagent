@@ -7,7 +7,7 @@
  */
 
 import type { ApprovalHandler, KodocConfig } from "@kodocagent/shared";
-import { KodocError } from "@kodocagent/shared";
+import { KodocError, logger } from "@kodocagent/shared";
 import type { LanguageModel, ModelMessage } from "ai";
 import { stepCountIs, streamText } from "ai";
 import type { SessionStore } from "../session/store.js";
@@ -293,9 +293,13 @@ export class AgentSession {
           },
           abortSignal: signal,
           // 샘플링 파라미터 미설정 (SPEC §3, §5 불변 원칙)
-          onError: () => {
+          onError: ({ error }: { error: unknown }) => {
             // 오류는 fullStream의 error 파트와 아래 catch에서 이미 깔끔히 처리됨.
-            // AI SDK 기본 onError(console.error 원시 덤프)를 비활성화한다.
+            // AI SDK 기본 onError(console.error 원시 덤프)는 stdout/stderr를 오염시키므로
+            // 비활성화하고, 진단이 필요한 경우를 위해 KODOC_DEBUG 시에만 stderr로 남긴다.
+            logger.debug("streamText onError", {
+              error: error instanceof Error ? error.message : String(error),
+            });
           },
         });
 
@@ -396,8 +400,11 @@ export class AgentSession {
             this.messages.push(modelMsg);
             await store.appendAssistant(modelMsg);
           }
-        } catch {
-          // 응답 메시지 영속화 실패는 무시 (스트림은 이미 완료)
+        } catch (err: unknown) {
+          // 응답 메시지 영속화 실패는 무시 (스트림은 이미 완료) — 진단만 남긴다
+          logger.debug("응답 메시지 영속화 실패(무시)", {
+            error: err instanceof Error ? err.message : String(err),
+          });
         }
 
         // 검증 라운드 트리거: 이번 라운드에 편집 도구 호출이 있었고, 한도 내이며, 중단 안 됨.

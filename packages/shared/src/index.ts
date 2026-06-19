@@ -1,3 +1,4 @@
+export { detectCloudSyncWarning } from "./cloud-sync.js";
 export type { ConfigLoadResult, KodocConfig, Provider, SetupValues } from "./config.js";
 export {
   CURRENT_CONFIG_VERSION,
@@ -13,6 +14,8 @@ export {
   SetupValuesSchema,
 } from "./config.js";
 export { KORDOC_ERROR_MESSAGES, KodocError, kordocErrorMessage } from "./errors.js";
+export type { LogFields, LogLevel } from "./logger.js";
+export { logger } from "./logger.js";
 export {
   acquireInstanceLock,
   isPidAlive,

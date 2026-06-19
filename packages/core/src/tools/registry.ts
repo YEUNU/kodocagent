@@ -12,7 +12,7 @@
 
 import { stat } from "node:fs/promises";
 import type { ApprovalHandler, Proposal } from "@kodocagent/shared";
-import { detectPii, KodocError, summarizePii } from "@kodocagent/shared";
+import { detectCloudSyncWarning, detectPii, KodocError, summarizePii } from "@kodocagent/shared";
 import type { Schema, ToolSet } from "ai";
 import { tool } from "ai";
 import type { z } from "zod";
@@ -200,6 +200,15 @@ export class ToolRegistry {
               !(proposal.warnings ?? []).includes(OPEN_FILE_WARN)
             ) {
               proposal.warnings = [...(proposal.warnings ?? []), OPEN_FILE_WARN];
+            }
+
+            // 클라우드 동기 폴더(iCloud/Dropbox/OneDrive 등) 경고 (#13) — 비차단.
+            // 덮어쓰기 제안이고 원본 경로가 있을 때만, 중복 없이 추가한다.
+            if (OVERWRITE_KINDS.has(proposal.kind) && proposal.sourcePath) {
+              const cloudWarn = detectCloudSyncWarning(proposal.sourcePath);
+              if (cloudWarn && !(proposal.warnings ?? []).includes(cloudWarn)) {
+                proposal.warnings = [...(proposal.warnings ?? []), cloudWarn];
+              }
             }
 
             // 2단계: approval-required 이벤트 발행 직전 — mtime baseline 캡처

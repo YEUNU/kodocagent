@@ -16,6 +16,7 @@ export const KODOC_PATHS = {
   sessions: join(KODOC_HOME, "sessions"),
   staging: join(KODOC_HOME, "staging"),
   backups: join(KODOC_HOME, "backups"),
+  logs: join(KODOC_HOME, "logs"),
   updateCheck: join(KODOC_HOME, "update-check.json"),
 } as const;
 

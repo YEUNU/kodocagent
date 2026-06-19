@@ -8,11 +8,54 @@
  */
 
 import { join } from "node:path";
+import { logger } from "@kodocagent/shared";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { AgentBridge, type SetupValues } from "./agent-bridge.js";
 
 let mainWindow: BrowserWindow | null = null;
 let bridge: AgentBridge | null = null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 전역 예외 핸들러 (프라이버시: 외부 업로드/텔레메트리 없음, 로컬 로깅만)
+//
+// 문서·PII 도구이므로 crashReporter/외부 전송은 절대 활성화하지 않는다.
+// uncaughtException·unhandledRejection을 logger(로컬, stderr + KODOC_DEBUG 시 파일)로
+// 기록해 조용한 크래시를 막고, 가능하면 사용자에게 다이얼로그로 알린다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 예외 핸들러 1회 등록 가드 (HMR/중복 호출 방지) */
+let crashHandlersInstalled = false;
+
+function installCrashHandlers(): void {
+  if (crashHandlersInstalled) return;
+  crashHandlersInstalled = true;
+
+  process.on("uncaughtException", (err: Error) => {
+    logger.error("uncaughtException", {
+      name: err.name,
+      message: err.message,
+      stack: err.stack,
+    });
+    // 메인 프로세스 크래시는 사용자에게 알린다(외부 전송 없음).
+    try {
+      dialog.showErrorBox(
+        "예기치 않은 오류",
+        `내부 오류가 발생했습니다: ${err.message}\n` +
+          "작업을 다시 시도하거나 앱을 재시작하세요. (오류는 로컬에만 기록되며 외부로 전송되지 않습니다.)",
+      );
+    } catch {
+      // 다이얼로그 표시 실패(앱 준비 전 등)는 무시 — 이미 logger로 기록됨
+    }
+  });
+
+  process.on("unhandledRejection", (reason: unknown) => {
+    const message = reason instanceof Error ? reason.message : String(reason);
+    logger.error("unhandledRejection", {
+      message,
+      stack: reason instanceof Error ? reason.stack : undefined,
+    });
+  });
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -43,7 +86,18 @@ function createWindow(): void {
   });
 }
 
+// 앱 준비 전에 전역 예외 핸들러를 먼저 등록한다(초기화 중 발생하는 오류도 포착).
+installCrashHandlers();
+
 app.whenReady().then(async () => {
+  // 렌더러 프로세스가 비정상 종료되면 로컬에 기록(외부 전송 없음).
+  app.on("render-process-gone", (_event, _webContents, details) => {
+    logger.error("render-process-gone", {
+      reason: details.reason,
+      exitCode: details.exitCode,
+    });
+  });
+
   // 기본 cwd: Documents 폴더
   const defaultCwd = app.getPath("documents");
   bridge = new AgentBridge(defaultCwd);
