@@ -87,6 +87,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", async () => {
+  bridge?.abort(); // pending approvals 정리 + controller 중단
   await bridge?.mcpManager?.disconnect().catch(() => {});
 });
 

@@ -14,11 +14,126 @@
 import { extname } from "node:path";
 import { kordocErrorMessage } from "@kodocagent/shared";
 import { markdownToPdf, renderHtml } from "kordoc";
+import sanitizeHtml from "sanitize-html";
 import { z } from "zod";
 import { parse } from "../kordoc-parse.js";
 import { assertFileSizeWithinLimit, resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, stageFile } from "../staging.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
+
+/**
+ * renderHtml 결과에서 잠재적으로 위험한 요소를 제거한다.
+ * - script/style/iframe/object/embed/form/input/link 태그 제거
+ * - on* 이벤트 속성, javascript: 스킴, meta http-equiv(refresh) 제거
+ * - 문서 구조(html/head/body/meta/title), 서식, 표, 이미지(http/https/data), 링크(http/https/mailto) 보존
+ *
+ * 서식 CSS 보존: kordoc renderHtml이 <head>에 넣는 <style>은 우리가 생성한 신뢰된 CSS다.
+ * 본문(문서 내용)에 들어올 수 있는 <style>(@import 추적 등)은 sanitize가 제거하되, 신뢰된
+ * head CSS는 sanitize 전에 추출해 정화 후 다시 주입한다(라이브러리가 경고하는 style 허용 회피).
+ */
+function sanitizeExportHtml(rawHtml: string): string {
+  // kordoc이 <head>에 생성한 첫 <style> 블록(신뢰된 서식 CSS)을 추출
+  const trustedCss = rawHtml.match(/<style\b[^>]*>([\s\S]*?)<\/style>/i)?.[1] ?? "";
+
+  const sanitized = sanitizeHtml(rawHtml, {
+    allowedTags: [
+      // 문서 구조
+      "html",
+      "head",
+      "body",
+      "meta",
+      "title",
+      // 서식
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "p",
+      "br",
+      "hr",
+      "strong",
+      "b",
+      "em",
+      "i",
+      "u",
+      "s",
+      "del",
+      "ins",
+      "mark",
+      "small",
+      "sub",
+      "sup",
+      "blockquote",
+      "pre",
+      "code",
+      "ul",
+      "ol",
+      "li",
+      "dl",
+      "dt",
+      "dd",
+      // 표
+      "table",
+      "thead",
+      "tbody",
+      "tfoot",
+      "tr",
+      "th",
+      "td",
+      "colgroup",
+      "col",
+      "caption",
+      // 링크·이미지
+      "a",
+      "img",
+      // 기타 구조
+      "div",
+      "span",
+      "section",
+      "article",
+      "header",
+      "footer",
+      "main",
+      "nav",
+      "aside",
+      "figure",
+      "figcaption",
+    ],
+    allowedAttributes: {
+      // 메타: charset만 허용 — http-equiv="refresh"(외부 URL 리다이렉트/javascript: 우회) 차단
+      meta: ["charset"],
+      // 제목
+      html: ["lang"],
+      // 링크: http/https/mailto만 허용 (javascript: 제거)
+      a: ["href", "title", "target", "rel"],
+      // 이미지: http/https/data만 허용
+      img: ["src", "alt", "title", "width", "height"],
+      // 표 구조
+      th: ["scope", "colspan", "rowspan"],
+      td: ["colspan", "rowspan"],
+      col: ["span"],
+      // 일반 클래스/id는 보존
+      "*": ["class", "id"],
+    },
+    allowedSchemes: ["http", "https", "mailto", "data"],
+    allowedSchemesByTag: {
+      img: ["http", "https", "data"],
+      a: ["http", "https", "mailto"],
+    },
+    // style 속성은 url()/@import 우회 가능성 — 제거
+    allowedStyles: {},
+    // <script>·<style> 콘텐츠는 기본 nonTextTags로 제거됨(본문 <style> @import 차단).
+    // on* 이벤트 속성도 기본적으로 제거됨.
+  });
+
+  // 신뢰된 head CSS를 정화 후 <head>에 재주입(없으면 그대로).
+  if (trustedCss && sanitized.includes("</head>")) {
+    return sanitized.replace("</head>", `<style>${trustedCss}</style></head>`);
+  }
+  return sanitized;
+}
 
 const MAX_PREVIEW_CHARS = 4_000;
 
@@ -86,7 +201,14 @@ export const exportDocumentTool: ToolDefinition<ExportDocumentInput> = {
     let stagedData: Uint8Array;
     const warnings: string[] = [];
     if (format === "html") {
-      stagedData = new TextEncoder().encode(renderHtml(markdown));
+      const rawHtml = renderHtml(markdown);
+      const safeHtml = sanitizeExportHtml(rawHtml);
+      stagedData = new TextEncoder().encode(safeHtml);
+      // 원본에 위험 구문이 실제로 있었을 때만 안내(정상 문서마다 보안 경고가 뜨는 노이즈 방지).
+      // sanitize는 항상 재포맷하므로 문자열 비교가 아니라 위험 패턴 존재 여부로 판정한다.
+      if (/<script|<iframe|<object|<embed|\son\w+\s*=|javascript:/i.test(rawHtml)) {
+        warnings.push("문서에 포함된 스크립트·위험 HTML을 제거하고 내보냈습니다(서식은 보존).");
+      }
     } else {
       try {
         const pdf = await markdownToPdf(markdown);

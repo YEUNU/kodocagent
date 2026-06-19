@@ -37,8 +37,15 @@ th { background: #f5f6f8; }
 img { max-width: 100%; }
 `;
 
+/**
+ * CSP: 외부 리소스(스크립트·외부 CSS·외부 연결·외부 이미지) 차단, 인라인 스타일·임베드(data:)
+ * 이미지만 허용. 신뢰할 수 없는 문서의 외부 이미지 로드로 IP가 추적되는 것을 막는다.
+ */
+const PREVIEW_CSP =
+  "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src 'none';";
+
 function buildSrcDoc(html: string): string {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${paperCss}</style></head><body><div class="doc-body">${html}</div></body></html>`;
+  return `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}"><style>${paperCss}</style></head><body><div class="doc-body">${html}</div></body></html>`;
 }
 
 export function DocumentPreview(props: DocumentPreviewProps): React.ReactElement {
@@ -93,7 +100,7 @@ export function DocumentPreview(props: DocumentPreviewProps): React.ReactElement
           <>
             <iframe
               className="preview-frame"
-              sandbox=""
+              sandbox="allow-same-origin"
               title="문서 미리보기"
               srcDoc={buildSrcDoc(preview.html)}
             />

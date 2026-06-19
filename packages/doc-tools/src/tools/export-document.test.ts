@@ -95,4 +95,82 @@ describe("exportDocumentTool", () => {
     expect(result as string).toContain("오류");
     expect(result as string).toContain(".html");
   }, 15000);
+
+  it("HTML 내보내기 결과에 <script>·on* 이벤트·javascript: 가 없다", async () => {
+    const subDir = join(testDir, `xss-${Date.now()}`);
+    await mkdir(subDir, { recursive: true });
+    // 마크다운 안에 raw HTML(인라인 XSS 벡터) 포함
+    const md =
+      "# 제목\n\n본문입니다.\n\n" +
+      "<script>alert('xss')</script>\n\n" +
+      '<img src="x" onerror="alert(1)">\n\n' +
+      '<a href="javascript:alert(2)">링크</a>\n\n' +
+      '<iframe src="http://evil.example"></iframe>\n';
+    await saveHwpx(subDir, "src.hwpx", md);
+
+    const ctx = makeCtx(subDir);
+    const result = await exportDocumentTool.propose?.({
+      input: { path: "src.hwpx", outputPath: "out.html" },
+      ctx,
+    });
+
+    expect(typeof result).toBe("object");
+    if (result == null || typeof result === "string") throw new Error(String(result));
+
+    await result.commit();
+    const html = await readFile(join(subDir, "out.html"), "utf-8");
+
+    expect(html).not.toMatch(/<script/i);
+    expect(html).not.toMatch(/onerror\s*=/i);
+    expect(html).not.toMatch(/javascript:/i);
+    expect(html).not.toMatch(/<iframe/i);
+    // 정상 본문은 보존
+    expect(html).toContain("제목");
+    expect(html).toContain("본문");
+    // 위험 구문이 제거됐으므로 경고가 붙는다
+    expect(result.proposal.warnings.some((w) => w.includes("위험 HTML"))).toBe(true);
+  }, 15000);
+
+  it("HTML 내보내기: meta http-equiv=refresh(리다이렉트)도 제거된다", async () => {
+    const subDir = join(testDir, `refresh-${Date.now()}`);
+    await mkdir(subDir, { recursive: true });
+    const md = "# 제목\n\n" + '<meta http-equiv="refresh" content="0;url=http://evil.example">\n';
+    await saveHwpx(subDir, "src.hwpx", md);
+
+    const ctx = makeCtx(subDir);
+    const result = await exportDocumentTool.propose?.({
+      input: { path: "src.hwpx", outputPath: "out.html" },
+      ctx,
+    });
+    if (result == null || typeof result === "string") throw new Error(String(result));
+    await result.commit();
+    const html = await readFile(join(subDir, "out.html"), "utf-8");
+    expect(html).not.toMatch(/http-equiv\s*=\s*["']?refresh/i);
+  }, 15000);
+
+  it("HTML 내보내기: 표 내용은 정화 후에도 보존된다", async () => {
+    const subDir = join(testDir, `safe-${Date.now()}`);
+    await mkdir(subDir, { recursive: true });
+    const md = "# 문서\n\n" + "| 항목 | 값 |\n|---|---|\n| 이름 | 홍길동 |\n";
+    await saveHwpx(subDir, "src.hwpx", md);
+
+    const ctx = makeCtx(subDir);
+    const result = await exportDocumentTool.propose?.({
+      input: { path: "src.hwpx", outputPath: "out.html" },
+      ctx,
+    });
+
+    expect(typeof result).toBe("object");
+    if (result == null || typeof result === "string") throw new Error(String(result));
+
+    await result.commit();
+    const html = await readFile(join(subDir, "out.html"), "utf-8");
+
+    expect(html).toContain("홍길동");
+    expect(html.toLowerCase()).toMatch(/<table/);
+    // 정상(위험 구문 없는) 문서엔 보안 경고가 붙지 않는다
+    expect(result.proposal.warnings.some((w) => w.includes("위험 HTML"))).toBe(false);
+    // kordoc 서식 CSS(<style> 블록)가 정화 후에도 보존된다(스타일 회귀 방지)
+    expect(html.toLowerCase()).toMatch(/<style/);
+  }, 15000);
 });

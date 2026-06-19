@@ -25,7 +25,7 @@ export function ChatView({ messages }: ChatViewProps): React.ReactElement {
   }
 
   return (
-    <div className="chat">
+    <div className="chat" role="log" aria-live="polite" aria-relevant="additions">
       {messages.map((msg) => {
         if (msg.role === "user") {
           return (

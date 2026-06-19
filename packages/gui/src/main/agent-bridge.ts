@@ -30,8 +30,14 @@ import {
   SUPPORTED_READ_EXTENSIONS,
   SUPPORTED_WRITE_EXTENSIONS,
 } from "@kodocagent/doc-tools";
-import type { KodocConfig, Proposal, Provider } from "@kodocagent/shared";
-import { acquireInstanceLock, KODOC_PATHS, PROVIDERS, resolveApiKey } from "@kodocagent/shared";
+import type { KodocConfig, Proposal, Provider, SetupValues } from "@kodocagent/shared";
+import {
+  acquireInstanceLock,
+  KODOC_PATHS,
+  PROVIDERS,
+  resolveApiKey,
+  SetupValuesSchema,
+} from "@kodocagent/shared";
 
 /** IPC로 전달 가능한 직렬화된 AgentEvent */
 export type SerializedAgentEvent = AgentEvent;
@@ -43,12 +49,8 @@ export interface ConfigSnapshot {
   hasKeys: Record<string, boolean>;
 }
 
-/** 온보딩 마법사가 보내는 설정 값 (사용자 입력 — 저장만 하고 렌더러로 되돌리지 않음) */
-export interface SetupValues {
-  provider: string;
-  apiKeys: { anthropic?: string; openai?: string; google?: string };
-  lawApiKey?: string;
-}
+// SetupValues 타입과 SetupValuesSchema는 @kodocagent/shared에서 가져온다
+export type { SetupValues };
 
 /** 좌측 파일 패널 항목 (IPC 직렬화) */
 export interface FileEntry {
@@ -88,7 +90,18 @@ function formatBackupTime(tsToken: string): string {
     "$1T$2:$3:$4.$5Z",
   );
   const d = new Date(restored);
-  return Number.isNaN(d.getTime()) ? tsToken : d.toISOString().replace("T", " ").slice(0, 19);
+  if (Number.isNaN(d.getTime())) return tsToken;
+  // 사용자 로컬 시간(Asia/Seoul) 표시 — 정렬용 mtime/tsToken은 그대로 UTC
+  return d.toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
 }
 
 type ApprovalResolver = (result: { approved: boolean; reason?: string }) => void;
@@ -108,6 +121,9 @@ export class AgentBridge {
 
   /** 현재 턴 AbortController */
   private controller: AbortController | null = null;
+
+  /** 전송 진행 중 플래그 — 첫 await 이전에 동기 설정해 동시 전송 레이스를 차단 */
+  private busy = false;
 
   /** 승인 대기 중인 Proposal resolver 맵 */
   private pendingApprovals = new Map<string, ApprovalResolver>();
@@ -176,6 +192,8 @@ export class AgentBridge {
    * 새 세션 생성 (session.new() IPC 호출 시)
    */
   async resetSession(): Promise<void> {
+    // 기존 pending approvals 정리
+    this.drainPendingApprovals();
     if (!this.config) {
       this.config = await loadConfig();
     }
@@ -231,7 +249,10 @@ export class AgentBridge {
 
   /**
    * 문서를 읽어 미리보기 HTML 렌더 (kordoc parse → renderHtml).
-   * cwd 상대 경로는 resolveSafePath 경계 검사, 절대 경로(드롭 파일)는 읽기 전용 허용.
+   * 미리보기는 사용자가 직접 선택/드롭한 파일을 "읽기 전용"으로 렌더하며 결과는 iframe에만
+   * 표시된다(에이전트/모델 컨텍스트로 가지 않음). 드래그드롭 파일은 작업 폴더 밖일 수 있으므로
+   * 절대 경로는 그대로 허용하고, 상대 경로만 cwd 경계를 검사한다.
+   * (에이전트의 실제 편집은 read_document/propose_*가 resolveSafePath로 cwd를 강제한다.)
    * 원본은 절대 변경하지 않는다.
    */
   async previewDocument(p: string): Promise<DocPreviewResult> {
@@ -292,63 +313,80 @@ export class AgentBridge {
 
   /**
    * 사용자 메시지 전송 → AgentSession.run() 실행
+   * 이미 처리 중이면(controller 활성) 새 전송을 무시하고 안내 이벤트를 방출한다.
    */
   async sendMessage(text: string): Promise<void> {
-    if (!this.store || !this.config) {
+    // 동시 전송 가드 — busy는 첫 await 이전에 동기로 설정되므로(아래) 빠른 연속 전송도 차단된다.
+    // (이전엔 controller로 검사했으나 controller가 두 await 뒤에 할당돼 레이스가 있었다.)
+    if (this.busy) {
       this.emitEvent({
         type: "error",
-        message: "세션이 초기화되지 않았습니다. 앱을 재시작하세요.",
-        recoverable: false,
+        message: "처리 중입니다. 완료 후 다시 입력해 주세요.",
+        recoverable: true,
       });
       return;
     }
-
-    // 설정 최신화
-    this.config = await loadConfig();
-    let model: ReturnType<typeof createModel>;
-    try {
-      model = createModel(this.config);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      this.emitEvent({ type: "error", message: msg, recoverable: false });
-      return;
-    }
-
-    const tools = new ToolRegistry();
-    for (const tool of createDocTools({ cwd: this.cwd })) {
-      tools.register(tool as import("@kodocagent/core").ToolDefinition<unknown>);
-    }
-    if (this.mcpManager) {
-      for (const mcpTool of this.mcpManager.getToolDefinitions()) {
-        tools.register(mcpTool);
-      }
-    }
-
-    const approvalHandler = this.makeApprovalHandler();
-
-    const opts: AgentSessionOptions = {
-      config: this.config,
-      model,
-      tools,
-      approvalHandler,
-      store: this.store,
-      cwd: this.cwd,
-      mcpServers: this.mcpManager?.connectedServerNames ?? [],
-    };
-
-    this.session = new AgentSession(opts);
-    await this.session.loadHistory();
-
-    this.controller = new AbortController();
+    this.busy = true;
 
     try {
-      for await (const event of this.session.run(text, this.controller.signal)) {
-        this.emitEvent(event);
+      if (!this.store || !this.config) {
+        this.emitEvent({
+          type: "error",
+          message: "세션이 초기화되지 않았습니다. 앱을 재시작하세요.",
+          recoverable: false,
+        });
+        return;
       }
-    } catch {
-      // AbortSignal에 의한 중단은 정상 처리
+
+      // 설정 최신화
+      this.config = await loadConfig();
+      let model: ReturnType<typeof createModel>;
+      try {
+        model = createModel(this.config);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.emitEvent({ type: "error", message: msg, recoverable: false });
+        return;
+      }
+
+      const tools = new ToolRegistry();
+      for (const tool of createDocTools({ cwd: this.cwd })) {
+        tools.register(tool as import("@kodocagent/core").ToolDefinition<unknown>);
+      }
+      if (this.mcpManager) {
+        for (const mcpTool of this.mcpManager.getToolDefinitions()) {
+          tools.register(mcpTool);
+        }
+      }
+
+      const approvalHandler = this.makeApprovalHandler();
+
+      const opts: AgentSessionOptions = {
+        config: this.config,
+        model,
+        tools,
+        approvalHandler,
+        store: this.store,
+        cwd: this.cwd,
+        mcpServers: this.mcpManager?.connectedServerNames ?? [],
+      };
+
+      this.session = new AgentSession(opts);
+      await this.session.loadHistory();
+
+      this.controller = new AbortController();
+
+      try {
+        for await (const event of this.session.run(text, this.controller.signal)) {
+          this.emitEvent(event);
+        }
+      } catch {
+        // AbortSignal에 의한 중단은 정상 처리
+      } finally {
+        this.controller = null;
+      }
     } finally {
-      this.controller = null;
+      this.busy = false;
     }
   }
 
@@ -358,6 +396,18 @@ export class AgentBridge {
   abort(): void {
     this.controller?.abort();
     this.controller = null;
+    this.drainPendingApprovals();
+  }
+
+  /**
+   * 대기 중인 모든 approval Promise를 "세션 중단"으로 resolve하고 Map을 비운다.
+   * abort/resetSession/before-quit 시 호출.
+   */
+  private drainPendingApprovals(): void {
+    for (const resolver of this.pendingApprovals.values()) {
+      resolver({ approved: false, reason: "세션 중단" });
+    }
+    this.pendingApprovals.clear();
   }
 
   /**
@@ -393,8 +443,16 @@ export class AgentBridge {
   /**
    * 온보딩 마법사: 사용자가 입력한 API 키/프로바이더를 config.json에 저장하고 재초기화한다.
    * 키 값은 저장만 하며 렌더러로 되돌리지 않는다(스냅샷은 boolean만).
+   * IPC 입력은 zod 스키마로 런타임 검증 — 알 수 없는 필드 제거, 타입 불일치 거부.
    */
-  async saveSetup(values: SetupValues): Promise<ConfigSnapshot> {
+  async saveSetup(rawValues: unknown): Promise<ConfigSnapshot> {
+    const parsed = SetupValuesSchema.safeParse(rawValues);
+    if (!parsed.success) {
+      throw new Error(
+        `설정 값이 올바르지 않습니다: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
+      );
+    }
+    const values = parsed.data;
     const config = await loadConfig();
     if ((PROVIDERS as readonly string[]).includes(values.provider)) {
       config.provider = values.provider as Provider;

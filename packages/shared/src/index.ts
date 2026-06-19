@@ -1,13 +1,16 @@
-export type { KodocConfig, Provider } from "./config.js";
+export type { ConfigLoadResult, KodocConfig, Provider, SetupValues } from "./config.js";
 export {
+  CURRENT_CONFIG_VERSION,
   DEFAULT_MODELS,
   KNOWN_MODELS,
   KodocConfigSchema,
   LAW_ENV_VAR,
   PROVIDER_ENV_VARS,
   PROVIDERS,
+  parseConfigSafe,
   resolveApiKey,
   resolveModel,
+  SetupValuesSchema,
 } from "./config.js";
 export { KORDOC_ERROR_MESSAGES, KodocError, kordocErrorMessage } from "./errors.js";
 export {

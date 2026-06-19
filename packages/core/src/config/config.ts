@@ -5,7 +5,7 @@
 import { chmod, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { KodocConfig } from "@kodocagent/shared";
-import { KODOC_PATHS, KodocConfigSchema, KodocError } from "@kodocagent/shared";
+import { KODOC_PATHS, KodocConfigSchema, KodocError, parseConfigSafe } from "@kodocagent/shared";
 
 const CONFIG_PATH = KODOC_PATHS.config;
 
@@ -40,14 +40,20 @@ export async function loadConfig(): Promise<KodocConfig> {
     );
   }
 
-  const result = KodocConfigSchema.safeParse(parsed);
-  if (!result.success) {
+  const result = parseConfigSafe(parsed);
+  if (!result.ok) {
+    if (result.reason === "future-version") {
+      throw new KodocError(
+        result.message,
+        `kodocagent를 최신 버전으로 업데이트하거나, '${CONFIG_PATH}'를 삭제하고 재실행하세요.`,
+      );
+    }
     throw new KodocError(
-      `설정 파일의 형식이 올바르지 않습니다: ${result.error.message}`,
+      `설정 파일의 형식이 올바르지 않습니다: ${result.message}`,
       `'${CONFIG_PATH}'를 삭제하고 'kodocagent'를 다시 실행하면 초기 설정이 시작됩니다.`,
     );
   }
-  return result.data;
+  return result.config;
 }
 
 /**

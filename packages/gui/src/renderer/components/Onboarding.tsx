@@ -128,12 +128,16 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
 
           {/* 제공자 선택 탭 */}
           <div>
-            <span className="field-label">AI 제공자</span>
-            <div className="tabs">
+            <span className="field-label" id="provider-tabs-label">
+              AI 제공자
+            </span>
+            <div className="tabs" role="tablist" aria-labelledby="provider-tabs-label">
               {PROVIDERS.map((p) => (
                 <button
                   key={p.id}
                   type="button"
+                  role="tab"
+                  aria-selected={selected === p.id}
                   className={`tab${selected === p.id ? " tab--active" : ""}`}
                   onClick={() => setSelected(p.id)}
                 >

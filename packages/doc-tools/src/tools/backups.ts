@@ -38,7 +38,7 @@ function parseBackupFilename(filename: string): {
 
 /**
  * 타임스탬프 토큰을 사람이 읽기 좋은 문자열로 변환한다.
- * 예) "2026-06-16T23-18-42-393Z" → "2026-06-16 23:18:42"
+ * 예) "2026-06-16T23-18-42-393Z" → "2026-06-17 08:18:42" (Asia/Seoul 기준)
  */
 function formatTimestamp(tsToken: string): string {
   // "2026-06-16T23-18-42-393Z" → "2026-06-16T23:18:42.393Z"
@@ -49,8 +49,17 @@ function formatTimestamp(tsToken: string): string {
   try {
     const d = new Date(restored);
     if (Number.isNaN(d.getTime())) return tsToken;
-    // "2026-06-16 23:18:42"
-    return d.toISOString().replace("T", " ").slice(0, 19);
+    // 사용자 로컬 시간(Asia/Seoul) 표시 — 정렬용 tsToken은 그대로 UTC
+    return d.toLocaleString("ko-KR", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
   } catch {
     return tsToken;
   }

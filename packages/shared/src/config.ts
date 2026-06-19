@@ -27,6 +27,8 @@ export const PROVIDER_ENV_VARS: Record<Provider, string> = {
 /** 국가법령정보센터 Open API 키 환경변수 (korean-law-mcp가 읽는 이름) */
 export const LAW_ENV_VAR = "LAW_OC";
 
+export const CURRENT_CONFIG_VERSION = 1;
+
 export const KodocConfigSchema = z.object({
   version: z.literal(1).default(1),
   provider: z.enum(PROVIDERS).default("anthropic"),
@@ -47,6 +49,61 @@ export const KodocConfigSchema = z.object({
 });
 
 export type KodocConfig = z.infer<typeof KodocConfigSchema>;
+
+/**
+ * config:save IPC 핸들러용 zod 런타임 검증 스키마.
+ * GUI main process에서 렌더러 입력 검증 시 사용.
+ * 알 수 없는 필드는 strip(제거), 타입 불일치는 거부한다.
+ */
+export const SetupValuesSchema = z.object({
+  provider: z.string(),
+  apiKeys: z
+    .object({
+      anthropic: z.string().optional(),
+      openai: z.string().optional(),
+      google: z.string().optional(),
+    })
+    .default({}),
+  lawApiKey: z.string().optional(),
+});
+
+export type SetupValues = z.infer<typeof SetupValuesSchema>;
+
+/**
+ * 설정 파일 로드 결과 — 버전 미래값(더 새 버전) 분리 포함
+ */
+export type ConfigLoadResult =
+  | { ok: true; config: KodocConfig }
+  | { ok: false; reason: "future-version"; version: number; message: string }
+  | { ok: false; reason: "parse-error"; message: string };
+
+/**
+ * 알 수 없는 필드 제거(strip) 후 설정 파싱.
+ * version > CURRENT_CONFIG_VERSION 이면 "future-version" 오류로 구분한다.
+ */
+export function parseConfigSafe(raw: unknown): ConfigLoadResult {
+  // version 선검사 — 미래 버전이면 일반 손상 오류와 구분
+  if (raw !== null && typeof raw === "object" && "version" in raw) {
+    const v = (raw as Record<string, unknown>).version;
+    if (typeof v === "number" && v > CURRENT_CONFIG_VERSION) {
+      return {
+        ok: false,
+        reason: "future-version",
+        version: v,
+        message: `설정 파일이 더 새 버전(v${v})입니다. kodocagent를 최신 버전으로 업데이트하거나, 설정 파일을 초기화하세요.`,
+      };
+    }
+  }
+  const result = KodocConfigSchema.safeParse(raw);
+  if (!result.success) {
+    return {
+      ok: false,
+      reason: "parse-error",
+      message: `설정 파일이 손상되었습니다: ${result.error.issues.map((i) => i.message).join(", ")}`,
+    };
+  }
+  return { ok: true, config: result.data };
+}
 
 export function resolveModel(config: KodocConfig): string {
   return config.model ?? DEFAULT_MODELS[config.provider];

@@ -36,10 +36,12 @@
     "iconv-lite": "^0.7.2",
     "jszip": "^3.10.1",
     "kordoc": "^3.1.1",
+    "sanitize-html": "^2.17.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@kodocagent/core": "workspace:*",
+    "@types/sanitize-html": "^2.16.1",
     "ai": "^6.0.199",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"

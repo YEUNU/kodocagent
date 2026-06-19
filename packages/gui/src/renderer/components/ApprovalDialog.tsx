@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Proposal } from "../types.js";
 
 interface ApprovalDialogProps {
@@ -259,9 +259,54 @@ function renderDiff(kind: string, diff: string): React.ReactNode {
 export function ApprovalDialog({ proposal, onRespond }: ApprovalDialogProps): React.ReactElement {
   const [showReason, setShowReason] = useState(false);
   const [reason, setReason] = useState("");
+  const modalRef = useRef<HTMLDivElement>(null);
+  const titleId = `approval-title-${proposal.id}`;
 
   const { id, kind, targetPath, summary, diff, warnings, willConvertFormat } = proposal;
   const kindLabel = KIND_LABEL[kind] ?? kind;
+
+  // 마운트 시 첫 인터랙티브 요소에 포커스
+  useEffect(() => {
+    const modal = modalRef.current;
+    if (!modal) return;
+    const first = modal.querySelector<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    );
+    first?.focus();
+  }, []);
+
+  // Tab/Shift+Tab 포커스 트랩
+  useEffect(() => {
+    const modal = modalRef.current;
+    if (!modal) return;
+
+    function handleKeyDown(e: KeyboardEvent): void {
+      if (e.key !== "Tab") return;
+      const focusable = Array.from(
+        modal?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+
+    modal.addEventListener("keydown", handleKeyDown);
+    return () => modal.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   function handleApprove() {
     onRespond(id, true);
@@ -277,11 +322,13 @@ export function ApprovalDialog({ proposal, onRespond }: ApprovalDialogProps): Re
   }
 
   return (
-    <div className="modal-scrim" role="dialog" aria-modal="true">
-      <div className="modal">
+    <div className="modal-scrim" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div className="modal" ref={modalRef}>
         {/* ── Header ── */}
         <div className="modal__header">
-          <div className="modal__title">{kindLabel} — 승인 요청</div>
+          <div className="modal__title" id={titleId}>
+            {kindLabel} — 승인 요청
+          </div>
           <div className="row" style={{ marginTop: "8px", flexWrap: "wrap", gap: "6px" }}>
             <span className="chip chip--tool">{kind}</span>
             <span className="chip">
