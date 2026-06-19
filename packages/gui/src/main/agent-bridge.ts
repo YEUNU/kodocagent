@@ -22,6 +22,7 @@ import {
   ToolRegistry,
 } from "@kodocagent/core";
 import {
+  cleanOldBackups,
   createDocTools,
   parse,
   renderHtml,
@@ -30,7 +31,7 @@ import {
   SUPPORTED_WRITE_EXTENSIONS,
 } from "@kodocagent/doc-tools";
 import type { KodocConfig, Proposal, Provider } from "@kodocagent/shared";
-import { KODOC_PATHS, PROVIDERS, resolveApiKey } from "@kodocagent/shared";
+import { acquireInstanceLock, KODOC_PATHS, PROVIDERS, resolveApiKey } from "@kodocagent/shared";
 
 /** IPC로 전달 가능한 직렬화된 AgentEvent */
 export type SerializedAgentEvent = AgentEvent;
@@ -132,6 +133,18 @@ export class AgentBridge {
    * cwd 변경 시에도 재호출된다.
    */
   async init(): Promise<void> {
+    // ⑫ best-effort 비동기 정리 — 실패해도 기동을 막지 않는다
+    cleanOldBackups(30).catch(() => {});
+
+    // ③ 동시 인스턴스 경고 — 차단하지 않고 recoverable 이벤트로 1회 알림
+    acquireInstanceLock()
+      .then((warn) => {
+        if (warn) {
+          this.emitEvent({ type: "error", message: warn, recoverable: true });
+        }
+      })
+      .catch(() => {});
+
     // 기존 MCP 연결 정리
     if (this.mcpManager) {
       await this.mcpManager.disconnect().catch(() => {});

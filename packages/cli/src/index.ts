@@ -14,8 +14,8 @@ import {
   SessionStore,
   ToolRegistry,
 } from "@kodocagent/core";
-import { cleanSessionStaging, createDocTools } from "@kodocagent/doc-tools";
-import { KodocError } from "@kodocagent/shared";
+import { cleanOldBackups, cleanSessionStaging, createDocTools } from "@kodocagent/doc-tools";
+import { acquireInstanceLock, KodocError, releaseInstanceLock } from "@kodocagent/shared";
 import chalk from "chalk";
 import { Command } from "commander";
 import { runChat } from "./chat.js";
@@ -66,19 +66,34 @@ program
         );
       }
 
+      // ⑫ 문서 작업 진입 시에만 best-effort 백업 정리(모든 CLI 명령이 아니라 채팅/단발에서만)
+      cleanOldBackups(30).catch(() => {});
+
       if (options.print) {
-        // 단발 질의
+        // 단발 질의(읽기 전용) — 동시 편집 위험 없음, 인스턴스 락 불필요
         await runSingleTurn(options.print);
-      } else if (options.resume === true) {
-        // --resume 만 주어진 경우 — 세션 선택 UI
-        const resumeId = await pickSession();
-        if (!resumeId) return; // 취소 또는 세션 없음
-        await runChat({ resumeId });
-      } else {
-        await runChat({
-          resumeId: typeof options.resume === "string" ? options.resume : undefined,
-          continueLatest: options.continue,
-        });
+        return;
+      }
+
+      // ③ 대화형(쓰기 가능) 세션에서만 동시 인스턴스 경고. 종료 시 자기 락 해제.
+      const lockWarn = await acquireInstanceLock();
+      if (lockWarn) {
+        process.stderr.write(chalk.yellow(`⚠ ${lockWarn}\n`));
+      }
+      try {
+        if (options.resume === true) {
+          // --resume 만 주어진 경우 — 세션 선택 UI
+          const resumeId = await pickSession();
+          if (!resumeId) return; // 취소 또는 세션 없음
+          await runChat({ resumeId });
+        } else {
+          await runChat({
+            resumeId: typeof options.resume === "string" ? options.resume : undefined,
+            continueLatest: options.continue,
+          });
+        }
+      } finally {
+        await releaseInstanceLock().catch(() => {});
       }
     } catch (err: unknown) {
       handleError(err);

@@ -66,6 +66,95 @@ export function findThrashingEditTool(
   return worstCount >= threshold ? { tool: worstTool, count: worstCount } : null;
 }
 
+// ─────────────────────────────────────────────────────────
+// AI SDK 오류 한국어 매핑 (⑧)
+// ─────────────────────────────────────────────────────────
+
+/**
+ * AI SDK / 제공자 오류를 상태코드·메시지 패턴으로 분류해 한국어 메시지와 힌트를 반환한다.
+ * 매칭되지 않으면 null을 반환해 기존 동작(원문)을 유지한다.
+ */
+export function mapProviderError(err: unknown): { message: string; hint?: string } | null {
+  const status =
+    (err as { status?: unknown; statusCode?: unknown }).status ??
+    (err as { statusCode?: unknown }).statusCode;
+  const name = (err as { name?: unknown }).name;
+  const message = err instanceof Error ? err.message : String(err);
+  const lowerMsg = message.toLowerCase();
+
+  // 인증 오류 (401/403)
+  if (status === 401 || status === 403 || name === "AuthenticationError") {
+    return {
+      message: "API 키가 유효하지 않습니다.",
+      hint: "kodocagent config set api-key.<provider> <키> 로 올바른 키를 설정하세요.",
+    };
+  }
+
+  // 요청 한도 초과 (429)
+  if (status === 429 || name === "RateLimitError") {
+    return {
+      message: "API 요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.",
+    };
+  }
+
+  // 서버 오류 (5xx / overloaded)
+  if (
+    (typeof status === "number" && status >= 500 && status < 600) ||
+    name === "InternalServerError" ||
+    lowerMsg.includes("overloaded") ||
+    lowerMsg.includes("service unavailable")
+  ) {
+    return {
+      message: "AI 서비스가 일시적으로 불안정합니다.",
+      hint: "잠시 후 다시 시도하세요.",
+    };
+  }
+
+  // 컨텍스트 길이 초과
+  if (
+    lowerMsg.includes("context_length") ||
+    lowerMsg.includes("too many tokens") ||
+    lowerMsg.includes("maximum context") ||
+    lowerMsg.includes("context window") ||
+    lowerMsg.includes("prompt is too long") ||
+    name === "ContextLengthExceededError"
+  ) {
+    return {
+      message: "대화가 너무 길어 컨텍스트 한도를 초과했습니다.",
+      hint: "새 세션(/new 또는 새 대화)을 시작하세요.",
+    };
+  }
+
+  // 네트워크 오류
+  if (
+    lowerMsg.includes("enotfound") ||
+    lowerMsg.includes("econnrefused") ||
+    lowerMsg.includes("fetch failed") ||
+    lowerMsg.includes("network") ||
+    name === "NetworkError"
+  ) {
+    return {
+      message: "네트워크 연결을 확인하세요.",
+    };
+  }
+
+  return null;
+}
+
+/**
+ * 오류를 사용자용 한국어 메시지로 변환한다(힌트를 메시지에 접어 넣음).
+ * AgentEvent.error에 hint 필드가 없으므로 message 한 줄로 합친다.
+ * KodocError → message(+hint), AI SDK 오류 → mapProviderError, 그 외 → 원문.
+ */
+function formatAgentError(err: unknown): string {
+  if (err instanceof KodocError) {
+    return err.hint ? `${err.message} ${err.hint}` : err.message;
+  }
+  const mapped = mapProviderError(err);
+  if (mapped) return mapped.hint ? `${mapped.message} ${mapped.hint}` : mapped.message;
+  return err instanceof Error ? err.message : String(err);
+}
+
 export interface AgentSessionOptions {
   config: KodocConfig;
   model: LanguageModel;
@@ -283,10 +372,14 @@ export class AgentSession {
               break;
             }
             case "error": {
+              // 스트리밍 중 발생하는 제공자 오류는 이 파트로 도착한다(⑧ 주 경로).
+              // mapProviderError로 한국어화하고 힌트를 메시지에 접어 노출한다.
               const errPart = part as { type: "error"; error: unknown };
-              const message =
-                errPart.error instanceof Error ? errPart.error.message : String(errPart.error);
-              yield { type: "error", message, recoverable: false };
+              yield {
+                type: "error",
+                message: formatAgentError(errPart.error),
+                recoverable: false,
+              };
               break;
             }
             default:
@@ -335,12 +428,8 @@ export class AgentSession {
         // AbortSignal에 의한 중단 — 정상 종료
         return;
       }
-      if (err instanceof KodocError) {
-        yield { type: "error", message: err.message, recoverable: false };
-      } else {
-        const message = err instanceof Error ? err.message : String(err);
-        yield { type: "error", message, recoverable: false };
-      }
+      // KodocError·AI SDK 오류 모두 한국어 메시지(+힌트)로 변환 (⑧)
+      yield { type: "error", message: formatAgentError(err), recoverable: false };
     }
   }
 }

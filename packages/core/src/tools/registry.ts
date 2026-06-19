@@ -254,6 +254,8 @@ export class ToolRegistry {
 
             // commit() — 백업 + 원자적 쓰기
             // (mtime 재확인도 이 블록 안에서 수행 — KodocError가 동일한 catch로 노출됨)
+            // commit()을 실제로 시도했는지 추적 — 가드 단계(commit 전) 실패엔 백업 안내를 붙이지 않는다.
+            let commitAttempted = false;
             try {
               // 4단계: commit() 직전 — mtime 재확인 (lost-update 방지)
               // 이 경로는 commit 전에 중단되므로 파일을 건드리지 않는다(부분쓰기·temp 없음)
@@ -298,6 +300,7 @@ export class ToolRegistry {
                 }
               }
 
+              commitAttempted = true;
               const commitMsg = await commit();
               // 제안 경고를 결과에 덧붙여 모델이 정직하게 보고하도록 한다
               // (예: find/replace에서 서식 분리로 일부 미치환 시 — "모두 변경" 과장 방지)
@@ -309,7 +312,12 @@ export class ToolRegistry {
               const msg = err instanceof Error ? err.message : String(err);
               // KodocError는 hint를 포함할 수 있으므로 별도 노출
               const hint = err instanceof KodocError && err.hint ? `\n[해결 방법] ${err.hint}` : "";
-              return `저장 오류: ${msg}${hint}`;
+              // L6: commit()을 실제로 시도한 뒤 실패한 경우에만 백업 안내(가드 단계 실패는
+              // commit 전이라 백업이 생성되지 않았으므로 안내하지 않는다).
+              const backupHint = commitAttempted
+                ? "\n변경 전 원본이 백업되었을 수 있으니 list_backups로 확인·복원할 수 있습니다."
+                : "";
+              return `저장 오류: ${msg}${hint}${backupHint}`;
             }
           }
 

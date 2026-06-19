@@ -14,7 +14,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { ServerConnectionConfig } from "./config.js";
-import { buildChildEnv, McpManager } from "./manager.js";
+import {
+  buildChildEnv,
+  MCP_CALL_TIMEOUT_MS,
+  MCP_RESULT_MAX_CHARS,
+  McpManager,
+  truncateMcpResult,
+} from "./manager.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ECHO_SERVER_PATH = join(__dirname, "__fixtures__/echo-server.mjs");
@@ -232,6 +238,38 @@ describe("H3: buildChildEnv — LLM 제공자 키 제거", () => {
     // LLM 키는 serverEnv로도 주입 가능 (서버가 명시적으로 필요한 경우)
     const envWithKey = buildChildEnv({ ANTHROPIC_API_KEY: "explicit-override" });
     expect(envWithKey.ANTHROPIC_API_KEY).toBe("explicit-override");
+  });
+});
+
+describe("M3: truncateMcpResult — 결과 절단", () => {
+  it("한도 이하이면 원문 그대로 반환한다", () => {
+    const text = "a".repeat(100);
+    expect(truncateMcpResult(text, 200)).toBe(text);
+  });
+
+  it("한도 초과 시 잘라내고 안내 문구를 덧붙인다", () => {
+    const text = "b".repeat(200);
+    const result = truncateMcpResult(text, 100);
+    expect(result.startsWith("b".repeat(100))).toBe(true);
+    expect(result).toContain("(결과가 너무 길어 일부만 표시)");
+    // 원문보다 길지 않다(잘린 앞부분 + 안내)
+    expect(result.indexOf("b".repeat(101))).toBe(-1);
+  });
+
+  it("정확히 한도 길이이면 자르지 않는다", () => {
+    const text = "c".repeat(MCP_RESULT_MAX_CHARS);
+    const result = truncateMcpResult(text);
+    expect(result).toBe(text);
+  });
+
+  it("한도 + 1이면 자른다", () => {
+    const text = "d".repeat(MCP_RESULT_MAX_CHARS + 1);
+    const result = truncateMcpResult(text);
+    expect(result).toContain("(결과가 너무 길어 일부만 표시)");
+  });
+
+  it("MCP_CALL_TIMEOUT_MS 상수가 30000이다", () => {
+    expect(MCP_CALL_TIMEOUT_MS).toBe(30_000);
   });
 });
 

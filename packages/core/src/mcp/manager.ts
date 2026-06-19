@@ -41,6 +41,20 @@ const STDIO_CONNECT_TIMEOUT_MS = 60_000;
 const HTTP_CONNECT_TIMEOUT_MS = 15_000;
 const MAX_MCP_TOOLS_WARN = 40;
 
+/** callTool 실행 타임아웃(30초) — 연결 성공 후 응답이 없으면 에이전트가 영영 멈추는 것을 방지 */
+export const MCP_CALL_TIMEOUT_MS = 30_000;
+/** 결과 텍스트 최대 길이(100,000자) — 초과 시 잘라내고 안내 추가 */
+export const MCP_RESULT_MAX_CHARS = 100_000;
+
+/**
+ * callTool 결과 텍스트에 길이 상한을 적용한다(M3).
+ * 초과 시 앞부분만 남기고 "(결과가 너무 길어 일부만 표시)" 안내를 덧붙인다.
+ */
+export function truncateMcpResult(text: string, maxChars: number = MCP_RESULT_MAX_CHARS): string {
+  if (text.length <= maxChars) return text;
+  return text.slice(0, maxChars) + "\n\n(결과가 너무 길어 일부만 표시)";
+}
+
 // ── 환경변수 필터 ─────────────────────────────────────────────────────────────
 
 /** LLM 제공자 API 키 환경변수 이름 집합 */
@@ -223,22 +237,40 @@ export class McpManager {
           inputSchema: inputSch,
           requiresApproval: false,
           execute: async ({ input }) => {
+            // M3: 타임아웃 타이머 핸들 — 성공·실패 모두 finally에서 정리(이벤트 루프 유지·
+            // 사후 미처리 거부 방지).
+            let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
             try {
-              const result = await client.callTool({
+              // M3: callTool에 실행 타임아웃 적용 — 응답이 없으면 에이전트가 영영 멈추는 것을 방지
+              const callPromise = client.callTool({
                 name: mcpToolName,
                 arguments: input as Record<string, unknown>,
               });
+              const timeoutPromise = new Promise<never>((_, reject) => {
+                timeoutHandle = setTimeout(
+                  () => reject(new Error("MCP_CALL_TIMEOUT")),
+                  MCP_CALL_TIMEOUT_MS,
+                );
+              });
+              const result = await Promise.race([callPromise, timeoutPromise]);
               // content 배열의 텍스트 파트를 합친다
               if ("content" in result && Array.isArray(result.content)) {
                 const textParts = (result.content as Array<{ type: string; text?: string }>)
                   .filter((c) => c.type === "text")
                   .map((c) => c.text ?? "");
-                return textParts.join("\n") || JSON.stringify(result.content);
+                const joined = textParts.join("\n") || JSON.stringify(result.content);
+                // M3: 결과 길이 상한 적용
+                return truncateMcpResult(joined);
               }
-              return JSON.stringify(result);
+              return truncateMcpResult(JSON.stringify(result));
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : String(err);
+              if (msg === "MCP_CALL_TIMEOUT") {
+                return `MCP 툴 응답 시간 초과 [${entryName}/${mcpToolName}]: 서버가 ${MCP_CALL_TIMEOUT_MS / 1000}초 내에 응답하지 않았습니다.`;
+              }
               return `MCP 툴 오류 [${entryName}/${mcpToolName}]: ${msg}`;
+            } finally {
+              if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
             }
           },
         });

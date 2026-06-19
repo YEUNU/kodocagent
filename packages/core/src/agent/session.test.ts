@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { SessionStore } from "../session/store.js";
 import { ToolRegistry } from "../tools/registry.js";
-import { AgentSession, findThrashingEditTool } from "./session.js";
+import { AgentSession, findThrashingEditTool, mapProviderError } from "./session.js";
 
 const { testSessionsDir } = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -379,6 +379,81 @@ describe("AgentSession — 자가 검증 루프", () => {
       if (prev === undefined) delete process.env.KODOC_SELF_VERIFY;
       else process.env.KODOC_SELF_VERIFY = prev;
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────
+// ⑧: mapProviderError — AI SDK 오류 한국어 매핑
+// ─────────────────────────────────────────────────────────
+
+describe("mapProviderError", () => {
+  it("401 상태코드 → API 키 오류 메시지", () => {
+    const result = mapProviderError({ status: 401, message: "Unauthorized" });
+    expect(result).not.toBeNull();
+    expect(result!.message).toContain("API 키가 유효하지 않습니다");
+  });
+
+  it("403 상태코드 → API 키 오류 메시지", () => {
+    const result = mapProviderError({ status: 403, message: "Forbidden" });
+    expect(result).not.toBeNull();
+    expect(result!.message).toContain("API 키가 유효하지 않습니다");
+  });
+
+  it("429 상태코드 → 요청 한도 초과 메시지", () => {
+    const result = mapProviderError({ status: 429, message: "Too Many Requests" });
+    expect(result).not.toBeNull();
+    expect(result!.message).toContain("API 요청 한도를 초과했습니다");
+  });
+
+  it("503 상태코드 → 서비스 불안정 메시지", () => {
+    const result = mapProviderError({ status: 503, message: "Service Unavailable" });
+    expect(result).not.toBeNull();
+    expect(result!.message).toContain("AI 서비스가 일시적으로 불안정합니다");
+  });
+
+  it("overloaded 메시지 → 서비스 불안정 메시지", () => {
+    const result = mapProviderError(new Error("The API is overloaded"));
+    expect(result).not.toBeNull();
+    expect(result!.message).toContain("AI 서비스가 일시적으로 불안정합니다");
+  });
+
+  it("context_length 포함 메시지 → 컨텍스트 한도 초과 메시지", () => {
+    const result = mapProviderError(
+      new Error("This model's maximum context length is 128000 tokens"),
+    );
+    expect(result).not.toBeNull();
+    expect(result!.message).toContain("컨텍스트 한도를 초과했습니다");
+  });
+
+  it("too many tokens 포함 메시지 → 컨텍스트 한도 초과 메시지", () => {
+    const result = mapProviderError(new Error("too many tokens in request"));
+    expect(result).not.toBeNull();
+    expect(result!.message).toContain("컨텍스트 한도를 초과했습니다");
+  });
+
+  it("ENOTFOUND 메시지 → 네트워크 연결 메시지", () => {
+    const result = mapProviderError(
+      new Error("request to https://api.anthropic.com failed, ENOTFOUND"),
+    );
+    expect(result).not.toBeNull();
+    expect(result!.message).toContain("네트워크 연결을 확인하세요");
+  });
+
+  it("fetch failed 메시지 → 네트워크 연결 메시지", () => {
+    const result = mapProviderError(new Error("fetch failed"));
+    expect(result).not.toBeNull();
+    expect(result!.message).toContain("네트워크 연결을 확인하세요");
+  });
+
+  it("알 수 없는 오류는 null을 반환한다(원문 위임)", () => {
+    const result = mapProviderError(new Error("some unknown random error xyz"));
+    expect(result).toBeNull();
+  });
+
+  it("비-Error 객체도 처리한다", () => {
+    const result = mapProviderError({ status: 429 });
+    expect(result).not.toBeNull();
+    expect(result!.message).toContain("API 요청 한도를 초과했습니다");
   });
 });
 
