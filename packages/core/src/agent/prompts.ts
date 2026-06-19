@@ -13,16 +13,25 @@ export interface SystemPromptContext {
 }
 
 /**
- * AgentSession에 주입할 시스템 프롬프트를 생성한다.
+ * 시스템 프롬프트를 안정(stable) 파트와 동적(dynamic) 파트로 나눠 반환한다.
+ *
+ * - stable: ROLE·DOCUMENT_RULES·EDIT_SAFETY·capabilities·LAW_RULES — 변경 빈도가 낮아
+ *   Anthropic prompt caching의 캐시 브레이크포인트를 붙이기에 적합하다(세션 간 거의 불변).
+ * - dynamic: cwd·MCP·열람 문서 — 라운드마다 바뀌므로 캐시 마커를 붙이지 않는다.
  *
  * 섹션 구성 (안정 prefix 먼저 — 캐시 친화):
  * 1. 역할
  * 2. 문서 규칙
  * 3. 편집 안전 규칙
- * 4. 법령 규칙
- * 5. 동적 컨텍스트 (마지막)
+ * 4. 능력·한계
+ * 5. 법령 규칙
+ * (이상 stable)
+ * 6. 동적 컨텍스트 (dynamic)
  */
-export function buildSystemPrompt(ctx: SystemPromptContext): string {
+export function buildSystemPromptParts(ctx: SystemPromptContext): {
+  stable: string;
+  dynamic: string;
+} {
   const stable = [
     ROLE_SECTION,
     DOCUMENT_RULES_SECTION,
@@ -31,6 +40,17 @@ export function buildSystemPrompt(ctx: SystemPromptContext): string {
     LAW_RULES_SECTION,
   ].join("\n\n");
   const dynamic = buildDynamicContext(ctx);
+  return { stable, dynamic };
+}
+
+/**
+ * AgentSession에 주입할 시스템 프롬프트를 생성한다.
+ *
+ * `buildSystemPromptParts`에 위임해 `${stable}\n\n${dynamic}` 한 문자열로 합친다.
+ * (기존 호출자·테스트 호환 유지 — 합쳐진 텍스트는 캐시 마커 도입 전후 의미상 동일하다.)
+ */
+export function buildSystemPrompt(ctx: SystemPromptContext): string {
+  const { stable, dynamic } = buildSystemPromptParts(ctx);
   return `${stable}\n\n${dynamic}`;
 }
 

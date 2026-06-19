@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { buildSystemPrompt } from "./prompts.js";
+import { buildSystemPrompt, buildSystemPromptParts } from "./prompts.js";
 
 const base = { cwd: "/tmp/x", mcpServers: [], openDocuments: [] };
 
@@ -40,6 +40,52 @@ describe("buildSystemPrompt — 능력·한계 '가능' 자동 도출", () => {
     const prompt = buildSystemPrompt({ ...base, toolNames: [] });
     expect(prompt).toContain("능력·한계");
     expect(prompt).toContain("(없음)");
+  });
+});
+
+describe("buildSystemPromptParts — stable/dynamic 분리 (prompt caching)", () => {
+  const ctx = {
+    cwd: "/tmp/work",
+    mcpServers: ["korean-law"],
+    openDocuments: ["보고서.hwpx"],
+    toolNames: ["read_document", "propose_edit"],
+  };
+
+  it("stable에는 안정 섹션(역할·규칙·능력·법령)이, dynamic에는 동적 컨텍스트가 들어간다", () => {
+    const { stable, dynamic } = buildSystemPromptParts(ctx);
+    // 안정 섹션은 stable에만
+    expect(stable).toContain("역할");
+    expect(stable).toContain("문서 규칙");
+    expect(stable).toContain("편집 안전 규칙");
+    expect(stable).toContain("능력·한계");
+    expect(stable).toContain("법령 규칙");
+    expect(stable).toContain("read_document");
+    // 동적 컨텍스트(cwd·MCP·열람 문서)는 dynamic에만 — stable은 세션 간 불변이어야 함
+    expect(dynamic).toContain("현재 컨텍스트");
+    expect(dynamic).toContain("/tmp/work");
+    expect(dynamic).toContain("korean-law");
+    expect(dynamic).toContain("보고서.hwpx");
+    expect(stable).not.toContain("/tmp/work");
+    expect(stable).not.toContain("현재 컨텍스트");
+  });
+
+  it("`${stable}\\n\\n${dynamic}` 가 buildSystemPrompt(ctx) 출력과 정확히 일치한다(행동 불변)", () => {
+    const { stable, dynamic } = buildSystemPromptParts(ctx);
+    expect(`${stable}\n\n${dynamic}`).toBe(buildSystemPrompt(ctx));
+  });
+
+  it("stable은 동적 입력(cwd·openDocuments·mcp)이 바뀌어도 동일하다(캐시 히트 전제)", () => {
+    const a = buildSystemPromptParts(ctx);
+    const b = buildSystemPromptParts({
+      ...ctx,
+      cwd: "/other/dir",
+      mcpServers: [],
+      openDocuments: ["다른문서.docx", "또다른.xlsx"],
+    });
+    // toolNames가 같으면 stable은 불변 — 캐시 브레이크포인트가 유효하다
+    expect(b.stable).toBe(a.stable);
+    // dynamic은 달라진다
+    expect(b.dynamic).not.toBe(a.dynamic);
   });
 });
 

@@ -14,7 +14,7 @@ import type { SessionStore } from "../session/store.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import { compactMessages } from "./context.js";
 import type { AgentEvent } from "./events.js";
-import { buildSystemPrompt, buildThrashNudge, SELF_VERIFY_PROMPT } from "./prompts.js";
+import { buildSystemPromptParts, buildThrashNudge, SELF_VERIFY_PROMPT } from "./prompts.js";
 
 /**
  * 문서를 실제로 변경하는(승인 후 커밋되는) 편집 도구 집합.
@@ -263,13 +263,26 @@ export class AgentSession {
 
     try {
       while (true) {
-        // 시스템 프롬프트는 라운드마다 재생성(openDocuments 변동 반영) + 캐시 친화 안정 prefix
-        const system = buildSystemPrompt({
+        // 시스템 프롬프트는 라운드마다 재생성(openDocuments 변동 반영) + 캐시 친화 안정 prefix.
+        // stable(역할·규칙·능력)과 dynamic(cwd·MCP·열람 문서)을 분리해
+        // stable에만 Anthropic prompt caching 브레이크포인트를 붙인다.
+        const { stable, dynamic } = buildSystemPromptParts({
           cwd: this.opts.cwd,
           mcpServers: this.opts.mcpServers ?? [],
           openDocuments: this.openDocuments,
           toolNames: tools.toolNames,
         });
+        // 안정 system 메시지에만 ephemeral 캐시 마커를 부착한다.
+        // Anthropic 렌더 순서는 tools→system→messages이므로, 안정 system 메시지에 마커를 달면
+        // tools까지 함께 캐시된다(헤드룸 대안의 비용 절감 핵심). providerOptions.anthropic는
+        // openai/google 프로바이더에서 무시되므로 항상 부착해도 안전하다(게이팅 불필요).
+        const stableSysMsg: ModelMessage = {
+          role: "system",
+          content: stable,
+          providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
+        };
+        // 동적 system 메시지에는 마커를 붙이지 않는다(라운드마다 바뀌어 캐시 무효화 유발).
+        const dynamicSysMsg: ModelMessage = { role: "system", content: dynamic };
         // 토큰 예산 내로 컨텍스트 압축 (in-memory만 적용)
         this.messages = compactMessages(this.messages, config.maxContextTokens);
 
@@ -277,17 +290,26 @@ export class AgentSession {
 
         const result = streamText({
           model,
-          system,
-          messages: this.messages,
+          // top-level system 제거 — system 메시지를 messages 앞에 직접 둔다.
+          // 합쳐진 system 텍스트(stable + dynamic)와 순서는 기존 buildSystemPrompt와 동일(행동 불변).
+          messages: [stableSysMsg, dynamicSysMsg, ...this.messages],
+          // messages 배열 내 system 메시지를 명시적으로 허용(미설정 시 SDK가 경고 로그 출력 → stdout 오염).
+          allowSystemInMessages: true,
           tools: aiSdkTools,
           // 멀티스텝 정지 조건: maxSteps번 툴콜 후 중단 (AI SDK v6 실제 API)
           stopWhen: stepCountIs(config.maxSteps),
-          // thrash 감지 — 같은 편집 도구를 반복 호출하면 그 스텝 system에 전략 전환 nudge 주입
+          // thrash 감지 — 같은 편집 도구를 반복 호출하면 그 스텝의 messages를 오버라이드해
+          // 동적 system 메시지(dynamicSysMsg)에 전략 전환 nudge를 주입한다.
+          // 안정 prefix(stableSysMsg)는 절대 건드리지 않아 캐시가 유지된다.
           prepareStep: ({ steps }) => {
             const names = steps.flatMap((s) => (s.toolCalls ?? []).map((tc) => tc.toolName));
             const thrash = findThrashingEditTool(names);
             if (thrash) {
-              return { system: `${system}\n\n${buildThrashNudge(thrash.tool, thrash.count)}` };
+              const nudgedDynamicSysMsg: ModelMessage = {
+                ...dynamicSysMsg,
+                content: `${dynamic}\n\n${buildThrashNudge(thrash.tool, thrash.count)}`,
+              };
+              return { messages: [stableSysMsg, nudgedDynamicSysMsg, ...this.messages] };
             }
             return {};
           },

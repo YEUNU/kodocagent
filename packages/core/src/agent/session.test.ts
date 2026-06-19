@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { SessionStore } from "../session/store.js";
 import { ToolRegistry } from "../tools/registry.js";
+import { buildSystemPrompt } from "./prompts.js";
 import { AgentSession, findThrashingEditTool, mapProviderError } from "./session.js";
 
 const { testSessionsDir } = vi.hoisted(() => {
@@ -250,6 +251,229 @@ describe("AgentSession", () => {
     // turn-complete가 있어야 한다
     const complete = events.find((e) => e.type === "turn-complete");
     expect(complete).toBeTruthy();
+  });
+});
+
+// ─────────────────────────────────────────────────────────
+// Anthropic prompt caching — 시스템 메시지 구성 검증
+// (CI에선 실제 캐시 히트는 못 보므로 "변환 산출물의 구성"을 단언한다)
+// ─────────────────────────────────────────────────────────
+
+/** V3 프롬프트의 system 메시지 형태 — 변환 후 providerOptions가 보존됨(코드로 확인). */
+type V3SystemMsg = {
+  role: string;
+  content: string;
+  providerOptions?: { anthropic?: { cacheControl?: { type?: string } } };
+};
+
+describe("AgentSession — Anthropic prompt caching 구성", () => {
+  beforeEach(async () => {
+    await mkdir(testSessionsDir, { recursive: true });
+  });
+  afterEach(async () => {
+    await rm(testSessionsDir, { recursive: true, force: true });
+  });
+
+  /** doStreamCalls[idx].prompt에서 선두의 연속된 system 메시지만 추출한다. */
+  function leadingSystemMessages(
+    model: LanguageModel,
+    callIdx = 0,
+  ): V3SystemMsg[] {
+    const raw = model as unknown as import("ai/test").MockLanguageModelV3;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const prompt = raw.doStreamCalls[callIdx]!.prompt as unknown as V3SystemMsg[];
+    const out: V3SystemMsg[] = [];
+    for (const m of prompt) {
+      if (m.role !== "system") break;
+      out.push(m);
+    }
+    return out;
+  }
+
+  it("선두 두 system 메시지: stable이 먼저, dynamic이 다음 (top-level system 없음)", async () => {
+    const model = makeMockModel(makeStreamParts("응답"));
+    const store = await createStore();
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "read_document",
+      description: "읽기(테스트)",
+      inputSchema: z.object({ path: z.string() }),
+      requiresApproval: false,
+      execute: vi.fn().mockResolvedValue("내용"),
+    });
+    const session = new AgentSession({
+      config: testConfig,
+      model,
+      tools,
+      approvalHandler: async () => ({ approved: true }),
+      store,
+      cwd: "/test",
+      mcpServers: ["korean-law"],
+    });
+    const controller = new AbortController();
+    for await (const _e of session.run("안녕", controller.signal)) {
+      // drain
+    }
+
+    const sys = leadingSystemMessages(model);
+    expect(sys.length).toBe(2);
+
+    // 정답 텍스트: buildSystemPromptParts와 동일 ctx로 buildSystemPrompt를 만들어
+    // stable/dynamic 경계를 역산한다.
+    const expectedFull = buildSystemPrompt({
+      cwd: "/test",
+      mcpServers: ["korean-law"],
+      openDocuments: [],
+      toolNames: tools.toolNames,
+    });
+    // (a) stable이 먼저: 안정 섹션(역할)을 포함, 동적 컨텍스트는 미포함
+    expect(sys[0]!.content).toContain("역할");
+    expect(sys[0]!.content).not.toContain("현재 컨텍스트");
+    // (b) dynamic이 다음: 동적 컨텍스트 포함
+    expect(sys[1]!.content).toContain("현재 컨텍스트");
+    expect(sys[1]!.content).toContain("/test");
+    // (c) 합쳐진 system 텍스트가 buildSystemPrompt 출력과 동일(행동 불변)
+    expect(`${sys[0]!.content}\n\n${sys[1]!.content}`).toBe(expectedFull);
+  });
+
+  it("stable system 메시지에 cacheControl ephemeral가 실려 변환된다; dynamic엔 없음", async () => {
+    const model = makeMockModel(makeStreamParts("응답"));
+    const store = await createStore();
+    const tools = new ToolRegistry();
+    const session = new AgentSession({
+      config: testConfig,
+      model,
+      tools,
+      approvalHandler: async () => ({ approved: true }),
+      store,
+      cwd: "/test",
+    });
+    const controller = new AbortController();
+    for await (const _e of session.run("안녕", controller.signal)) {
+      // drain
+    }
+
+    const sys = leadingSystemMessages(model);
+    expect(sys.length).toBe(2);
+    // (b) 변환된 V3 프롬프트의 stable 메시지에 providerOptions.anthropic.cacheControl가 보존됨
+    expect(sys[0]!.providerOptions?.anthropic?.cacheControl).toEqual({ type: "ephemeral" });
+    // dynamic 메시지에는 캐시 마커가 없어야 한다(라운드마다 바뀌므로)
+    expect(sys[1]!.providerOptions?.anthropic?.cacheControl).toBeUndefined();
+  });
+
+  it("thrash 반복 시 nudge가 dynamic 쪽에 주입되고 stable은 불변(캐시 유지)", async () => {
+    // 임계치(5) 이상 같은 편집툴을 한 응답에서 호출 → prepareStep이 다음 스텝에서 nudge 주입.
+    // 멀티스텝이므로 첫 doStream에서 5개 tool-call을 내보내고, 두 번째 doStream(다음 스텝)에서
+    // prepareStep이 오버라이드한 messages를 받는다.
+    const fiveCalls: AnyStreamPart[] = [
+      { type: "stream-start", warnings: [] },
+      ...Array.from({ length: 5 }, (_v, i) => ({
+        type: "tool-call",
+        toolCallId: `c${i}`,
+        toolName: "propose_find_replace",
+        input: '{"path":"a.hwpx","find":"x","replace":"y","summary":"s"}',
+      })),
+      {
+        type: "finish",
+        finishReason: "tool-calls",
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      },
+    ];
+    const mk = (parts: AnyStreamPart[]) => ({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      stream: simulateReadableStream<any>({
+        chunks: parts,
+        initialDelayInMs: null,
+        chunkDelayInMs: null,
+      }),
+      request: { body: "{}" },
+      response: {},
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doStream: any = vi
+      .fn()
+      .mockResolvedValueOnce(mk(fiveCalls))
+      .mockResolvedValueOnce(mk(makeStreamParts("정리 후 응답")));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const model = new MockLanguageModelV3({ doStream } as any) as unknown as LanguageModel;
+
+    const store = await createStore();
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "propose_find_replace",
+      description: "편집툴(테스트)",
+      inputSchema: z.object({
+        path: z.string(),
+        find: z.string(),
+        replace: z.string(),
+        summary: z.string(),
+      }),
+      requiresApproval: false,
+      execute: vi.fn().mockResolvedValue("저장 완료: a.hwpx"),
+    });
+    // 자가검증 라운드가 끼어들지 않게 비활성화(스텝 카운트를 단순화)
+    const prev = process.env.KODOC_SELF_VERIFY;
+    process.env.KODOC_SELF_VERIFY = "0";
+    try {
+      const session = new AgentSession({
+        config: testConfig,
+        model,
+        tools,
+        approvalHandler: async () => ({ approved: true }),
+        store,
+        cwd: "/test",
+      });
+      const controller = new AbortController();
+      for await (const _e of session.run("바꿔줘", controller.signal)) {
+        // drain
+      }
+    } finally {
+      if (prev === undefined) delete process.env.KODOC_SELF_VERIFY;
+      else process.env.KODOC_SELF_VERIFY = prev;
+    }
+
+    // 두 번째 doStream 호출(=thrash 감지 후 스텝)의 선두 system 메시지를 검사
+    expect(doStream).toHaveBeenCalledTimes(2);
+    const sys = leadingSystemMessages(model, 1);
+    expect(sys.length).toBe(2);
+    // stable은 thrash와 무관하게 불변 + 캐시 마커 유지
+    expect(sys[0]!.content).toContain("역할");
+    expect(sys[0]!.content).not.toContain("반복 호출 주의");
+    expect(sys[0]!.providerOptions?.anthropic?.cacheControl).toEqual({ type: "ephemeral" });
+    // nudge는 dynamic 쪽에 주입됨
+    expect(sys[1]!.content).toContain("현재 컨텍스트");
+    expect(sys[1]!.content).toContain("반복 호출 주의");
+    expect(sys[1]!.content).toContain("propose_find_replace");
+  });
+
+  it("멀티프로바이더 회귀: 캐시 마커는 anthropic 네임스페이스에만 있어 openai/google 경로를 깨지 않는다", async () => {
+    // 마커가 anthropic 키에만 격리돼 있으면 openai/google 변환은 이를 무시한다.
+    // (MockLanguageModelV3는 프로바이더 무관 — V3 프롬프트를 그대로 통과시키므로
+    //  스트림이 정상 완료되고, providerOptions가 anthropic 키에만 존재함을 단언한다.)
+    const model = makeMockModel(makeStreamParts("응답"));
+    const store = await createStore();
+    const tools = new ToolRegistry();
+    const session = new AgentSession({
+      config: { ...testConfig, provider: "openai" },
+      model,
+      tools,
+      approvalHandler: async () => ({ approved: true }),
+      store,
+      cwd: "/test",
+    });
+    let completed = false;
+    const controller = new AbortController();
+    for await (const e of session.run("안녕", controller.signal)) {
+      if (e.type === "turn-complete") completed = true;
+    }
+    expect(completed).toBe(true);
+
+    const sys = leadingSystemMessages(model);
+    expect(sys.length).toBe(2);
+    // 마커는 anthropic 키에만 — openai/google 등 다른 프로바이더 키엔 캐시 플래그가 없다
+    const po = sys[0]!.providerOptions as Record<string, unknown> | undefined;
+    expect(po?.anthropic).toBeDefined();
+    expect(Object.keys(po ?? {})).toEqual(["anthropic"]);
   });
 });
 
