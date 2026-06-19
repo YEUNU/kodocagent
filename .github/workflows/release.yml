@@ -50,3 +50,4 @@ jobs:
           cd - > /dev/null
           git tag "v$LOCAL"
           git push origin "v$LOCAL" || true
+          gh release create "v$LOCAL" --title "v$LOCAL" --generate-notes || true

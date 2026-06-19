@@ -275,10 +275,7 @@ describe("AgentSession — Anthropic prompt caching 구성", () => {
   });
 
   /** doStreamCalls[idx].prompt에서 선두의 연속된 system 메시지만 추출한다. */
-  function leadingSystemMessages(
-    model: LanguageModel,
-    callIdx = 0,
-  ): V3SystemMsg[] {
+  function leadingSystemMessages(model: LanguageModel, callIdx = 0): V3SystemMsg[] {
     const raw = model as unknown as import("ai/test").MockLanguageModelV3;
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const prompt = raw.doStreamCalls[callIdx]!.prompt as unknown as V3SystemMsg[];

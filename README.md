@@ -2,6 +2,8 @@
 
 **한국어 특화 문서 AI 에이전트** — HWP/HWPX/DOCX/XLSX 문서를 읽고 수정하며, 한국 법령을 확인해 문서를 검토·추천하는 터미널 에이전트.
 
+[English README](README.en.md)
+
 ---
 
 ## 설치
@@ -296,6 +298,29 @@ pnpm -r typecheck
 | Google | `gemini-3.5-flash` | `GOOGLE_GENERATIVE_AI_API_KEY` |
 
 환경변수가 `config.json`보다 우선합니다. BYOK(Bring Your Own Key) 방식으로 API 키를 직접 관리합니다.
+
+---
+
+## 프라이버시 · 데이터 처리
+
+kodocagent는 **자체 텔레메트리나 사용량 데이터를 수집하지 않습니다.** 작성자나 제3자에게 어떤 데이터도 전송되지 않습니다.
+
+데이터가 외부로 나가는 경로는 다음 두 가지뿐이며, 모두 에이전트 동작에 필요해 **사용자가 직접 설정한 대상으로만** 전송됩니다:
+
+- **LLM 프로바이더**(Anthropic / OpenAI / Google): API 키(BYOK)와 **문서 내용**(읽은 텍스트, 수정 요청 등)은 사용자가 선택한 프로바이더의 API로 전송됩니다. 문서를 다루려면 모델이 그 내용을 받아야 하므로 불가피합니다.
+- **MCP 법령 서버**: 사용자가 법령 기능을 켠 경우, 법령 조회에 필요한 검색어가 국가법령정보센터 Open API(또는 사용자가 추가한 MCP 서버)로 전송됩니다.
+
+키·세션 이력·백업·설정은 모두 로컬 `~/.kodocagent`에만 저장됩니다(`config.json`은 `0600` 권한). 어디에도 업로드되지 않습니다.
+
+> 요약: 문서 내용은 **사용자가 켠 LLM 프로바이더(및 켰을 경우 MCP 법령 서버)** 로만 전송됩니다. kodocagent 작성자에게는 전송되지 않습니다.
+
+---
+
+## 변경 이력 · 기여 · 보안
+
+- [변경 이력 (CHANGELOG.md)](CHANGELOG.md)
+- [기여 가이드 (CONTRIBUTING.md)](CONTRIBUTING.md)
+- [보안 정책 (SECURITY.md)](SECURITY.md)
 
 ---
 
