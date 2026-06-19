@@ -4,7 +4,9 @@ overrides:
   # exceljs는 uuid v4 API만 사용 → 11.x 호환 (moderate 취약점 해소)
   uuid: ">=11.1.1"
   # electron>@electron/get>undici 전이의존 high 취약점 해소 (빌드툴 한정)
-  undici: ">=7.28.0"
+  # 상한 <8: jsdom(테스트 환경)이 undici 7.x의 lib/handler/wrap-handler.js에 의존 —
+  # undici 8은 해당 파일을 제거해 jsdom 로딩이 깨진다. 7.28.0이 취약점 픽스와 jsdom 양쪽 충족.
+  undici: ">=7.28.0 <8"
 allowBuilds:
   esbuild: true
   electron: true
