@@ -9,7 +9,7 @@ overrides:
   undici: '>=7.28.0 <8'
 
 patchedDependencies:
-  kordoc@3.1.1: b8fa642c5dd39c13b725ec317e098bd3241fa83d4732aa154d2110d8eac55da6
+  kordoc@3.4.1: bf61e0ebb270a0e5ac2d5f93db5ef91040c8dca90ca340ac89bf4f2830a4e286
 
 importers:
 
@@ -73,8 +73,8 @@ importers:
         specifier: ^4.4.0
         version: 4.4.0
       kordoc:
-        specifier: ^3.1.1
-        version: 3.1.1(patch_hash=b8fa642c5dd39c13b725ec317e098bd3241fa83d4732aa154d2110d8eac55da6)(pdfjs-dist@5.7.284)
+        specifier: ^3.4.1
+        version: 3.4.1(patch_hash=bf61e0ebb270a0e5ac2d5f93db5ef91040c8dca90ca340ac89bf4f2830a4e286)(pdfjs-dist@5.7.284)
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -147,8 +147,8 @@ importers:
         specifier: ^3.10.1
         version: 3.10.1
       kordoc:
-        specifier: ^3.1.1
-        version: 3.1.1(patch_hash=b8fa642c5dd39c13b725ec317e098bd3241fa83d4732aa154d2110d8eac55da6)(pdfjs-dist@5.7.284)
+        specifier: ^3.4.1
+        version: 3.4.1(patch_hash=bf61e0ebb270a0e5ac2d5f93db5ef91040c8dca90ca340ac89bf4f2830a4e286)(pdfjs-dist@5.7.284)
       sanitize-html:
         specifier: ^2.17.5
         version: 2.17.5
@@ -2770,8 +2770,8 @@ packages:
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
 
-  kordoc@3.1.1:
-    resolution: {integrity: sha512-X0eYxXmszuJao5i4/DvhSDhg0U7gdZf81KRndS0AfrxmeAz1ipzdPAAxpPpz5i5njbKeG20dRxnRmmm7Bg/32g==}
+  kordoc@3.4.1:
+    resolution: {integrity: sha512-Jvuh7EpnfaeBGUjSQQbrVQ36iSl61IZ2aKXvaTeW9hcTxG0TVL7TLdoUHobL3L5WgPtTHcFR643V2o/iZZ3m0w==}
     engines: {node: '>=18'}
     hasBin: true
     peerDependencies:
@@ -6641,7 +6641,7 @@ snapshots:
     dependencies:
       json-buffer: 3.0.1
 
-  kordoc@3.1.1(patch_hash=b8fa642c5dd39c13b725ec317e098bd3241fa83d4732aa154d2110d8eac55da6)(pdfjs-dist@5.7.284):
+  kordoc@3.4.1(patch_hash=bf61e0ebb270a0e5ac2d5f93db5ef91040c8dca90ca340ac89bf4f2830a4e286)(pdfjs-dist@5.7.284):
     dependencies:
       '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
       '@xmldom/xmldom': 0.9.10
