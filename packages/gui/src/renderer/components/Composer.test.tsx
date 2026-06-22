@@ -44,8 +44,8 @@ describe("Composer — 전송", () => {
     expect(onSend).not.toHaveBeenCalled();
     await userEvent.type(ta, "{Enter}");
     expect(onSend).toHaveBeenCalledTimes(1);
-    expect(onSend.mock.calls[0][0]).toContain("첫줄");
-    expect(onSend.mock.calls[0][0]).toContain("둘째줄");
+    expect(onSend.mock.calls[0]![0]).toContain("첫줄");
+    expect(onSend.mock.calls[0]![0]).toContain("둘째줄");
   });
 });
 

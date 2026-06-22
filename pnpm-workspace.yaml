@@ -13,6 +13,9 @@ allowBuilds:
   onnxruntime-node: true
   protobufjs: true
   sharp: true
+  # electron-winstaller: electron-builder의 win NSIS 빌드 시에만 쓰는 네이티브 헬퍼.
+  # 빌드/타입체크/테스트와 실제 패키징(별도 환경)에 불필요하므로 빌드 스크립트는 거부.
+  electron-winstaller: false
 minimumReleaseAgeExclude:
   - '@ai-sdk/anthropic@3.0.82'
   - '@ai-sdk/gateway@3.0.127'

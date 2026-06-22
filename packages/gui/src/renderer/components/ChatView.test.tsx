@@ -15,9 +15,7 @@ import { ChatView } from "./ChatView.js";
 
 // jsdom은 scrollIntoView를 구현하지 않는다 — 자동 스크롤 useEffect가 던지지 않도록 shim.
 beforeAll(() => {
-  if (!("scrollIntoView" in Element.prototype)) {
-    Element.prototype.scrollIntoView = () => {};
-  }
+  Element.prototype.scrollIntoView = () => {};
 });
 
 afterEach(cleanup);

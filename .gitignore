@@ -230,5 +230,7 @@ coverage/
 .env
 # electron-vite 빌드 출력 (biome lint 제외)
 packages/gui/out/
+# electron-builder 패키징 산출물 (dmg/nsis/AppImage) — 위 dist/ 규칙으로 이미 무시되나 명시
+packages/gui/dist/
 # kordoc PDF 파싱이 cwd에 만드는 OCR 임시 산출물
 .kordoc_ocr_tmp/

@@ -83,7 +83,7 @@ describe("Onboarding — 저장/건너뛰기 동작", () => {
     await userEvent.click(screen.getByRole("button", { name: /저장하고 시작/ }));
 
     await waitFor(() => expect(saveMock).toHaveBeenCalledTimes(1));
-    const arg = saveMock.mock.calls[0][0];
+    const arg = saveMock.mock.calls[0]![0];
     expect(arg.provider).toBe("anthropic");
     expect(arg.apiKeys.anthropic).toBe("sk-ant-xyz");
     expect(arg.apiKeys.openai).toBeUndefined();

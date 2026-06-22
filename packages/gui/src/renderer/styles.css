@@ -258,6 +258,10 @@ body,
   gap: 8px;
   color: var(--text-muted);
 }
+/* "diff" 탭: 캔버스 안에서 직접 렌더되므로 여백을 준다(iframe과 달리 100% 채우지 않음). */
+.diff-pane {
+  padding: 16px 20px;
+}
 .approx {
   display: inline-flex;
   align-items: center;

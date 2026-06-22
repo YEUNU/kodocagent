@@ -81,6 +81,12 @@ export function App(): React.ReactElement {
       .finally(() => setPreviewLoading(false));
   }, []);
 
+  // 변경본 탭: 스테이징된 결과물(절대 경로)을 읽기 전용으로 렌더. 새 IPC 없이 doc.preview 재사용.
+  const loadStagedPreview = useCallback(
+    (stagedPath: string): Promise<DocPreviewResult> => window.kodoc.doc.preview(stagedPath),
+    [],
+  );
+
   // config 초기 로드
   useEffect(() => {
     if (typeof window.kodoc === "undefined") return;
@@ -379,6 +385,13 @@ export function App(): React.ReactElement {
       ? Math.min(100, Math.round((lastInputTokens / CONTEXT_WINDOW) * 100))
       : null;
 
+  // 변경본/diff 탭: 대기 중 제안이 현재 활성 문서를 대상으로 할 때만 미리보기에 전달한다.
+  // (targetPath는 상대/절대가 섞일 수 있어 파일명 기준으로 매칭)
+  const previewProposal =
+    pendingProposal && activeFile && basename(pendingProposal.targetPath) === activeFile.name
+      ? pendingProposal
+      : null;
+
   if (configMissing) {
     return (
       <Onboarding
@@ -420,6 +433,8 @@ export function App(): React.ReactElement {
           activeName={activeFile?.name ?? null}
           preview={preview}
           loading={previewLoading}
+          proposal={previewProposal}
+          onRequestStagedPreview={loadStagedPreview}
         />
         <section className="pane">
           <div className="pane__header">

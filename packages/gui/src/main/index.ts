@@ -10,7 +10,11 @@
 import { join } from "node:path";
 import { logger } from "@kodocagent/shared";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import electronUpdater from "electron-updater";
 import { AgentBridge, type SetupValues } from "./agent-bridge.js";
+
+// electron-updater는 CommonJS default export(`{ autoUpdater }`)만 제공 → named import 대신 구조분해.
+const { autoUpdater } = electronUpdater;
 
 let mainWindow: BrowserWindow | null = null;
 let bridge: AgentBridge | null = null;
@@ -55,6 +59,32 @@ function installCrashHandlers(): void {
       stack: reason instanceof Error ? reason.stack : undefined,
     });
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 자동 업데이트 (electron-updater)
+//
+// 프라이버시: 업데이트 확인은 패키징된 앱(app.isPackaged)에서만, GitHub Releases를
+// 대상으로만 수행한다. 텔레메트리/외부 분석 전송은 추가하지 않는다. dev/test 환경
+// (app.isPackaged === false)에서는 아무 동작도 하지 않으므로 vitest·electron-vite dev에
+// 영향이 없다. 업데이트 점검 실패는 logger로 삼키고 절대 크래시시키지 않는다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function maybeCheckForUpdates(): void {
+  if (!app.isPackaged) return; // dev/test 무영향
+  try {
+    autoUpdater.logger = null; // electron-updater 내부 콘솔 로깅 비활성(우리 logger만 사용)
+    autoUpdater.checkForUpdatesAndNotify().catch((err: unknown) => {
+      logger.warn("autoUpdater.checkForUpdatesAndNotify failed", {
+        message: err instanceof Error ? err.message : String(err),
+      });
+    });
+  } catch (err: unknown) {
+    // 동기 예외(설정/플랫폼 문제)도 크래시로 번지지 않게 삼킨다.
+    logger.warn("autoUpdater setup failed", {
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 function createWindow(): void {
@@ -126,6 +156,9 @@ app.whenReady().then(async () => {
   mainWindow?.webContents.once("did-finish-load", () => {
     mainWindow?.webContents.send("cwd:changed", bridge?.getCwd() ?? defaultCwd);
   });
+
+  // 패키징된 앱에서만 업데이트 확인(GitHub Releases). dev/test 무영향.
+  maybeCheckForUpdates();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

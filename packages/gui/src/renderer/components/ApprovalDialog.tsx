@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Proposal } from "../types.js";
+import { ProposalDiff } from "./ProposalDiff.js";
 
 interface ApprovalDialogProps {
   proposal: Proposal;
@@ -65,193 +66,6 @@ function CheckIcon(): React.ReactElement {
       <path d="M5 12.5 10 17 19 7" />
     </svg>
   );
-}
-
-// ── Diff renderers ─────────────────────────────────────────────────────────
-
-/** Parse a markdown pipe-table string into header row + data rows (array of string[]). */
-function parseMarkdownTable(diff: string): { headers: string[]; rows: string[][] } | null {
-  const lines = diff
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-
-  if (lines.length === 0) return null;
-
-  // All lines must start/end with "|" for a markdown table
-  const firstLine = lines[0];
-  if (!firstLine?.startsWith("|")) return null;
-
-  const splitRow = (line: string): string[] =>
-    line
-      .replace(/^\|/, "")
-      .replace(/\|$/, "")
-      .split("|")
-      .map((c) => c.trim());
-
-  const isSeparator = (line: string) => /^\|[\s|:-]+\|$/.test(line);
-
-  const dataLines = lines.filter((l) => !isSeparator(l));
-  if (dataLines.length < 2) return null;
-
-  const headerLine = dataLines[0];
-  if (!headerLine) return null;
-  const headers = splitRow(headerLine);
-  const rows = dataLines.slice(1).map(splitRow);
-
-  return { headers, rows };
-}
-
-/** Render markdown table (cell-edit / form-fill / form-object) as <table className="doc-table">. */
-function renderMarkdownTable(diff: string): React.ReactNode {
-  const parsed = parseMarkdownTable(diff);
-  if (!parsed) {
-    return <pre className="diff">{renderDiffLines(diff)}</pre>;
-  }
-
-  const { headers, rows } = parsed;
-  const lastColIdx = headers.length - 1;
-
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <div className="paper" style={{ padding: "16px 20px" }}>
-        <table className="doc-table">
-          <thead>
-            <tr>
-              {headers.map((h, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: 헤더 열은 정렬 없음
-                <th key={i} style={{ textAlign: "left" }}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, ri) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: 데이터 행은 정렬 없음
-              <tr key={ri}>
-                {row.map((cell, ci) => {
-                  const isChanged = ci === lastColIdx;
-                  return (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: 셀은 정렬 없음
-                    <td key={ci} className={isChanged ? "cell--changed" : undefined}>
-                      {cell}
-                    </td>
-                  );
-                })}
-                {/* pad missing cells */}
-                {row.length < headers.length &&
-                  Array.from({ length: headers.length - row.length }).map((_, pi) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: 패딩 셀
-                    <td key={`pad-${pi}`} />
-                  ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-/** Parse redact-pii diff format:
- *  Line 0: "개인정보 N건 비식별 처리" (summary — unused here, shown in proposal.summary)
- *  Lines 1+: "- {타입}: {N}건 → {마스킹예시}"
- */
-interface PiiEntry {
-  type: string;
-  count: string;
-  example: string;
-}
-
-function parsePiiDiff(diff: string): PiiEntry[] {
-  const entries: PiiEntry[] = [];
-  for (const line of diff.split("\n")) {
-    const trimmed = line.replace(/^-\s*/, "").trim();
-    // "전화번호: 2건 → 010-****-1234"
-    const match = trimmed.match(/^(.+?):\s*(\d+)건\s*→\s*(.+)$/);
-    if (match?.[1] && match[2] && match[3]) {
-      entries.push({ type: match[1].trim(), count: match[2], example: match[3].trim() });
-    }
-  }
-  return entries;
-}
-
-function renderPiiDiff(diff: string): React.ReactNode {
-  const entries = parsePiiDiff(diff);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-      {/* Honesty banner */}
-      <div className="banner banner--warn">
-        <AlertIcon />
-        <span>원문 값은 표시하지 않습니다 — 유형·위치·마스킹 결과만</span>
-      </div>
-
-      {/* PII chips */}
-      {entries.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-          {entries.map((entry, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: PII 항목은 정렬 없음
-            <span key={i} className="chip chip--pii">
-              {entry.type} {entry.count}건
-              {entry.example && (
-                <>
-                  {" "}
-                  <code style={{ fontFamily: "var(--font-mono)", fontSize: "var(--t-xs)" }}>
-                    {entry.example}
-                  </code>
-                </>
-              )}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Fallback: if no entries parsed, show raw diff */}
-      {entries.length === 0 && diff.trim() && <pre className="diff">{renderDiffLines(diff)}</pre>}
-    </div>
-  );
-}
-
-/** Unified diff / plain text renderer. */
-function renderDiffLines(diff: string): React.ReactNode {
-  if (!diff) {
-    return (
-      <span className="diff__line diff__line--ctx" key="empty">
-        (변경 내용 없음){"\n"}
-      </span>
-    );
-  }
-  return diff.split("\n").map((line, i) => {
-    let cls = "diff__line diff__line--ctx";
-    if (line.startsWith("+")) cls = "diff__line diff__line--add";
-    else if (line.startsWith("-")) cls = "diff__line diff__line--remove";
-    else if (line.startsWith("@@")) cls = "diff__line diff__line--hunk";
-    return (
-      // biome-ignore lint/suspicious/noArrayIndexKey: diff 라인은 정렬 없음 — index가 안정 키
-      <span className={cls} key={i}>
-        {line}
-        {"\n"}
-      </span>
-    );
-  });
-}
-
-/** Top-level diff dispatcher by kind and diff format. */
-function renderDiff(kind: string, diff: string): React.ReactNode {
-  if (kind === "redact-pii") {
-    return renderPiiDiff(diff);
-  }
-
-  // Markdown table format: cell-edit, form-fill, form-object (and sheet-edit if tabular)
-  const isMarkdownTable = diff.trimStart().startsWith("|");
-  if (isMarkdownTable) {
-    return renderMarkdownTable(diff);
-  }
-
-  // Unified diff / plain text
-  return <pre className="diff">{renderDiffLines(diff)}</pre>;
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
@@ -357,7 +171,7 @@ export function ApprovalDialog({ proposal, onRespond }: ApprovalDialogProps): Re
           <p className="t-sm">{summary}</p>
 
           <div className="h-section">변경 내용</div>
-          {renderDiff(kind, diff ?? "")}
+          <ProposalDiff kind={kind} diff={diff ?? ""} />
 
           <span className="safe-note">
             <LockIcon />

@@ -150,8 +150,8 @@ describe("ApprovalDialog — 포커스 트랩", () => {
     // keydown 리스너는 .modal 컨테이너에 붙어 있으므로 그 내부 요소에서 발화시킨다.
     const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>(".modal button"));
     expect(buttons.length).toBeGreaterThanOrEqual(2);
-    const first = buttons[0];
-    const last = buttons[buttons.length - 1];
+    const first = buttons[0]!;
+    const last = buttons[buttons.length - 1]!;
     last.focus();
     expect(document.activeElement).toBe(last);
     // 마지막에서 Tab → 첫 요소로 래핑(이벤트는 모달 내부에서 버블링)
@@ -162,8 +162,8 @@ describe("ApprovalDialog — 포커스 트랩", () => {
   it("첫 요소에서 Shift+Tab을 누르면 마지막 요소로 순환한다", () => {
     render(<ApprovalDialog proposal={makeProposal()} onRespond={vi.fn()} />);
     const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>(".modal button"));
-    const first = buttons[0];
-    const last = buttons[buttons.length - 1];
+    const first = buttons[0]!;
+    const last = buttons[buttons.length - 1]!;
     first.focus();
     fireEvent.keyDown(first, { key: "Tab", shiftKey: true });
     expect(document.activeElement).toBe(last);

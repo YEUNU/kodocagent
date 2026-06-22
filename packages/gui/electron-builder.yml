@@ -1,0 +1,58 @@
+# electron-builder 설정 — kodocagent 데스크톱 앱 패키징/배포
+#
+# 실행 방법(로컬, 미서명):  pnpm --filter @kodocagent/gui pack   (dist/ 에 미서명 산출)
+# 배포(서명·공증 필요):      pnpm --filter @kodocagent/gui publish:gui
+#
+# 코드사이닝/공증은 사용자 Apple Developer ID / Windows 코드사이닝 인증서가 필요하며,
+# 아래 mac.* 의 서명 관련 키는 주석(자리표시자)으로 두었다. 인증서 없이도 `pack`으로
+# 미서명 로컬 빌드가 가능하도록 기본값은 서명을 강제하지 않는다.
+# 자세한 절차·필요 env는 docs/RELEASE-GUI.md 참고.
+
+appId: com.kodocagent.desktop
+productName: kodocagent
+
+# electron-vite 번들 출력(out/)을 앱 소스로, 패키징 산출물은 dist/ 로.
+directories:
+  output: dist
+  buildResources: assets
+
+# 패키징에 포함할 파일 — electron-vite가 생성한 out/ 와 package.json.
+files:
+  - out/**/*
+  - package.json
+
+# 자동 업데이트/배포 대상 — GitHub Releases.
+publish:
+  provider: github
+  owner: YEUNU
+  repo: kodocagent
+
+# ── macOS ──────────────────────────────────────────────────────────────────
+mac:
+  category: public.app-category.productivity
+  target:
+    - dmg
+  # 문서/PII 앱이므로 강화된 런타임 + 공증을 권장한다. 인증서가 준비되면 아래 주석을 해제.
+  # hardenedRuntime: true
+  # gatekeeperAssess: false
+  # entitlements: assets/entitlements.mac.plist
+  # entitlementsInherit: assets/entitlements.mac.plist
+  # notarize 는 환경변수(APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID)로 구동.
+  # notarize: true
+
+# ── Windows ──────────────────────────────────────────────────────────────────
+win:
+  target:
+    - nsis
+  # win 코드사이닝은 WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD env 로 구동(인증서 준비 시).
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+
+# ── Linux (선택) ──────────────────────────────────────────────────────────────
+linux:
+  target:
+    - AppImage
+  category: Office
