@@ -8,6 +8,15 @@
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-06-23
+
+긴급 핫픽스 — 0.7.2 CLI는 시작 즉시 크래시하므로 **0.7.3 사용을 권장**합니다.
+
+### Fixed
+
+- **CLI 시작 크래시 핫픽스**: 번들에 인라인된 `iconv-lite`(→`safer-buffer`)의 동적 `require("buffer")`가 ESM 번들에서 `Dynamic require of "buffer" is not supported`로 실패하던 문제 수정. tsup 배너에 `createRequire`를 추가해 esbuild의 `__require` 셤이 실제 `require`를 사용하도록 함. (0.7.2 회귀 — 릴리스 워크플로가 번들 dist 실행을 검증하지 않아 누락됐고, CI의 `node dist/index.js --version` 게이트가 포착.)
+- **CI lint 게이트 복구**: `design/` 로컬 HTML 갤러리(미발행 참조물)를 Biome 검사에서 제외하고 코드 lint 위반을 정리. 누적된 미푸시 커밋이 첫 푸시에서 한꺼번에 검사되며 드러난 것.
+
 ## [0.7.2] - 2026-06-23
 
 안정성·보안 하드닝과 무손상(無損傷) 강화 위주의 릴리스입니다.
@@ -116,7 +125,8 @@
 
 - 검증된 코어: BYOK 3사(Anthropic/OpenAI/Google), 법령 MCP 실증, `compare_documents`, OIDC Trusted Publishing.
 
-[Unreleased]: https://github.com/YEUNU/kodocagent/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/YEUNU/kodocagent/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/YEUNU/kodocagent/releases/tag/v0.7.3
 [0.7.2]: https://github.com/YEUNU/kodocagent/releases/tag/v0.7.2
 [0.7.1]: https://github.com/YEUNU/kodocagent/releases/tag/v0.7.1
 [0.7.0]: https://github.com/YEUNU/kodocagent/releases/tag/v0.7.0

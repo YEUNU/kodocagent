@@ -76,7 +76,9 @@ function decodeGarbageScore(s: string): number {
 /** 한국어 문서에 흔히 등장하는 코드포인트 범위인지. */
 function isCommonDocChar(c: number): boolean {
   return (
-    c === 0x09 || c === 0x0a || c === 0x0d || // 탭/개행
+    c === 0x09 ||
+    c === 0x0a ||
+    c === 0x0d || // 탭/개행
     (c >= 0x20 && c <= 0x7e) || // ASCII 인쇄가능
     (c >= 0xac00 && c <= 0xd7a3) || // 한글 음절
     (c >= 0x1100 && c <= 0x11ff) || // 한글 자모

@@ -301,10 +301,7 @@ export function restoreCollapsedSpaces(markdown: string, paragraphTexts: string[
 }
 
 /** restoreCollapsedSpaces 의 blocks 판 — form 필드·blocksToMarkdown 일관성용. @returns 변경 여부 */
-export function restoreCollapsedSpacesBlocks(
-  blocks: IRBlock[],
-  paragraphTexts: string[],
-): boolean {
+export function restoreCollapsedSpacesBlocks(blocks: IRBlock[], paragraphTexts: string[]): boolean {
   const slots = collectBlockTextSlots(blocks);
   const used = new Set<number>();
   const rawSet = new Set(paragraphTexts.map((p) => p.trim()));
