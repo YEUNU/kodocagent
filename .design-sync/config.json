@@ -1,0 +1,6 @@
+{
+  "projectId": "fcfd7109-602e-4bab-9d46-47a24f9acf54",
+  "projectName": "kodocagent GUI",
+  "shape": "off-script-gallery",
+  "note": "design/ 정적 HTML @dsCard 갤러리를 직접 업로드한다(빌드 가능한 컴포넌트 라이브러리/Storybook 없음 → converter 미사용). 카드 = design/**/*.html(@dsCard 마커), 스타일 = design/assets/ds.css, 진입 = styles.css(@import assets/ds.css)."
+}
