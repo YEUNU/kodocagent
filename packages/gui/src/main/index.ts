@@ -196,6 +196,16 @@ function registerIpc(): void {
     bridge?.abort();
   });
 
+  /** chat.compare — 키가 있는 여러 프로바이더 응답 비교 (읽기 전용) */
+  ipcMain.handle("chat:compare", async (_event, prompt: string, documentPath?: string) => {
+    return (
+      (await bridge?.compareProviders(prompt, documentPath)) ?? {
+        ok: false as const,
+        error: "세션이 초기화되지 않았습니다.",
+      }
+    );
+  });
+
   /** approval.respond */
   ipcMain.on(
     "approval:respond",

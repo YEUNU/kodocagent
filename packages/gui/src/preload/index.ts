@@ -10,6 +10,7 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type {
   BackupEntry,
+  CompareResponse,
   DocPreviewResult,
   FileEntry,
   SerializedAgentEvent,
@@ -26,6 +27,8 @@ export interface KodocApi {
     onEvent: (cb: (ev: SerializedAgentEvent) => void) => () => void;
     /** 현재 턴 중단 */
     abort: () => void;
+    /** 키가 있는 여러 프로바이더 응답 비교 (읽기 전용). documentPath 주면 그 문서를 맥락으로 포함 */
+    compare: (prompt: string, documentPath?: string) => Promise<CompareResponse>;
   };
   approval: {
     /** 승인 응답 */
@@ -78,6 +81,8 @@ const api: KodocApi = {
     abort: () => {
       ipcRenderer.send("chat:abort");
     },
+    compare: (prompt: string, documentPath?: string) =>
+      ipcRenderer.invoke("chat:compare", prompt, documentPath),
   },
   approval: {
     respond: (proposalId: string, approved: boolean, reason?: string) => {

@@ -100,12 +100,30 @@ export function formatToolCallSummary(toolName: string, args: unknown): string {
   return full.length > MAX_LEN ? `${full.slice(0, MAX_LEN)}…` : full;
 }
 
+/** 멀티 프로바이더 비교 1건 결과 (preload/core와 일치) */
+export interface ProviderCompareResult {
+  provider: string;
+  model: string;
+  ok: boolean;
+  text?: string;
+  error?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  ms: number;
+}
+
+/** chat.compare 응답 */
+export type CompareResponse =
+  | { ok: true; results: ProviderCompareResult[] }
+  | { ok: false; error: string };
+
 /** window.kodoc API 타입 (preload와 일치) */
 export interface KodocApi {
   chat: {
     send: (text: string) => void;
     onEvent: (cb: (ev: SerializedAgentEvent) => void) => () => void;
     abort: () => void;
+    compare: (prompt: string, documentPath?: string) => Promise<CompareResponse>;
   };
   approval: {
     respond: (proposalId: string, approved: boolean, reason?: string) => void;

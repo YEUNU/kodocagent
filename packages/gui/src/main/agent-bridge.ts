@@ -10,10 +10,12 @@
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, isAbsolute, join } from "node:path";
-import type { AgentEvent, AgentSessionOptions } from "@kodocagent/core";
+import type { AgentEvent, AgentSessionOptions, ProviderComparisonResult } from "@kodocagent/core";
 import {
   AgentSession,
+  compareProviders,
   createModel,
+  keyedProviders,
   loadConfig,
   loadMcpConfig,
   McpManager,
@@ -44,6 +46,14 @@ import {
 
 /** IPC로 전달 가능한 직렬화된 AgentEvent */
 export type SerializedAgentEvent = AgentEvent;
+
+/** 멀티 프로바이더 비교 1건 결과 (IPC 직렬화용 — core 타입 재노출) */
+export type { ProviderComparisonResult };
+
+/** chat.compare 결과 — 성공이면 results, 실패(키 부족 등)면 error */
+export type CompareResponse =
+  | { ok: true; results: ProviderComparisonResult[] }
+  | { ok: false; error: string };
 
 /** config.get() 응답 — 키 값은 절대 포함하지 않음 */
 export interface ConfigSnapshot {
@@ -270,6 +280,32 @@ export class AgentBridge {
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
+  }
+
+  /**
+   * 멀티 프로바이더 비교: 같은 질문을 키가 있는 여러 프로바이더에 읽기전용(도구·편집 없음)으로
+   * 병렬 전송한다. documentPath 가 주어지면 그 문서 본문(markdown)을 맥락으로 함께 보낸다.
+   * 키가 2개 미만이면 비교 의미가 없으므로 error 를 반환한다. 원본은 절대 변경하지 않는다.
+   */
+  async compareProviders(prompt: string, documentPath?: string): Promise<CompareResponse> {
+    if (!this.config) this.config = await loadConfig();
+    if (keyedProviders(this.config).length < 2) {
+      return {
+        ok: false,
+        error: "비교하려면 API 키가 2개 이상 필요합니다 (Claude·OpenAI·Gemini 중 둘 이상).",
+      };
+    }
+    let documentText: string | undefined;
+    if (documentPath) {
+      try {
+        const preview = await this.previewDocument(documentPath);
+        if (preview.ok) documentText = preview.markdown;
+      } catch {
+        // 문서 읽기 실패 시 문서 없이 질문만 비교한다.
+      }
+    }
+    const results = await compareProviders(this.config, prompt, { documentText });
+    return { ok: true, results };
   }
 
   /**

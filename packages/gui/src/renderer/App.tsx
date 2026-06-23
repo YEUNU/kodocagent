@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApprovalDialog } from "./components/ApprovalDialog.js";
 import { ChatView } from "./components/ChatView.js";
+import { CompareDialog } from "./components/CompareDialog.js";
 import { Composer } from "./components/Composer.js";
 import { DocumentPreview } from "./components/DocumentPreview.js";
 import { FilePane } from "./components/FilePane.js";
@@ -14,6 +15,7 @@ import type {
   DocPreviewResult,
   FileEntry,
   Proposal,
+  ProviderCompareResult,
   SerializedAgentEvent,
 } from "./types.js";
 import { formatToolCallSummary } from "./types.js";
@@ -39,6 +41,14 @@ export function App(): React.ReactElement {
   const [model, setModel] = useState<string | null>(null);
   const [cwd, setCwd] = useState<string>("");
   const [configMissing, setConfigMissing] = useState(false);
+  // 키가 있는 프로바이더 수 (2개 이상이면 모델 비교 가능)
+  const [keyCount, setKeyCount] = useState(0);
+  const [compareState, setCompareState] = useState<{
+    prompt: string;
+    loading: boolean;
+    results: ProviderCompareResult[] | null;
+    error: string | null;
+  } | null>(null);
 
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [activeFile, setActiveFile] = useState<{ name: string; path: string } | null>(null);
@@ -94,6 +104,7 @@ export function App(): React.ReactElement {
       .get()
       .then((cfg) => {
         setModel(cfg.model);
+        setKeyCount(Object.values(cfg.hasKeys).filter(Boolean).length);
         if (!Object.values(cfg.hasKeys).some(Boolean)) {
           setConfigMissing(true);
           setAppState("config-missing");
@@ -307,6 +318,32 @@ export function App(): React.ReactElement {
     [appState],
   );
 
+  // 모델 비교: 같은 질문을 키 있는 여러 프로바이더에 읽기전용으로 보내 응답을 모달로 비교.
+  const handleCompare = useCallback(
+    (text: string) => {
+      if (appState === "running") return;
+      setCompareState({ prompt: text, loading: true, results: null, error: null });
+      window.kodoc.chat
+        .compare(text, activeFile?.path)
+        .then((res) =>
+          setCompareState(
+            res.ok
+              ? { prompt: text, loading: false, results: res.results, error: null }
+              : { prompt: text, loading: false, results: null, error: res.error },
+          ),
+        )
+        .catch((e: unknown) =>
+          setCompareState({
+            prompt: text,
+            loading: false,
+            results: null,
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+    },
+    [appState, activeFile],
+  );
+
   const handleAbort = useCallback(() => {
     window.kodoc.chat.abort();
     setAppState("idle");
@@ -451,11 +488,22 @@ export function App(): React.ReactElement {
       <Composer
         disabled={appState === "running" || appState === "config-missing"}
         running={appState === "running"}
+        canCompare={keyCount >= 2}
         onSend={handleSend}
         onAbort={handleAbort}
+        onCompare={handleCompare}
       />
       {pendingProposal && (
         <ApprovalDialog proposal={pendingProposal} onRespond={handleApprovalRespond} />
+      )}
+      {compareState && (
+        <CompareDialog
+          prompt={compareState.prompt}
+          loading={compareState.loading}
+          results={compareState.results}
+          error={compareState.error}
+          onClose={() => setCompareState(null)}
+        />
       )}
     </div>
   );
