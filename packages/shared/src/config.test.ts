@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_MODELS,
+  hasAnyApiKey,
   KNOWN_MODELS,
   KodocConfigSchema,
   type Provider,
   parseConfigSafe,
+  resolveActiveProvider,
   resolveModel,
   SetupValuesSchema,
 } from "./config.js";
@@ -86,5 +88,64 @@ describe("SetupValuesSchema", () => {
   it("provider 필드가 없으면 거부한다", () => {
     const result = SetupValuesSchema.safeParse({ apiKeys: {} });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("resolveActiveProvider / hasAnyApiKey (셋 중 하나 자동 선택)", () => {
+  const ENV_VARS = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY"] as const;
+  const saved: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    for (const v of ENV_VARS) {
+      saved[v] = process.env[v];
+      delete process.env[v];
+    }
+  });
+  afterEach(() => {
+    for (const v of ENV_VARS) {
+      if (saved[v] === undefined) delete process.env[v];
+      else process.env[v] = saved[v];
+    }
+  });
+
+  it("키가 하나도 없으면 null, hasAnyApiKey=false", () => {
+    const cfg = KodocConfigSchema.parse({});
+    expect(resolveActiveProvider(cfg)).toBeNull();
+    expect(hasAnyApiKey(cfg)).toBe(false);
+  });
+
+  it("설정된 provider 에 키가 있으면 그대로 사용한다", () => {
+    const cfg = KodocConfigSchema.parse({
+      provider: "anthropic",
+      apiKeys: { anthropic: "k", openai: null, google: null },
+    });
+    expect(resolveActiveProvider(cfg)).toBe("anthropic");
+    expect(hasAnyApiKey(cfg)).toBe(true);
+  });
+
+  it("설정된 provider 에 키가 없고 다른 provider 에 있으면 자동 전환한다", () => {
+    const cfg = KodocConfigSchema.parse({
+      provider: "anthropic",
+      apiKeys: { anthropic: null, openai: "k", google: null },
+    });
+    expect(resolveActiveProvider(cfg)).toBe("openai");
+  });
+
+  it("env 변수 키도 인식한다", () => {
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = "envk";
+    const cfg = KodocConfigSchema.parse({ provider: "anthropic" });
+    expect(resolveActiveProvider(cfg)).toBe("google");
+    expect(hasAnyApiKey(cfg)).toBe(true);
+  });
+
+  it("자동 전환 시 사용자 model 은 무시하고 전환된 provider 기본 모델을 쓴다", () => {
+    const cfg = KodocConfigSchema.parse({
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      apiKeys: { anthropic: null, openai: "k", google: null },
+    });
+    const active = resolveActiveProvider(cfg);
+    expect(active).toBe("openai");
+    expect(resolveModel(cfg, active ?? "anthropic")).toBe(DEFAULT_MODELS.openai);
   });
 });

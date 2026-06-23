@@ -105,10 +105,32 @@ export function parseConfigSafe(raw: unknown): ConfigLoadResult {
   return { ok: true, config: result.data };
 }
 
-export function resolveModel(config: KodocConfig): string {
-  return config.model ?? DEFAULT_MODELS[config.provider];
+export function resolveModel(config: KodocConfig, provider: Provider = config.provider): string {
+  // 사용자가 명시한 모델(config.model)은 그 모델이 속한 provider(=설정된 provider)일 때만
+  // 적용한다. provider 가 자동 전환된 경우(설정 provider 에 키가 없어 다른 provider 사용)엔
+  // 그 provider 의 기본 모델을 쓴다 — 다른 provider 에 엉뚱한 모델 ID 를 넘기지 않도록.
+  if (config.model && provider === config.provider) return config.model;
+  return DEFAULT_MODELS[provider];
 }
 
 export function resolveApiKey(config: KodocConfig, provider: Provider): string | null {
   return process.env[PROVIDER_ENV_VARS[provider]] ?? config.apiKeys[provider];
+}
+
+/** 키가 하나라도(env 또는 config) 있으면 true. */
+export function hasAnyApiKey(config: KodocConfig): boolean {
+  return PROVIDERS.some((p) => !!resolveApiKey(config, p));
+}
+
+/**
+ * 실제로 사용할 프로바이더를 고른다(BYOK — 키가 있는 것을 자동 선택).
+ * 설정된 provider 에 키가 있으면 그대로, 없으면 PROVIDERS 우선순위로 키가 있는 첫 프로바이더.
+ * 셋 다 키가 없으면 null.
+ */
+export function resolveActiveProvider(config: KodocConfig): Provider | null {
+  if (resolveApiKey(config, config.provider)) return config.provider;
+  for (const p of PROVIDERS) {
+    if (resolveApiKey(config, p)) return p;
+  }
+  return null;
 }

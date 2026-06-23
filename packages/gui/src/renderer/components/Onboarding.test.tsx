@@ -66,11 +66,12 @@ describe("Onboarding — 저장 활성화 조건", () => {
     expect(saveBtn.disabled).toBe(false);
   });
 
-  it("anthropic 선택 상태에서 openai 키만 입력하면 여전히 비활성", async () => {
+  it("anthropic 선택 상태라도 openai 키만 입력하면 저장 활성화된다 (셋 중 하나면 충분)", async () => {
     render(<Onboarding onComplete={vi.fn()} />);
-    await userEvent.type(screen.getByLabelText(/OpenAI API 키/), "sk-openai");
     const saveBtn = screen.getByRole("button", { name: /저장하고 시작/ }) as HTMLButtonElement;
     expect(saveBtn.disabled).toBe(true);
+    await userEvent.type(screen.getByLabelText(/OpenAI API 키/), "sk-openai");
+    expect(saveBtn.disabled).toBe(false);
   });
 });
 

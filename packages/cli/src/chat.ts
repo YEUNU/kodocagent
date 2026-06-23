@@ -24,7 +24,14 @@ import {
 } from "@kodocagent/core";
 import { cleanSessionStaging, createDocTools } from "@kodocagent/doc-tools";
 import type { KodocConfig } from "@kodocagent/shared";
-import { KNOWN_MODELS, PROVIDERS, type Provider, resolveApiKey } from "@kodocagent/shared";
+import {
+  KNOWN_MODELS,
+  PROVIDERS,
+  type Provider,
+  resolveActiveProvider,
+  resolveApiKey,
+  resolveModel,
+} from "@kodocagent/shared";
 import chalk from "chalk";
 import { createCliApprovalHandler } from "./approve.js";
 import { setActiveSessionId } from "./fatal-cleanup.js";
@@ -183,8 +190,10 @@ export async function runChat(opts: {
   });
 
   process.stdout.write(chalk.bold(`kodocagent 채팅 시작 (/help로 도움말)\n`));
+  // 실제 사용될 provider(키 있는 것 자동 선택)와 모델을 표시한다.
+  const activeProvider = resolveActiveProvider(config) ?? config.provider;
   process.stdout.write(
-    chalk.dim(`프로바이더: ${config.provider}, 모델: ${config.model ?? "(기본값)"}\n\n`),
+    chalk.dim(`프로바이더: ${activeProvider}, 모델: ${resolveModel(config, activeProvider)}\n\n`),
   );
   process.stdout.write(
     chalk.dim(

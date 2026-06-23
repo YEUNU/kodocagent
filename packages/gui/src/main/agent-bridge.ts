@@ -36,7 +36,9 @@ import {
   KODOC_PATHS,
   logger,
   PROVIDERS,
+  resolveActiveProvider,
   resolveApiKey,
+  resolveModel,
   SetupValuesSchema,
 } from "@kodocagent/shared";
 
@@ -198,10 +200,11 @@ export class AgentBridge {
     if (!this.config) {
       this.config = await loadConfig();
     }
+    const activeProvider = resolveActiveProvider(this.config) ?? this.config.provider;
     this.store = await SessionStore.create({
       cwd: this.cwd,
-      provider: this.config.provider,
-      model: this.config.model ?? "(기본값)",
+      provider: activeProvider,
+      model: resolveModel(this.config, activeProvider),
       createdAt: new Date().toISOString(),
     });
     this.session = null;
@@ -434,9 +437,11 @@ export class AgentBridge {
     for (const provider of ["anthropic", "openai", "google"] as const) {
       hasKeys[provider] = !!resolveApiKey(config, provider);
     }
+    // 실제 사용될 provider(키 있는 것 자동 선택)와 그 기본 모델을 표시한다.
+    const active = resolveActiveProvider(config);
     return {
-      provider: config.provider,
-      model: config.model,
+      provider: active ?? config.provider,
+      model: active ? resolveModel(config, active) : config.model,
       hasKeys,
     };
   }
@@ -464,6 +469,8 @@ export class AgentBridge {
         config.apiKeys[p] = k.trim();
       }
     }
+    // 선택한 provider 에 키가 없으면 키가 있는 provider 로 자동 보정한다(셋 중 하나면 충분).
+    config.provider = resolveActiveProvider(config) ?? config.provider;
     if (typeof values.lawApiKey === "string" && values.lawApiKey.trim()) {
       config.lawApiKey = values.lawApiKey.trim();
     }

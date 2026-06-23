@@ -29,9 +29,9 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
   const [showGoogleKey, setShowGoogleKey] = useState(false);
   const [showLawKey, setShowLawKey] = useState(false);
 
-  const selectedKey =
-    selected === "anthropic" ? anthropicKey : selected === "openai" ? openaiKey : googleKey;
-  const canSave = !saving && selectedKey.trim().length > 0;
+  // 셋 중 최소 하나의 키만 있으면 저장 가능. 입력한 제공자로 자동 동작한다(provider 자동 선택).
+  const anyKeyEntered = [anthropicKey, openaiKey, googleKey].some((k) => k.trim().length > 0);
+  const canSave = !saving && anyKeyEntered;
 
   function handleSave(): void {
     if (!canSave) return;
@@ -145,6 +145,10 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
                 </button>
               ))}
             </div>
+            <p style={{ marginTop: "6px", fontSize: "var(--t-sm)", color: "var(--text-muted)" }}>
+              기본으로 쓸 제공자입니다. 셋 중 <b>최소 하나</b>의 키만 입력하면 되고, 키를 넣은
+              제공자로 자동 동작합니다(여러 개 넣으면 기본 제공자 우선).
+            </p>
           </div>
 
           {/* API 키 입력 영역 */}
@@ -172,14 +176,14 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
                   Claude
                 </span>
                 {selected === "anthropic" ? (
-                  <span className="badge badge--accent">필수</span>
+                  <span className="badge badge--accent">기본</span>
                 ) : (
                   <span className="badge badge--neutral">선택</span>
                 )}
               </div>
               <div className="field-row" style={{ marginBottom: 0 }}>
                 <label className="field-label" htmlFor="key-anthropic">
-                  Claude API 키{selected === "anthropic" && <span className="req">*</span>}
+                  Claude API 키
                 </label>
                 <div style={{ position: "relative" }}>
                   <input
@@ -252,14 +256,14 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
                   OpenAI
                 </span>
                 {selected === "openai" ? (
-                  <span className="badge badge--accent">필수</span>
+                  <span className="badge badge--accent">기본</span>
                 ) : (
                   <span className="badge badge--neutral">선택</span>
                 )}
               </div>
               <div className="field-row" style={{ marginBottom: 0 }}>
                 <label className="field-label" htmlFor="key-openai">
-                  OpenAI API 키{selected === "openai" && <span className="req">*</span>}
+                  OpenAI API 키
                 </label>
                 <div style={{ position: "relative" }}>
                   <input
@@ -332,14 +336,14 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
                   Gemini
                 </span>
                 {selected === "google" ? (
-                  <span className="badge badge--accent">필수</span>
+                  <span className="badge badge--accent">기본</span>
                 ) : (
                   <span className="badge badge--neutral">선택</span>
                 )}
               </div>
               <div className="field-row" style={{ marginBottom: 0 }}>
                 <label className="field-label" htmlFor="key-google">
-                  Gemini API 키{selected === "google" && <span className="req">*</span>}
+                  Gemini API 키
                 </label>
                 <div style={{ position: "relative" }}>
                   <input
@@ -475,8 +479,8 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
             </div>
           </div>
 
-          {/* 선택한 제공자 키가 비어 있을 때 안내 */}
-          {selectedKey.trim().length === 0 && (
+          {/* 키가 하나도 없을 때 안내 — 셋 중 하나만 있으면 충분 */}
+          {!anyKeyEntered && (
             <div
               style={{
                 display: "flex",
@@ -490,9 +494,8 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
                 <circle cx="12" cy="12" r="9" />
                 <path d="M12 11v5M12 8h.01" />
               </svg>
-              선택된 제공자(
-              {selected === "anthropic" ? "Claude" : selected === "openai" ? "OpenAI" : "Gemini"}
-              )의 API 키를 입력하면 저장 버튼이 활성화됩니다.
+              Claude·OpenAI·Gemini 중 최소 하나의 API 키를 입력하면 저장됩니다. 입력한 제공자로 자동
+              동작합니다.
             </div>
           )}
         </div>
