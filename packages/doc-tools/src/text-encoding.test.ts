@@ -67,6 +67,28 @@ describe("decodeTextFile", () => {
     expect(result.encoding).toBe("utf-8");
     expect(result.text).toBe("Hello, World!");
   });
+
+  it("BOM 없는 UTF-16LE '가나다라' → cp949 모지바케 대신 UTF-16으로 디코딩", () => {
+    // BOM 없는 UTF-16은 fatal UTF-8 검증 실패 → 예전엔 무조건 cp949 폴백(모지바케).
+    // 이제 NUL 바이트 감지 후 LE/BE/cp949 중 가장 깨끗한 디코딩을 선택한다.
+    const s = "가나다라";
+    const le = Buffer.from(
+      Uint8Array.from([...s].flatMap((c) => [c.codePointAt(0)! & 0xff, c.codePointAt(0)! >> 8])),
+    );
+    const result = decodeTextFile(le);
+    expect(result.encoding).toBe("utf-16le");
+    expect(result.text).toBe(s);
+  });
+
+  it("BOM 없는 UTF-16BE도 올바르게 디코딩", () => {
+    const s = "한글ABC";
+    const be = Buffer.from(
+      Uint8Array.from([...s].flatMap((c) => [c.codePointAt(0)! >> 8, c.codePointAt(0)! & 0xff])),
+    );
+    const result = decodeTextFile(be);
+    expect(result.encoding).toBe("utf-16be");
+    expect(result.text).toBe(s);
+  });
 });
 
 // ─────────────────────────────────────────────────────────

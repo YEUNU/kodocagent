@@ -7,17 +7,18 @@ export interface PiiFinding {
 const PATTERNS: Array<{ type: string; re: RegExp; mask: (m: string) => string }> = [
   {
     type: "주민등록번호",
-    re: /\b\d{6}-[1-4]\d{6}\b/g,
+    // (?<![\d-])…(?![\d-]): 더 긴 하이픈-숫자열(차대번호·일련번호 등)의 일부면 매치 안 함.
+    re: /(?<![\d-])\d{6}-[1-4]\d{6}(?![\d-])/g,
     mask: (m) => `${m.slice(0, 8)}******`,
   },
   {
     type: "신용카드번호",
-    re: /\b\d{4}-\d{4}-\d{4}-\d{4}\b/g,
+    re: /(?<![\d-])\d{4}-\d{4}-\d{4}-\d{4}(?![\d-])/g,
     mask: (m) => `${m.slice(0, 4)}-****-****-${m.slice(-4)}`,
   },
   {
     type: "전화번호",
-    re: /\b0\d{1,2}-\d{3,4}-\d{4}\b/g,
+    re: /(?<![\d-])0\d{1,2}-\d{3,4}-\d{4}(?![\d-])/g,
     mask: (m) => {
       const p = m.split("-");
       return `${p[0]}-${"*".repeat((p[1] ?? "").length)}-${p[2]}`;

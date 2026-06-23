@@ -252,3 +252,22 @@ describe("summarizePii", () => {
     expect(summarizePii(findings)).toBe("전화번호 3건, 이메일 1건");
   });
 });
+
+describe("PII 과매칭 방지 — 더 긴 하이픈-숫자열의 일부는 마스킹하지 않는다", () => {
+  it("차대번호/자산 일련번호(4-4-4-4보다 긴 하이픈열)는 보존한다", () => {
+    const text = "자산 일련번호 0123-4567-8901-2345-6789 보관";
+    expect(redactText(text).text).toBe(text); // 변형 없음
+    expect(detectPii(text)).toHaveLength(0);
+  });
+
+  it("전화번호 형태가 더 긴 숫자열의 일부면 마스킹하지 않는다", () => {
+    const text = "코드 010-1234-5678-9999 참조";
+    expect(redactText(text).text).toBe(text);
+  });
+
+  it("진짜 단독 전화번호·카드번호·주민번호는 그대로 마스킹한다", () => {
+    expect(redactText("연락처 010-1234-5678 입니다").text).toContain("010-****-5678");
+    expect(redactText("카드 1234-5678-9012-3456 사용").text).toContain("1234-****-****-3456");
+    expect(redactText("주민 900101-1234567 확인").text).toContain("900101-1******");
+  });
+});

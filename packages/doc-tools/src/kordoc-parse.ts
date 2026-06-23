@@ -3,11 +3,13 @@
  *
  * 배경: kordoc(3.x; 3.4.1 포함)의 parse()/sanitizeText 는 도형/이미지 **대체텍스트**
  *   ("사각형입니다." 등)를 제거하는 정규식을 앵커 없이 전역(/g)으로 본문 전체에 적용한다.
- *   (3.4.1은 파서 경로만 룩비하인드로 고쳐졌고 sanitizeText 사본은 미수정 → 우리 patch가 보강.)
- *   그 결과 도형
- *   키워드(표·그림·원·별·선…)로 끝나는 **합성어**("목표입니다"의 표, "공원입니다"의 원,
- *   "발표입니다"의 표)의 꼬리를 본문 한가운데서 잘라낸다. → read_document 텍스트 무성
- *   손실 + patchHwpx 재조정 시 숨은 꼬리 중복(문서 손상).
+ *   그 결과 도형 키워드(표·그림·원·별·선…)+입니다 가 본문 어디에 있든 잘려나간다:
+ *   ① 한글합성어 꼬리("목표입니다"→"목", "발표입니다"→"발")
+ *   ② **숫자·공백 뒤 명사("총액은 1730000원입니다."→"총액은 1730000", "단위는 원입니다."→"단위는")**
+ *      — 금액 표현('…원입니다')이라 실문서 노출도가 높다.
+ *   → read_document 텍스트 무성 손실 + patchHwpx 재조정 시 숨은 꼬리 중복(문서 손상).
+ *   (3.4.1은 파서 경로만 룩비하인드로 고쳐졌으나 룩비하인드는 ①만 막고 ②는 못 막는다 →
+ *    우리 patch/가드는 **문단 선두 앵커(^)** 로 진짜 대체텍스트만 제거해 ①②를 모두 보존한다.)
  *
  * 레포 자체는 `patches/kordoc@3.4.1.patch`(룩비하인드)로 근본 수정돼 있으나, npm 에
  *   발행된 CLI 사용자는 unscoped kordoc 를 그대로 받으므로 패치가 닿지 않는다. 이 래퍼는
@@ -77,15 +79,24 @@ const SHAPE_ALT_KEYWORDS = [
   "OLE\\s?개체",
 ].join("|");
 
-/** kordoc 의 (버그) 전역 대체텍스트 제거 — 앵커 없음. */
+/** kordoc 의 (버그) 전역 대체텍스트 제거 — 앵커 없음(unpatched kordoc 의 최악 동작 모델). */
 export const BUGGY_SHAPE_STRIP = new RegExp(
   `(?:모서리가 둥근 |둥근 )?(?:${SHAPE_ALT_KEYWORDS})\\s?입니다\\.?`,
   "g",
 );
 
-/** 올바른 동작 — 선행 한글 음절이 있으면(=합성어 내부) 제거하지 않음. */
+/**
+ * 올바른 동작 — **문단 전체(^…$)** 가 도형 대체텍스트일 때만 제거한다.
+ * 도형/이미지 대체텍스트는 자체로 독립 단락("원입니다.")으로 놓이므로, 전체앵커면
+ * 진짜 대체텍스트만 제거하고 본문 중 키워드+입니다는 **위치 불문 전부 보존**한다:
+ *   - 중간/끝: "총액은 1730000원입니다.", "단위는 원입니다.", "목표입니다"
+ *   - **선두**: "표입니다 라고 그가 말했다.", "# 표입니다 정리" (fixed=전체보존 → buggy≠fixed →
+ *     가드가 raw 에서 복원). 선두 앵커(^)는 이 선두 본문을 못 살렸다(buggy===fixed → 복원 스킵).
+ * 트레이드오프: 선두 임베드 대체텍스트("원입니다. 본문")는 전체앵커가 안 잡아 누수 가능(드묾·
+ * 비무성). 무손상(본문 무성손실 0)을 누수보다 우선한다.
+ */
 export const FIXED_SHAPE_STRIP = new RegExp(
-  `(?<![가-힣])(?:모서리가 둥근 |둥근 )?(?:${SHAPE_ALT_KEYWORDS})\\s?입니다\\.?`,
+  `^(?:모서리가 둥근 |둥근 )?(?:${SHAPE_ALT_KEYWORDS})\\s?입니다\\.?$`,
   "g",
 );
 
@@ -149,6 +160,10 @@ function splitDecoration(line: string): { prefix: string; content: string } {
 export function restoreOverStrippedShapeText(markdown: string, paragraphTexts: string[]): string {
   const lines = markdown.split("\n");
   const used = new Set<number>();
+  // 날조 방지: 어떤 라인이 그 자체로 실재하는 완결 단락이면 절단이 아니므로 덮어쓰지 않는다.
+  // (예: "총액은 1730000" 단락과 "총액은 1730000원입니다." 단락이 공존할 때, 후자의 buggy
+  //  형태가 전자와 우연히 같아 전자에 '원입니다' 꼬리를 날조하는 것을 차단.)
+  const rawSet = new Set(paragraphTexts.map((p) => p.replace(/[ \t]+/g, " ").trim()));
   let changed = false;
 
   for (const raw of paragraphTexts) {
@@ -161,7 +176,9 @@ export function restoreOverStrippedShapeText(markdown: string, paragraphTexts: s
     for (let i = 0; i < lines.length; i++) {
       if (used.has(i)) continue;
       const { prefix, content } = splitDecoration(lines[i] ?? "");
-      if (content.trim() === buggy && content.trim() !== fixed) {
+      const normContent = content.replace(/[ \t]+/g, " ").trim();
+      if (rawSet.has(normContent)) continue; // 실재 완결 단락 — 덮어쓰기 금지(날조 방지)
+      if (normContent === buggy && normContent !== fixed) {
         lines[i] = prefix + fixed;
         used.add(i);
         changed = true;
@@ -218,6 +235,7 @@ function collectBlockTextSlots(
 export function restoreOverStrippedBlocks(blocks: IRBlock[], paragraphTexts: string[]): boolean {
   const slots = collectBlockTextSlots(blocks);
   const used = new Set<number>();
+  const rawSet = new Set(paragraphTexts.map((p) => p.replace(/[ \t]+/g, " ").trim()));
   let changed = false;
 
   for (const raw of paragraphTexts) {
@@ -228,9 +246,82 @@ export function restoreOverStrippedBlocks(blocks: IRBlock[], paragraphTexts: str
 
     for (let i = 0; i < slots.length; i++) {
       if (used.has(i)) continue;
-      const cur = slots[i]?.get().trim() ?? "";
+      const cur = (slots[i]?.get() ?? "").replace(/[ \t]+/g, " ").trim();
+      if (rawSet.has(cur)) continue; // 실재 완결 단락 — 덮어쓰기 금지(날조 방지)
       if (cur === buggy && cur !== fixed) {
         slots[i]?.set(fixed);
+        used.add(i);
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  return changed;
+}
+
+/** 공백만 다른지 비교용 — 모든 공백 제거. */
+const stripAllSpaces = (s: string): string => s.replace(/\s+/g, "");
+
+/**
+ * 공백 붕괴/결합 복원 — kordoc 가 본문 공백을 변형(다중공백 1칸 축약, 단음절 토큰 공백결합:
+ * "물 과 불"→"물과불")한 라인을 원본 단락의 공백으로 되돌린다.
+ *
+ * 안전성(핵심): **공백 제거 시 동일**한 raw 단락이 있고 실제 공백만 다를 때에만 복원한다.
+ *   → 비공백 문자는 절대 추가/삭제/변경되지 않으므로 손실·날조가 원천적으로 불가능하다
+ *     (최악의 오매칭이라도 공백 위치만 어긋남). 날조방지(실재 완결 단락 보호)도 적용.
+ */
+export function restoreCollapsedSpaces(markdown: string, paragraphTexts: string[]): string {
+  const lines = markdown.split("\n");
+  const used = new Set<number>();
+  const rawSet = new Set(paragraphTexts.map((p) => p.trim()));
+  let changed = false;
+
+  for (const raw of paragraphTexts) {
+    const target = raw.trim();
+    const key = stripAllSpaces(target);
+    if (!key || key === target) continue; // 내부 공백 없는 단락 — 복원할 것 없음
+
+    for (let i = 0; i < lines.length; i++) {
+      if (used.has(i)) continue;
+      const { prefix, content } = splitDecoration(lines[i] ?? "");
+      const c = content.trim();
+      if (!c || c === target) continue; // 이미 일치
+      if (rawSet.has(c)) continue; // 실재 완결 단락 — 덮어쓰기 금지
+      if (stripAllSpaces(c) === key) {
+        lines[i] = prefix + target;
+        used.add(i);
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  return changed ? lines.join("\n") : markdown;
+}
+
+/** restoreCollapsedSpaces 의 blocks 판 — form 필드·blocksToMarkdown 일관성용. @returns 변경 여부 */
+export function restoreCollapsedSpacesBlocks(
+  blocks: IRBlock[],
+  paragraphTexts: string[],
+): boolean {
+  const slots = collectBlockTextSlots(blocks);
+  const used = new Set<number>();
+  const rawSet = new Set(paragraphTexts.map((p) => p.trim()));
+  let changed = false;
+
+  for (const raw of paragraphTexts) {
+    const target = raw.trim();
+    const key = stripAllSpaces(target);
+    if (!key || key === target) continue;
+
+    for (let i = 0; i < slots.length; i++) {
+      if (used.has(i)) continue;
+      const c = (slots[i]?.get() ?? "").trim();
+      if (!c || c === target) continue;
+      if (rawSet.has(c)) continue;
+      if (stripAllSpaces(c) === key) {
+        slots[i]?.set(target);
         used.add(i);
         changed = true;
         break;
@@ -281,10 +372,13 @@ export async function parse(
   try {
     const paragraphTexts = await extractHwpxParagraphTexts(bytes);
     if (paragraphTexts.length === 0) return result; // hwpx 아님(docx 등) → 통과
-    const repaired = restoreOverStrippedShapeText(result.markdown, paragraphTexts);
+    // 1) 도형 대체텍스트 과제거 복원 → 2) 공백 붕괴/결합 복원 (마크다운, 순차 적용)
+    let repaired = restoreOverStrippedShapeText(result.markdown, paragraphTexts);
+    repaired = restoreCollapsedSpaces(repaired, paragraphTexts);
     // blocks 도 동일 규칙으로 제자리 복원(form 필드·blocksToMarkdown 등이 blocks 를 읽음).
     if (Array.isArray(result.blocks)) {
       restoreOverStrippedBlocks(result.blocks, paragraphTexts);
+      restoreCollapsedSpacesBlocks(result.blocks, paragraphTexts);
     }
     if (repaired !== result.markdown) {
       return { ...result, markdown: repaired };
