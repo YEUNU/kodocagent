@@ -1,6 +1,6 @@
 /* ============================================================================
    kodocagent — Design System (DS)
-   Theme: Dark neutral chrome + light "paper" document canvas.
+   Theme: Light modern workspace (white panels) + light "paper" document canvas.
    Single source of truth for tokens + base components.
    Every preview card links this file and composes these classes — do NOT
    redefine colors/spacing locally (that's how coherence drifts).
@@ -8,19 +8,19 @@
 
 /* ── Tokens ───────────────────────────────────────────────────────────── */
 :root {
-  /* Chrome — dark neutral slate (frames the document) */
-  --chrome-bg: #15171e; /* app base */
-  --chrome-surface: #1c1f28; /* panels */
-  --chrome-elevated: #242834; /* cards, dialogs, hovered rows */
-  --chrome-inset: #0f1115; /* inputs, code, sunken wells */
-  --chrome-border: #2b303c;
-  --chrome-border-strong: #3a4150;
+  /* Surfaces — light modern workspace (white panels on a soft grey canvas) */
+  --chrome-bg: #f6f7f9; /* app base / canvas behind paper */
+  --chrome-surface: #ffffff; /* panels, top bar, composer */
+  --chrome-elevated: #f1f3f5; /* hovered rows, secondary buttons, neutral badges */
+  --chrome-inset: #f4f6f8; /* inputs, wells, tabs, diff, gauges */
+  --chrome-border: #e6e8ec;
+  --chrome-border-strong: #d4d8de;
 
-  /* Text on chrome */
-  --text-strong: #f1f3f7;
-  --text: #c8cdd8;
-  --text-muted: #8b93a3;
-  --text-faint: #5f6675;
+  /* Text on surfaces (dark ink on light) */
+  --text-strong: #14171f;
+  --text: #3d4351;
+  --text-muted: #6b7280;
+  --text-faint: #9aa1ad;
 
   /* Paper — light document canvas (the "result", always light) */
   --paper: #ffffff;
@@ -35,18 +35,18 @@
   --accent: #4d84cf;
   --accent-hover: #3d6fb5;
   --accent-ink: #ffffff;
-  --accent-soft: rgba(77, 132, 207, 0.15);
-  --accent-line: rgba(77, 132, 207, 0.42);
+  --accent-soft: rgba(77, 132, 207, 0.1);
+  --accent-line: rgba(77, 132, 207, 0.32);
 
-  /* Semantic — on chrome (dark), muted (not neon "traffic-light") */
-  --add: #4fa386; /* insert / approve */
-  --add-soft: rgba(79, 163, 134, 0.15);
-  --remove: #d96b6b; /* delete / reject */
-  --remove-soft: rgba(217, 107, 107, 0.14);
-  --warn: #d3a142; /* caution / format-convert */
-  --warn-soft: rgba(211, 161, 66, 0.14);
-  --pii: #a07bc4; /* sensitive / PII (muted plum, distinct from add/remove) */
-  --pii-soft: rgba(160, 123, 196, 0.16);
+  /* Semantic — tuned to read on light surfaces (deeper than the old on-dark set) */
+  --add: #15935f; /* insert / approve */
+  --add-soft: rgba(21, 147, 95, 0.1);
+  --remove: #d6453f; /* delete / reject */
+  --remove-soft: rgba(214, 69, 63, 0.1);
+  --warn: #b9791b; /* caution / format-convert */
+  --warn-soft: rgba(185, 121, 27, 0.12);
+  --pii: #8a55b8; /* sensitive / PII (muted plum, distinct from add/remove) */
+  --pii-soft: rgba(138, 85, 184, 0.12);
 
   /* Semantic — on paper (light), for in-document diff/highlight */
   --p-add-bg: #e3f4ea;
@@ -57,18 +57,18 @@
   --p-pii-ink: #7e22ce;
   --p-find-bg: #fff3c4; /* search hit */
 
-  /* Radii */
-  --r-xs: 4px;
-  --r-sm: 6px;
+  /* Radii — a touch larger for the airy modern feel */
+  --r-xs: 5px;
+  --r-sm: 7px;
   --r-md: 10px;
   --r-lg: 14px;
   --r-pill: 999px;
 
-  /* Elevation */
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-2: 0 8px 28px rgba(0, 0, 0, 0.42);
-  --shadow-paper: 0 1px 3px rgba(20, 24, 33, 0.08), 0 8px 24px rgba(20, 24, 33, 0.06);
-  --scrim: rgba(0, 0, 0, 0.62); /* modal backdrop */
+  /* Elevation — soft, light-theme shadows */
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --shadow-2: 0 12px 32px rgba(16, 24, 40, 0.14);
+  --shadow-paper: 0 1px 3px rgba(16, 24, 40, 0.06), 0 8px 24px rgba(16, 24, 40, 0.05);
+  --scrim: rgba(20, 24, 33, 0.4); /* modal backdrop */
 
   /* Type */
   --font-sans:

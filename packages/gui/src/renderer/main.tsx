@@ -15,13 +15,13 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
         <div
           style={{
             padding: 24,
-            color: "#f1f3f7",
+            color: "var(--text-strong)",
             fontFamily: "monospace",
             whiteSpace: "pre-wrap",
             fontSize: 13,
           }}
         >
-          <h2 style={{ color: "#d96b6b", marginBottom: 12 }}>렌더 오류</h2>
+          <h2 style={{ color: "var(--remove)", marginBottom: 12 }}>렌더 오류</h2>
           <div>{this.state.error.message}</div>
           <pre style={{ marginTop: 12, opacity: 0.8 }}>{this.state.error.stack}</pre>
         </div>
