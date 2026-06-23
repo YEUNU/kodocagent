@@ -24,6 +24,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test
+      # 번들 스모크 — 발행 직전 인라인 번들 dist 가 실제로 기동하는지 검증한다.
+      # `pnpm test`(소스)만으로는 esbuild ESM 번들의 동적 require 회귀(0.7.2: iconv-lite →
+      # safer-buffer `require("buffer")` 크래시) 같은 번들 전용 결함을 못 잡으므로 게이트 필수.
+      - run: node packages/cli/dist/index.js --version
       # @kodocagent/cli 단일 패키지만 발행 (내부 패키지는 private — dist에 인라인 번들).
       #
       # 인증: npm OIDC Trusted Publishing — 장기 NPM_TOKEN/2FA 불필요.
