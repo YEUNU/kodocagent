@@ -1,0 +1,135 @@
+name: Release GUI
+
+# @kodocagent/gui(Electron 데스크톱 앱)의 설치 파일(dmg/exe/AppImage)을 빌드해
+# GitHub Release 에 첨부한다. CLI(npm) 발행은 release.yml 이 담당하며 이 워크플로와 독립이다.
+#
+# ⚠️ 미서명 빌드 — 코드사이닝/공증 인증서를 시크릿으로 주입하지 않은 상태다.
+#   · macOS: 다운로드한 .dmg 의 .app 은 Gatekeeper 가 차단 → 우클릭→열기 또는
+#            `xattr -dr com.apple.quarantine <app>` 로 실행(README/RELEASE-GUI.md 안내).
+#   · Windows: SmartScreen 경고 → "추가 정보 → 실행".
+#   서명 배포로 전환하려면 docs/RELEASE-GUI.md 의 CSC_*/APPLE_*/WIN_CSC_* 시크릿을 추가하고
+#   electron-builder.yml 의 서명 키 주석을 해제한다.
+#
+# 트리거:
+#   · gui-v* 태그 푸시  → 해당 버전으로 정식 Release 생성/갱신.
+#   · 수동 실행(dry_run) → 빌드·검증만 하고 Release 는 만들지 않음.
+# 릴리스 태그는 CLI(v*)와 구분되도록 `gui-v{version}` 을 쓴다.
+
+on:
+  push:
+    tags: ["gui-v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "빌드·검증만 하고 Release는 만들지 않음"
+        type: boolean
+        default: true
+
+concurrency: release-gui-${{ github.ref }}
+
+permissions:
+  contents: write # Release 생성·자산 업로드
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            artifact_glob: "*.dmg"
+          - os: windows-latest
+            artifact_glob: "*.exe"
+          - os: ubuntu-latest
+            artifact_glob: "*.AppImage"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      # Windows 러너의 pnpm junction realpath EPERM 회피 (ci.yml 과 동일)
+      - if: runner.os == 'Windows'
+        run: pnpm config set node-linker hoisted --location project
+      - run: pnpm install --frozen-lockfile
+      # 빌드(워크스페이스 의존 포함) → pnpm deploy(평탄 node_modules) → 네이티브 바이너리 보강
+      # → electron-builder. pnpm 워크스페이스의 전이·동적 의존(kordoc·cfb·ajv·sharp 등)을
+      # 누락 없이 패키징하는 정석 경로다. 인증서 미설정 시 자동으로 미서명 빌드.
+      # (배경·동작: docs/RELEASE-GUI.md, packages/gui/scripts/package-app.mjs)
+      - name: Build + package installer
+        run: node packages/gui/scripts/package-app.mjs --publish never
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-${{ matrix.os }}
+          # 설치 파일 + electron-updater 메타(latest*.yml)·blockmap 만 수집(unpacked 디렉터리 제외).
+          path: |
+            packages/gui/dist/${{ matrix.artifact_glob }}
+            packages/gui/dist/*.yml
+            packages/gui/dist/*.blockmap
+          if-no-files-found: error
+
+  release:
+    needs: build
+    # 태그 푸시면 항상, 수동 실행이면 dry_run=false 일 때만 Release 생성.
+    if: ${{ github.event_name == 'push' || github.event.inputs.dry_run == 'false' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Resolve GUI version and tag
+        id: ver
+        run: |
+          V=$(node -p "require('./packages/gui/package.json').version")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=gui-v$V" >> "$GITHUB_OUTPUT"
+      # 태그 푸시면 태그가 package.json 버전과 일치하는지 검증(메타 yml 버전 불일치 방지).
+      - name: Verify tag matches package version
+        if: github.event_name == 'push'
+        run: |
+          if [ "${{ github.ref_name }}" != "${{ steps.ver.outputs.tag }}" ]; then
+            echo "::error::태그 ${{ github.ref_name }} ≠ package.json 버전 기반 ${{ steps.ver.outputs.tag }}. gui package.json 버전을 맞추세요."
+            exit 1
+          fi
+      - name: List collected artifacts
+        run: ls -lah artifacts
+      - name: Create or update GitHub Release (unsigned GUI)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          VERSION="${{ steps.ver.outputs.version }}"
+          NOTES=$(cat <<EOF
+          kodocagent 데스크톱 앱 **v$VERSION** (미서명 빌드)
+
+          | 플랫폼 | 파일 |
+          | --- | --- |
+          | macOS | \`.dmg\` |
+          | Windows | \`.exe\` (NSIS 설치 관리자) |
+          | Linux | \`.AppImage\` |
+
+          ### ⚠️ 미서명 빌드 실행 안내
+          이 빌드는 코드사이닝/공증이 적용되지 않았습니다.
+          - **macOS**: \`.dmg\` 로 설치 후 앱을 **우클릭 → 열기**(최초 1회) 하거나
+            \`xattr -dr com.apple.quarantine /Applications/kodocagent.app\` 실행.
+          - **Windows**: SmartScreen 경고 시 **추가 정보 → 실행**.
+
+          자세한 패키징·서명 절차는 [docs/RELEASE-GUI.md](https://github.com/YEUNU/kodocagent/blob/main/docs/RELEASE-GUI.md), 변경 이력은 [packages/gui/CHANGELOG.md](https://github.com/YEUNU/kodocagent/blob/main/packages/gui/CHANGELOG.md) 참고.
+          EOF
+          )
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG 존재 — 자산 갱신(--clobber)"
+            gh release upload "$TAG" artifacts/* --clobber
+          else
+            echo "Release $TAG 신규 생성"
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "GUI v$VERSION (unsigned)" \
+              --notes "$NOTES" \
+              artifacts/*
+          fi

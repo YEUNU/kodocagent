@@ -5,23 +5,29 @@
   "private": true,
   "type": "module",
   "main": "out/main/index.js",
+  "//files": "pnpm deploy 가 패키징용 디렉터리로 복사할 대상(빌드 산출물·아이콘·빌더 설정). gui 는 private 라 npm 발행과 무관.",
+  "files": [
+    "out",
+    "assets",
+    "electron-builder.yml"
+  ],
   "scripts": {
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "dev": "electron-vite dev",
     "preview": "electron-vite preview",
-    "dist": "electron-vite build && electron-builder",
-    "pack": "electron-vite build && electron-builder --dir",
-    "publish:gui": "electron-vite build && electron-builder -p onTagOrDraft"
+    "dist": "node scripts/package-app.mjs --publish never",
+    "dist:dir": "node scripts/package-app.mjs --dir",
+    "publish:gui": "node scripts/package-app.mjs --publish onTagOrDraft"
   },
+  "//deps": "메인은 자기 소스만 번들하고 의존은 전부 외부화하므로, 런타임 의존은 앱 node_modules 에 실제로 있어야 한다. dependencies = gui 의 직접 의존(@kodocagent/* 빌드 dist·electron-updater·네이티브 sharp/@napi-rs/canvas). kordoc·cfb·ajv·exceljs·@modelcontextprotocol/sdk·iconv-lite 등은 @kodocagent/core·doc-tools 의 전이 의존으로 `pnpm deploy --prod`(dist 스크립트)가 평탄 node_modules 로 전부 포함한다. 네이티브 플랫폼 바이너리는 dist 스크립트가 스토어에서 보강한다.",
   "dependencies": {
     "@kodocagent/core": "workspace:*",
     "@kodocagent/doc-tools": "workspace:*",
     "@kodocagent/shared": "workspace:*",
-    "electron": "^42.4.0",
+    "@napi-rs/canvas": "^0.1.100",
     "electron-updater": "^6.8.9",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",
@@ -30,9 +36,12 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
+    "electron": "^42.4.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^6.0.0-beta.1",
     "jsdom": "^29.1.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "typescript": "^6.0.3",
     "vite": "^8.0.16"
   }

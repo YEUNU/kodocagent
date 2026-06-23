@@ -18,14 +18,23 @@ pnpm install
 빌드 산출물은 `packages/gui/out/`(electron-vite 번들), 패키징 산출물은
 `packages/gui/dist/`(.dmg/.exe/AppImage)에 생성되며 둘 다 git에서 무시된다.
 
+> **패키징 방식(중요)**: 빌드는 `packages/gui/scripts/package-app.mjs` 를 거친다 —
+> ① gui + 워크스페이스 의존 빌드 → ② `pnpm deploy --prod`(평탄 실 node_modules 생성)
+> → ③ 네이티브 플랫폼 바이너리(.node) 보강 → ④ deploy 디렉터리에서 electron-builder 실행.
+> 메인 프로세스는 의존을 번들하지 않고 전부 외부화하므로(kordoc 의 동적 require 때문),
+> 전체 런타임 트리(kordoc·cfb·ajv·sharp 등)가 deploy 의 평탄 node_modules 에 들어가야 한다.
+> pnpm 워크스페이스의 심링크 node_modules 를 electron-builder 가 직접 패키징하면 전이/동적
+> 의존을 비결정적으로 누락해 실행 시 `Cannot find module` 크래시가 나므로, 이 deploy 경유가 필수다.
+
 ## 1. 미서명 로컬 빌드 (인증서 불필요)
 
 코드사이닝 인증서 없이도 로컬에서 미서명 빌드를 만들 수 있다(개발/내부 테스트용):
 
 ```bash
 # 현재 OS용 미서명 패키지를 dist/ 에 생성 (압축 안 함, 디렉터리만)
-pnpm --filter @kodocagent/gui pack
+pnpm --filter @kodocagent/gui run dist:dir
 ```
+> ⚠️ `pnpm pack`/`publish` 는 pnpm 내장 명령과 겹치므로 반드시 `run` 을 붙이거나 `dist`/`dist:dir` 를 쓴다.
 
 - macOS: 미서명 `.app`은 Gatekeeper가 차단하므로 "우클릭 → 열기" 또는
   `xattr -dr com.apple.quarantine <app>` 로 실행한다.

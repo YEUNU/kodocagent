@@ -11,6 +11,11 @@
 appId: com.kodocagent.desktop
 productName: kodocagent
 
+# electron 버전을 고정 명시한다. dist 는 `pnpm deploy --prod`(devDeps 제외)가 만든
+# 평탄 node_modules 에서 패키징하므로 electron(devDep)이 그 디렉터리에 없어
+# electron-builder 가 버전을 자동 검출하지 못한다. ⚠️ devDependencies.electron 과 동기화 유지.
+electronVersion: 42.4.0
+
 # electron-vite 번들 출력(out/)을 앱 소스로, 패키징 산출물은 dist/ 로.
 directories:
   output: dist
@@ -20,6 +25,14 @@ directories:
 files:
   - out/**/*
   - package.json
+
+# 네이티브 모듈(.node)은 asar 안에서 dlopen 이 안 되므로 풀어둔다(asar.unpacked).
+# sharp(libvips)·@napi-rs/canvas(skia)는 로더가 패키지 디렉터리 구조 전체를 검사하므로
+# 디렉터리째 unpack 해야 런타임에 바이너리를 찾는다.
+asarUnpack:
+  - "**/node_modules/sharp/**"
+  - "**/node_modules/@img/**"
+  - "**/node_modules/@napi-rs/**"
 
 # 자동 업데이트/배포 대상 — GitHub Releases.
 publish:

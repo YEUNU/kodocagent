@@ -1,0 +1,17 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- kodocagent 앱 아이콘 — 인앱 brand-mark("k" 타일)와 동일한 스틸블루 정체성.
+       글자는 폰트 비의존(벡터 패스)으로 그려 어떤 래스터라이저에서도 동일하게 렌더된다.
+       de-AI 디자인 원칙: glow/orb 없음, 기본 파랑(#3b82f6) 아님 — 의도적 스틸블루(#4d84cf). -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5790d8"/>
+      <stop offset="1" stop-color="#3d6fb5"/>
+    </linearGradient>
+  </defs>
+  <rect x="80" y="80" width="864" height="864" rx="208" fill="url(#tile)"/>
+  <g fill="none" stroke="#ffffff" stroke-width="96" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="392" y1="316" x2="392" y2="708"/>
+    <path d="M392 556 L620 360"/>
+    <path d="M392 556 L628 708"/>
+  </g>
+</svg>
