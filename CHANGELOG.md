@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-발행되지 않은 작업입니다. 안정성·보안 하드닝과 릴리스 위생 위주의 변경입니다.
+## [0.7.2] - 2026-06-23
+
+안정성·보안 하드닝과 무손상(無損傷) 강화 위주의 릴리스입니다.
 
 ### Added
 
@@ -114,7 +116,8 @@
 
 - 검증된 코어: BYOK 3사(Anthropic/OpenAI/Google), 법령 MCP 실증, `compare_documents`, OIDC Trusted Publishing.
 
-[Unreleased]: https://github.com/YEUNU/kodocagent/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/YEUNU/kodocagent/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/YEUNU/kodocagent/releases/tag/v0.7.2
 [0.7.1]: https://github.com/YEUNU/kodocagent/releases/tag/v0.7.1
 [0.7.0]: https://github.com/YEUNU/kodocagent/releases/tag/v0.7.0
 [0.6.3]: https://github.com/YEUNU/kodocagent/releases/tag/v0.6.3
