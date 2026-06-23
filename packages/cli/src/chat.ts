@@ -13,7 +13,9 @@ import * as readline from "node:readline/promises";
 import { isCancel, select, spinner, text } from "@clack/prompts";
 import {
   AgentSession,
+  compareProviders,
   createModel,
+  keyedProviders,
   listSessions,
   loadConfig,
   loadMcpConfig,
@@ -49,6 +51,7 @@ const HELP_TEXT = `
 
 슬래시 명령:
   /model   — 프로바이더/모델 전환
+  /compare <질문> — 키가 있는 여러 프로바이더 응답 비교(읽기전용)
   /context — 현재 컨텍스트 사용량 표시
   /usage   — 누적 API 사용량(토큰) 표시
   /clear   — 새 세션 시작
@@ -230,6 +233,41 @@ export async function runChat(opts: {
           process.stdout.write(
             `${formatCumulativeUsage(cumulativeInputTokens, cumulativeOutputTokens)}\n`,
           );
+        }
+        continue;
+      }
+      if (trimmed.toLowerCase().startsWith("/compare")) {
+        const q = trimmed.slice("/compare".length).trim();
+        if (!q) {
+          process.stdout.write(
+            chalk.dim(
+              "사용법: /compare <질문> — 키가 있는 여러 프로바이더의 응답을 나란히 비교합니다(읽기전용).\n",
+            ),
+          );
+          continue;
+        }
+        const keyed = keyedProviders(config);
+        if (keyed.length < 2) {
+          process.stdout.write(
+            chalk.yellow(
+              `비교하려면 API 키가 2개 이상 필요합니다(현재 ${keyed.length}개: ${keyed.join(", ") || "없음"}). 'kodocagent config set api-key.<provider> <키>'로 추가하세요.\n`,
+            ),
+          );
+          continue;
+        }
+        process.stdout.write(chalk.dim(`${keyed.join(", ")} 비교 중…\n`));
+        const results = await compareProviders(config, q);
+        for (const r of results) {
+          if (r.ok) {
+            const meta = `${(r.ms / 1000).toFixed(1)}s · ${r.inputTokens ?? 0}→${r.outputTokens ?? 0} 토큰`;
+            process.stdout.write(chalk.bold(`\n── ${r.provider} (${r.model}) · ${meta} ──\n`));
+            process.stdout.write(`${r.text ?? ""}\n`);
+            cumulativeInputTokens += r.inputTokens ?? 0;
+            cumulativeOutputTokens += r.outputTokens ?? 0;
+          } else {
+            process.stdout.write(chalk.red(`\n── ${r.provider} (${r.model}) · 실패 ──\n`));
+            process.stdout.write(chalk.red(`${r.error ?? "오류"}\n`));
+          }
         }
         continue;
       }

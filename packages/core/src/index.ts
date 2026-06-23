@@ -13,7 +13,9 @@ export { loadConfig, saveConfig } from "./config/config.js";
 export type { LoadMcpConfigResult, McpConfig, ServerConnectionConfig } from "./mcp/config.js";
 export { loadMcpConfig } from "./mcp/config.js";
 export { McpManager } from "./mcp/manager.js";
-export { createModel } from "./providers/registry.js";
+export type { CompareOptions, ProviderComparisonResult } from "./providers/compare.js";
+export { compareProviders, keyedProviders } from "./providers/compare.js";
+export { createModel, createModelForProvider } from "./providers/registry.js";
 export type { SessionMeta, SessionSummary } from "./session/store.js";
 export { generateSessionId, latestSession, listSessions, SessionStore } from "./session/store.js";
 export type {

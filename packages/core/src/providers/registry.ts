@@ -8,7 +8,7 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
-import type { KodocConfig } from "@kodocagent/shared";
+import type { KodocConfig, Provider } from "@kodocagent/shared";
 import { KodocError, resolveActiveProvider, resolveApiKey, resolveModel } from "@kodocagent/shared";
 import type { LanguageModel } from "ai";
 
@@ -43,28 +43,18 @@ export function normalizeAnthropicBaseUrl(envValue: string | undefined): string 
 }
 
 /**
- * 활성 설정 기반으로 AI SDK v6 LanguageModel을 생성한다.
- * API 키가 없으면 KodocError를 던진다.
+ * 지정한 프로바이더로 AI SDK v6 LanguageModel을 생성한다(자동 선택 없이 그 provider 고정).
+ * 해당 provider에 API 키가 없으면 KodocError를 던진다. (멀티 프로바이더 비교 등에서 사용)
  */
-export function createModel(config: KodocConfig): LanguageModel {
-  // 설정된 provider 에 키가 없으면 키가 있는 다른 provider 를 자동 선택한다(BYOK — 셋 중 하나).
-  const provider = resolveActiveProvider(config);
-  if (!provider) {
-    throw new KodocError(
-      "API 키가 하나도 없습니다 (Claude·OpenAI·Gemini 중 최소 하나 필요).",
-      "'kodocagent config set api-key.<provider> <키>'로 설정하거나 ANTHROPIC_API_KEY/OPENAI_API_KEY/GOOGLE_GENERATIVE_AI_API_KEY 환경변수를 지정하세요.",
-    );
-  }
+export function createModelForProvider(config: KodocConfig, provider: Provider): LanguageModel {
   const apiKey = resolveApiKey(config, provider);
-  const modelId = resolveModel(config, provider);
-
   if (!apiKey) {
-    // resolveActiveProvider 가 키 있는 provider 만 반환하므로 도달 불가 — 방어적 가드.
     throw new KodocError(
       `API 키가 없습니다. 프로바이더: ${provider}`,
       `'kodocagent config set api-key.${provider} <키>'로 API 키를 설정하거나, 환경변수를 지정하세요.`,
     );
   }
+  const modelId = resolveModel(config, provider);
 
   switch (provider) {
     case "anthropic": {
@@ -90,4 +80,20 @@ export function createModel(config: KodocConfig): LanguageModel {
       );
     }
   }
+}
+
+/**
+ * 활성 설정 기반으로 AI SDK v6 LanguageModel을 생성한다.
+ * 설정된 provider 에 키가 없으면 키가 있는 다른 provider 를 자동 선택한다(BYOK — 셋 중 하나).
+ * 키가 하나도 없으면 KodocError를 던진다.
+ */
+export function createModel(config: KodocConfig): LanguageModel {
+  const provider = resolveActiveProvider(config);
+  if (!provider) {
+    throw new KodocError(
+      "API 키가 하나도 없습니다 (Claude·OpenAI·Gemini 중 최소 하나 필요).",
+      "'kodocagent config set api-key.<provider> <키>'로 설정하거나 ANTHROPIC_API_KEY/OPENAI_API_KEY/GOOGLE_GENERATIVE_AI_API_KEY 환경변수를 지정하세요.",
+    );
+  }
+  return createModelForProvider(config, provider);
 }
