@@ -8,6 +8,22 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-06-24
+
+멀티 프로바이더 유연화 릴리스 — 어느 한 프로바이더만 있어도 동작하고, 여러 프로바이더 응답을 비교할 수 있습니다.
+
+### Added
+
+- **멀티 프로바이더 비교 `/compare <질문>`**: 키가 있는 여러 프로바이더(Claude·OpenAI·Gemini)에 같은 질문을 **읽기전용**(도구·편집 없이)으로 병렬 전송해 응답을 나란히 비교합니다. 키가 2개 미만이면 안내합니다.
+
+### Changed
+
+- **프로바이더 BYOK 유연화**: 이제 Claude·OpenAI·Gemini 중 **최소 하나**의 키만 있으면 됩니다. 설정된 프로바이더에 키가 없으면 키가 있는 프로바이더를 자동 선택합니다(`resolveActiveProvider`). 기존에는 사실상 Claude가 필수였습니다. 프로바이더가 자동 전환되면 그 프로바이더의 기본 모델을 사용합니다.
+
+### Note (GUI)
+
+- 데스크톱 GUI는 라이트 모던 워크스페이스로 전면 재디자인되었고, dmg/exe/AppImage 설치 파일 패키징이 실제 동작하도록 수정되었으며("모델 비교" 화면 포함), 별도 `gui-v*` 태그로 배포됩니다(`packages/gui/CHANGELOG.md`).
+
 ## [0.7.3] - 2026-06-23
 
 긴급 핫픽스 — 0.7.2 CLI는 시작 즉시 크래시하므로 **0.7.3 사용을 권장**합니다.
@@ -125,7 +141,8 @@
 
 - 검증된 코어: BYOK 3사(Anthropic/OpenAI/Google), 법령 MCP 실증, `compare_documents`, OIDC Trusted Publishing.
 
-[Unreleased]: https://github.com/YEUNU/kodocagent/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/YEUNU/kodocagent/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/YEUNU/kodocagent/releases/tag/v0.8.0
 [0.7.3]: https://github.com/YEUNU/kodocagent/releases/tag/v0.7.3
 [0.7.2]: https://github.com/YEUNU/kodocagent/releases/tag/v0.7.2
 [0.7.1]: https://github.com/YEUNU/kodocagent/releases/tag/v0.7.1
