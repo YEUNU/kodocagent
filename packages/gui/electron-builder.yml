@@ -10,6 +10,12 @@
 
 appId: com.kodocagent.desktop
 productName: kodocagent
+
+# 미서명 macOS 빌드를 ad-hoc 로 깊게 재서명해 번들을 봉인한다. 안 하면 electron-builder 가
+# 서명을 건너뛰어 "Sealed Resources=none" 상태가 되고 macOS 가 "손상되어 열 수 없음"으로
+# 오판한다(우회 불가). 훅 내부에서 darwin·미인증서일 때만 동작한다. (scripts/afterpack-adhoc-sign.cjs)
+afterPack: scripts/afterpack-adhoc-sign.cjs
+
 # 실행 파일명을 명시한다. 미설정 시 package.json name(@kodocagent/gui)에서 파생돼
 # "@kodocagentgui"가 되는데, Linux AppImage는 executableName에 '@'를 허용하지 않아 빌드가 실패한다.
 executableName: kodocagent

@@ -1,5 +1,12 @@
 # @kodocagent/gui
 
+## 0.5.2
+
+### Patch Changes
+
+- **편집 승인 다이얼로그가 안 뜨고 무한 "작업 중"으로 멈추던 교착 수정**(`propose_edit` 등 모든 승인 필요 편집). `AgentSession.run()`이 승인 이벤트 큐를 "다음 스트림 파트 도착 시에만" 비웠는데, 그 다음 파트(`tool-result`)는 승인이 끝나야 와서, GUI 처럼 승인이 지연되는 핸들러에선 승인 이벤트가 영영 방출되지 않아 다이얼로그가 안 떴다(→ 승인 불가 → 무한 대기). "다음 파트 대기" 와 "승인 이벤트 도착 신호" 를 race 해 즉시 방출하도록 고침. CLI(인라인 핸들러)·자동승인 테스트는 못 잡던 잠복 결함. 회귀 테스트 추가(구버전 타임아웃 → 수정본 통과). 더불어 agent-bridge 가 비중단 예외를 조용히 삼켜 또 다른 무한 "작업 중"을 유발하던 것도 오류 이벤트로 노출.
+- **macOS 미서명 빌드 "손상되어 열 수 없음" 오판 수정**. 인증서 없이 빌드하면 electron-builder 가 코드서명을 통째로 건너뛰어 번들이 봉인되지 않고(`Sealed Resources=none`), macOS 가 이를 우회 불가한 "손상" 으로 판정했다(우클릭→열기도 안 됨). `afterPack` 훅에서 ad-hoc 깊은 재서명(`codesign --deep --sign -`)으로 번들을 봉인 → "확인되지 않은 개발자"(우클릭→열기 가능) 수준으로 내려가고, `xattr -dr com.apple.quarantine` 후 정상 실행. 실 빌드 검증(`Sealed Resources version=2`·strict verify 통과).
+
 ## 0.5.1
 
 ### Patch Changes

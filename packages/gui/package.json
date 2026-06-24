@@ -1,6 +1,6 @@
 {
   "name": "@kodocagent/gui",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "kodocagent Electron 데스크톱 GUI",
   "private": true,
   "type": "module",
@@ -9,7 +9,8 @@
   "files": [
     "out",
     "assets",
-    "electron-builder.yml"
+    "electron-builder.yml",
+    "scripts/afterpack-adhoc-sign.cjs"
   ],
   "scripts": {
     "build": "electron-vite build",

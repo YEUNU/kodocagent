@@ -36,8 +36,10 @@ pnpm --filter @kodocagent/gui run dist:dir
 ```
 > ⚠️ `pnpm pack`/`publish` 는 pnpm 내장 명령과 겹치므로 반드시 `run` 을 붙이거나 `dist`/`dist:dir` 를 쓴다.
 
-- macOS: 미서명 `.app`은 Gatekeeper가 차단하므로 "우클릭 → 열기" 또는
-  `xattr -dr com.apple.quarantine <app>` 로 실행한다.
+- macOS: 미서명 `.app`은 다운로드 격리(quarantine) 때문에 Gatekeeper가 차단한다. 가장 확실한 방법은
+  `xattr -dr com.apple.quarantine <app>` 로 격리 속성을 제거하는 것("우클릭 → 열기"는 macOS 버전/
+  서명 상태에 따라 "손상되어 열 수 없음"으로 막힐 수 있다). 빌드는 `afterPack` 훅이 ad-hoc 깊은 재서명
+  (`scripts/afterpack-adhoc-sign.cjs`)으로 번들을 봉인하므로 격리만 제거하면 정상 실행된다.
 - Windows: SmartScreen 경고가 뜰 수 있다("추가 정보 → 실행").
 
 ## 2. 서명·공증 배포 (인증서 필요)

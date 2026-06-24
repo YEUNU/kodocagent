@@ -124,8 +124,12 @@ jobs:
 
           ### ⚠️ 미서명 빌드 실행 안내
           이 빌드는 코드사이닝/공증이 적용되지 않았습니다.
-          - **macOS**: \`.dmg\` 로 설치 후 앱을 **우클릭 → 열기**(최초 1회) 하거나
-            \`xattr -dr com.apple.quarantine /Applications/kodocagent.app\` 실행.
+          - **macOS**: \`.dmg\` 의 앱을 \`/Applications\` 로 옮긴 뒤, 다운로드 격리 속성을 제거하세요(가장 확실):
+            \`\`\`
+            xattr -dr com.apple.quarantine /Applications/kodocagent.app
+            \`\`\`
+            그 후 앱을 실행하면 됩니다. (앱을 옮기지 않고 우클릭 → 열기 도 보통 동작하지만,
+            macOS 버전에 따라 막힐 수 있어 위 명령이 가장 확실합니다.)
           - **Windows**: SmartScreen 경고 시 **추가 정보 → 실행**.
 
           자세한 패키징·서명 절차는 [docs/RELEASE-GUI.md](https://github.com/YEUNU/kodocagent/blob/main/docs/RELEASE-GUI.md), 변경 이력은 [packages/gui/CHANGELOG.md](https://github.com/YEUNU/kodocagent/blob/main/packages/gui/CHANGELOG.md) 참고.
