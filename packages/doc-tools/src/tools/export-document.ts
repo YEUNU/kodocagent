@@ -16,6 +16,7 @@ import { kordocErrorMessage } from "@kodocagent/shared";
 import { markdownToPdf, renderHtml } from "kordoc";
 import sanitizeHtml from "sanitize-html";
 import { z } from "zod";
+import { inlineImagesAsDataUri, type ParsedImage } from "../inline-images.js";
 import { parse } from "../kordoc-parse.js";
 import { assertFileSizeWithinLimit, resolveSafePath } from "../security.js";
 import { backupFile, commitStaged, stageFile } from "../staging.js";
@@ -201,7 +202,12 @@ export const exportDocumentTool: ToolDefinition<ExportDocumentInput> = {
     let stagedData: Uint8Array;
     const warnings: string[] = [];
     if (format === "html") {
-      const rawHtml = renderHtml(markdown);
+      // 문서에 박힌 그림을 data URI 로 인라인 → 내보낸 HTML 이 외부 파일 없이 자체 완결.
+      // (sanitizeExportHtml 이 img src 의 data: 스킴을 허용하므로 인라인 후 정화해도 보존됨)
+      const rawHtml = inlineImagesAsDataUri(
+        renderHtml(markdown),
+        (parseResult as { images?: ParsedImage[] }).images,
+      );
       const safeHtml = sanitizeExportHtml(rawHtml);
       stagedData = new TextEncoder().encode(safeHtml);
       // 원본에 위험 구문이 실제로 있었을 때만 안내(정상 문서마다 보안 경고가 뜨는 노이즈 방지).

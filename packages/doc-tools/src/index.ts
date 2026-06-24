@@ -27,6 +27,8 @@ export const SUPPORTED_WRITE_EXTENSIONS = [".hwpx", ".docx", ".xlsx", ".md", ".t
 export const HWP_WRITE_CONVERSION = { from: ".hwp", to: ".hwpx" } as const;
 
 export { renderHtml } from "kordoc";
+// 미리보기/내보내기 HTML 의 <img src="파일명"> 을 parse 가 추출한 그림 바이트의 data URI 로 인라인
+export { inlineImagesAsDataUri, type ParsedImage } from "./inline-images.js";
 // 미리보기/렌더용 — GUI 등 소비자가 동일한 robust parse + renderHtml 을 쓰도록 재노출
 export { parse } from "./kordoc-parse.js";
 export { resolveSafePath } from "./security.js";

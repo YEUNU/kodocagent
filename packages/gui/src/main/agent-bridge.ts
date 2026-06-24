@@ -26,6 +26,8 @@ import {
 import {
   cleanOldBackups,
   createDocTools,
+  inlineImagesAsDataUri,
+  type ParsedImage,
   parse,
   renderHtml,
   resolveSafePath,
@@ -276,7 +278,11 @@ export class AgentBridge {
       if (!result.success || typeof result.markdown !== "string") {
         return { ok: false, error: "문서를 읽을 수 없습니다 (지원하지 않는 형식이거나 손상됨)." };
       }
-      return { ok: true, html: renderHtml(result.markdown), markdown: result.markdown };
+      // 문서에 박힌 그림을 data URI 로 인라인 — 안 하면 <img src="image_001.png"> 가
+      // 미리보기 iframe 에서 깨져 alt("image")만 보인다(parse 가 그림 바이트를 result.images 로 추출).
+      const images = (result as { images?: ParsedImage[] }).images;
+      const html = inlineImagesAsDataUri(renderHtml(result.markdown), images);
+      return { ok: true, html, markdown: result.markdown };
     } catch (err: unknown) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
