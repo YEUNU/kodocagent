@@ -116,16 +116,21 @@ export async function backupFile(
     // Windows 등 chmod 미지원 환경 — 무시
   }
 
-  // 작업 메타데이터 사이드카(되돌리기 타임라인 표시용). 선행 점(.)으로 시작해
-  // 백업 목록 정규식(^<ts>-<name>$)에 걸리지 않으므로 list_backups는 영향받지 않는다.
-  // backupPath에서 ts 토큰을 추출하여 사이드카도 동일한 유니크 타임스탬프를 사용한다.
-  if (meta?.summary) {
+  // 작업 메타데이터 사이드카(되돌리기 타임라인용). 선행 점(.)으로 시작해 백업 목록
+  // 정규식(^<ts>-<name>$)에 걸리지 않으므로 list_backups는 영향받지 않는다.
+  // sourcePath(원본 절대 경로)를 항상 기록해, 타임라인이 현재 작업 폴더의 백업만
+  // 보여줄 수 있게 한다(전역 백업 디렉터리에 다른 폴더·과거 작업 백업이 쌓여도 노이즈 방지).
+  // summary는 있을 때만 포함한다. 사이드카 쓰기 실패가 백업을 깨지 않도록 best-effort.
+  {
     const backupBasename = basename(backupPath);
     await writeFile(
       join(backupsRoot, `.${backupBasename}.meta.json`),
-      JSON.stringify({ summary: meta.summary }),
+      JSON.stringify({
+        sourcePath: targetPath,
+        ...(meta?.summary ? { summary: meta.summary } : {}),
+      }),
       "utf-8",
-    ).catch(() => undefined); // best-effort: 사이드카 실패가 백업을 깨지 않는다
+    ).catch(() => undefined);
   }
 
   return backupPath;

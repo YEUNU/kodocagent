@@ -9,7 +9,7 @@
  */
 
 import { readdir, readFile, stat } from "node:fs/promises";
-import { extname, isAbsolute, join } from "node:path";
+import { dirname, extname, isAbsolute, join, resolve } from "node:path";
 import type { AgentEvent, AgentSessionOptions, ProviderComparisonResult } from "@kodocagent/core";
 import {
   AgentSession,
@@ -309,32 +309,42 @@ export class AgentBridge {
   }
 
   /**
-   * 되돌리기 타임라인: 백업 디렉터리 목록(최신순, 최대 20).
+   * 되돌리기 타임라인: **현재 작업 폴더(cwd)**의 백업만 (최신순, 최대 20).
+   *
+   * 백업은 전역 디렉터리(~/.kodocagent/backups)에 쌓이므로, 필터 없이 보여주면 다른 폴더·
+   * 과거 작업의 백업까지 전부 노출돼 "아무것도 안 했는데 타임라인이 가득 찬" 노이즈가 된다.
+   * 사이드카(.meta.json)의 sourcePath(원본 절대 경로)가 현재 cwd 폴더에 속한 것만 추린다.
+   * sourcePath가 없는 구버전 백업은 폴더를 알 수 없으므로 제외(현재 폴더 작업과 무관).
    */
   async listBackups(): Promise<BackupEntry[]> {
     try {
       const dir = KODOC_PATHS.backups;
       const names = await readdir(dir);
+      const cwdResolved = resolve(this.cwd);
       const out: BackupEntry[] = [];
       for (const filename of names) {
         const m = filename.match(BACKUP_RE);
         if (!m) continue;
-        let mtimeMs = 0;
-        try {
-          mtimeMs = (await stat(join(dir, filename))).mtimeMs;
-        } catch {
-          mtimeMs = 0;
-        }
-        // 작업 요약 사이드카(.<filename>.meta.json) — 있으면 무슨 작업인지 표시
+        // 사이드카에서 원본 경로·요약을 읽는다. 현재 폴더 백업이 아니면 일찍 건너뛴다.
+        let sourcePath: string | undefined;
         let summary: string | undefined;
         try {
           const parsed: unknown = JSON.parse(
             await readFile(join(dir, `.${filename}.meta.json`), "utf-8"),
           );
+          const sp = (parsed as { sourcePath?: unknown } | null)?.sourcePath;
+          if (typeof sp === "string") sourcePath = sp;
           const s = (parsed as { summary?: unknown } | null)?.summary;
           if (typeof s === "string") summary = s;
         } catch {
-          summary = undefined;
+          // 사이드카 없음(구버전 백업) → 폴더를 알 수 없으므로 제외
+        }
+        if (!sourcePath || resolve(dirname(sourcePath)) !== cwdResolved) continue;
+        let mtimeMs = 0;
+        try {
+          mtimeMs = (await stat(join(dir, filename))).mtimeMs;
+        } catch {
+          mtimeMs = 0;
         }
         out.push({
           filename,
