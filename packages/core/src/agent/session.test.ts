@@ -914,3 +914,118 @@ describe("세션 재개 (loadHistory)", () => {
     expect(callJson).toContain("보고서.hwpx");
   }, 15000);
 });
+
+describe("AgentSession — 승인 이벤트 전달(교착 회귀 방지)", () => {
+  beforeEach(async () => {
+    await mkdir(testSessionsDir, { recursive: true });
+  });
+  afterEach(async () => {
+    await rm(testSessionsDir, { recursive: true, force: true });
+  });
+
+  /**
+   * 회귀: GUI 처럼 "승인이 지연되는" 핸들러(다이얼로그→사용자 클릭)는 approval-required 이벤트가
+   * run() 스트림으로 먼저 도착해야 비로소 resolve 할 수 있다. 과거 구현은 큐를 "다음 스트림 파트"
+   * 도착 시에만 비웠는데, 그 다음 파트(tool-result)는 승인이 끝나야 와서 교착했다(다이얼로그 안 뜸
+   * → 승인 불가 → 무한 대기). 이 테스트는 승인 이벤트가 핸들러 resolve 이전에 방출되는지 검증한다.
+   * (자동승인 테스트·CLI 인라인 핸들러는 이 교착을 못 잡았다.)
+   */
+  it("propose 툴의 승인 이벤트가 (지연 승인 핸들러에서도) 다음 파트를 기다리지 않고 방출된다", async () => {
+    const toolCall: AnyStreamPart[] = [
+      { type: "stream-start", warnings: [] },
+      {
+        type: "tool-call",
+        toolCallId: "c1",
+        // EDITING_TOOLS 미포함 이름 → 자가검증 라운드 없이 2회 doStream 으로 끝난다.
+        toolName: "propose_test_edit",
+        input: '{"path":"a.txt","summary":"s"}',
+      },
+      {
+        type: "finish",
+        finishReason: "tool-calls",
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      },
+    ];
+    const mk = (parts: AnyStreamPart[]) => ({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      stream: simulateReadableStream<any>({
+        chunks: parts,
+        initialDelayInMs: null,
+        chunkDelayInMs: null,
+      }),
+      request: { body: "{}" },
+      response: {},
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doStream: any = vi
+      .fn()
+      .mockResolvedValueOnce(mk(toolCall))
+      .mockResolvedValueOnce(mk(makeStreamParts("편집을 적용했습니다.")));
+    const model = new MockLanguageModelV3({ doStream } as never) as unknown as LanguageModel;
+
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "propose_test_edit",
+      description: "승인 필요 편집(테스트)",
+      inputSchema: z.object({ path: z.string(), summary: z.string() }),
+      requiresApproval: true,
+      // propose() 는 실제처럼 약간의 비동기 작업(parse/patch 모사) 뒤에 제안을 반환한다.
+      // 레지스트리는 propose() 반환 후 approval 이벤트를 방출 → tool-call 파트보다 늦게 큐에 들어간다.
+      propose: async ({ input }) => {
+        await new Promise((r) => setTimeout(r, 30));
+        return {
+          proposal: {
+            id: "p1",
+            kind: "edit",
+            targetPath: `/test/${input.path}`,
+            stagedPath: "/test/.staged",
+            summary: input.summary,
+            diff: "- 옛 내용\n+ 새 내용",
+            warnings: [],
+          },
+          commit: async () => "저장 완료",
+        };
+      },
+    });
+
+    const store = await createStore();
+
+    // 지연 승인 핸들러: approval-required 이벤트를 소비자가 본 뒤에야 resolve 된다.
+    let resolveApproval: () => void = () => {};
+    const approvalGate = new Promise<void>((res) => {
+      resolveApproval = res;
+    });
+    const session = new AgentSession({
+      config: testConfig,
+      model,
+      tools,
+      approvalHandler: async () => {
+        await approvalGate; // 다이얼로그→사용자 클릭을 모사(이벤트 도착 전엔 절대 resolve 안 됨)
+        return { approved: true };
+      },
+      store,
+      cwd: "/test",
+    });
+
+    const events: import("./events.js").AgentEvent[] = [];
+    const controller = new AbortController();
+    const consume = (async () => {
+      for await (const ev of session.run("편집해줘", controller.signal)) {
+        events.push(ev);
+        if (ev.type === "approval-required") resolveApproval(); // 이벤트 도착 후에만 승인 허용
+      }
+    })();
+
+    // 교착이면 approval-required 가 안 와 resolveApproval 호출 안 됨 → 핸들러 영구 블록 → 미완.
+    const outcome = await Promise.race([
+      consume.then(() => "completed" as const),
+      new Promise<"timeout">((res) => setTimeout(() => res("timeout"), 2000)),
+    ]);
+    controller.abort(); // 정리(교착 시 누수 방지)
+
+    expect(outcome).toBe("completed");
+    expect(events.some((e) => e.type === "approval-required")).toBe(true);
+    // 승인 후 tool-result 와 다음 라운드 텍스트까지 도달했는지(흐름 재개 확인)
+    expect(events.some((e) => e.type === "turn-complete")).toBe(true);
+  }, 10000);
+});

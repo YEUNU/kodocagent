@@ -414,14 +414,24 @@ export class AgentBridge {
       this.session = new AgentSession(opts);
       await this.session.loadHistory();
 
-      this.controller = new AbortController();
+      const controller = new AbortController();
+      this.controller = controller;
 
       try {
-        for await (const event of this.session.run(text, this.controller.signal)) {
+        for await (const event of this.session.run(text, controller.signal)) {
           this.emitEvent(event);
         }
-      } catch {
-        // AbortSignal에 의한 중단은 정상 처리
+      } catch (err: unknown) {
+        // AbortSignal에 의한 중단은 정상 종료. 그 외 예기치 않은 throw 는 반드시 사용자에게
+        // 알린다 — 과거엔 조용히 삼켜 turn-complete/error 가 안 와 UI 가 무한 "작업 중"에 갇혔다.
+        if (!controller.signal.aborted) {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.emitEvent({
+            type: "error",
+            message: `예기치 않은 오류로 작업을 끝내지 못했습니다: ${msg}`,
+            recoverable: false,
+          });
+        }
       } finally {
         this.controller = null;
       }

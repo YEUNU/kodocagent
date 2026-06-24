@@ -212,15 +212,31 @@ export class AgentSession {
     }
   }
 
-  /** approval-required 이벤트를 run() 스트림에 전달하기 위한 큐 */
+  /** approval-required 이벤트를 run() 스트림에 전달하기 위한 큐 (단일 진실 소스) */
   private pendingApprovalEvents: import("@kodocagent/shared").Proposal[] = [];
+
+  /**
+   * "승인 이벤트가 큐에 들어왔다"를 run() 루프에 즉시 알리는 신호.
+   * run() 루프는 다음 스트림 파트 대기와 이 신호를 race 한다 → 승인 이벤트가 들어오면
+   * 다음 파트(tool-result)를 기다리지 않고 깨어나 방출한다. (교착 방지 — 아래 run() 주석 참조)
+   */
+  private approvalWake: Promise<void> | null = null;
+  private approvalWakeResolve: (() => void) | null = null;
+
+  /** 승인 깨우기 신호를 새로 무장한다(매 race 직전 armed 상태 보장). */
+  private armApprovalWake(): void {
+    this.approvalWake = new Promise<void>((resolve) => {
+      this.approvalWakeResolve = resolve;
+    });
+  }
 
   constructor(private readonly opts: AgentSessionOptions) {
     opts.tools.setApprovalHandler(opts.approvalHandler);
     opts.tools.setContext({ cwd: opts.cwd, sessionId: opts.store.id });
-    // approval-required 이벤트를 캡처해 run() 스트림으로 전달
+    // approval-required 이벤트를 캡처해 run() 스트림으로 전달하고, run() 루프를 즉시 깨운다.
     opts.tools.setApprovalEventEmitter((proposal) => {
       this.pendingApprovalEvents.push(proposal);
+      this.approvalWakeResolve?.();
     });
   }
 
@@ -325,93 +341,129 @@ export class AgentSession {
           },
         });
 
-        // fullStream으로 모든 이벤트를 구독한다
-        for await (const part of result.fullStream) {
-          if (signal.aborted) break;
+        // fullStream을 수동 이터레이터로 소비한다.
+        //
+        // ⚠️ 교착 주의: 단순 for-await 는 "다음 파트"가 도착해야 루프 본문이 돌아
+        // pendingApprovalEvents 를 비울 수 있다. 그런데 승인이 필요한 편집 툴(propose_*)은
+        // execute 안에서 propose()(parse/patch/compare 수십~수백 ms) 뒤에 승인 이벤트를
+        // 큐에 넣고 approvalHandler 를 await 로 "블록"한다. 다음 파트(tool-result)는 승인이
+        // 끝나야 오므로, 승인 이벤트가 큐에 갇혀 영영 방출되지 않는다 → GUI 처럼 승인이
+        // 지연되는(다이얼로그→사용자 클릭) 소비자에서 교착(다이얼로그 안 뜸 → 승인 불가 →
+        // tool-result 없음 → 무한 "작업 중"). CLI 는 핸들러가 인라인 렌더, 자동승인 테스트는
+        // 즉시 resolve 라 둘 다 못 잡던 결함이다.
+        // 해결: "다음 파트 대기" 와 "승인 이벤트 도착 신호(approvalWake)" 를 race 해, 승인
+        // 이벤트가 들어오면 다음 파트를 기다리지 않고 즉시 방출한다. 큐가 단일 진실 소스이고
+        // 매 반복 상단에서 비우므로 신호 누락/스퓨리어스 깨움 모두 무해하다.
+        const iterator = result.fullStream[Symbol.asyncIterator]();
+        let pendingNext = iterator.next();
+        this.armApprovalWake();
+        try {
+          while (true) {
+            if (signal.aborted) break;
 
-          // approval-required 이벤트를 방출 (UI가 렌더링할 수 있도록)
-          while (this.pendingApprovalEvents.length > 0) {
-            const proposal = this.pendingApprovalEvents.shift()!;
-            yield { type: "approval-required", proposal };
-          }
-
-          switch (part.type) {
-            case "text-delta": {
-              yield { type: "text-delta", text: part.text };
-              break;
+            // 큐에 쌓인 approval-required 를 즉시 방출 (다음 스트림 파트를 기다리지 않음)
+            while (this.pendingApprovalEvents.length > 0) {
+              const proposal = this.pendingApprovalEvents.shift()!;
+              yield { type: "approval-required", proposal };
             }
-            case "tool-call": {
-              yield {
-                type: "tool-call",
-                toolName: part.toolName,
-                args: part.input,
-                callId: part.toolCallId,
-              };
-              if (EDITING_TOOLS.has(part.toolName)) editedThisRound = true;
-              // 열람한 문서 경로를 기록한다 (openDocuments → 시스템 프롬프트)
-              try {
-                const inp = part.input as Record<string, unknown>;
-                if (part.toolName === "read_document") {
-                  this.recordOpenDocument(inp.path);
-                } else if (part.toolName === "compare_documents") {
-                  this.recordOpenDocument(inp.pathA);
-                  this.recordOpenDocument(inp.pathB);
-                } else if (
-                  part.toolName === "write_new_document" ||
-                  part.toolName === "write_new_spreadsheet"
-                ) {
-                  this.recordOpenDocument(inp.path);
+
+            // 다음 파트 도착 vs 승인 이벤트 도착 신호를 race
+            const outcome = await Promise.race([
+              pendingNext.then((res) => ({ kind: "part" as const, res })),
+              (this.approvalWake ?? Promise.resolve()).then(() => ({ kind: "wake" as const })),
+            ]);
+            if (outcome.kind === "wake") {
+              // 승인 이벤트 도착 — 신호 재무장 후 루프 상단에서 큐를 비운다.
+              this.armApprovalWake();
+              continue;
+            }
+            const { value: part, done } = outcome.res;
+            if (done) break;
+            pendingNext = iterator.next(); // 스트림 전진
+
+            switch (part.type) {
+              case "text-delta": {
+                yield { type: "text-delta", text: part.text };
+                break;
+              }
+              case "tool-call": {
+                yield {
+                  type: "tool-call",
+                  toolName: part.toolName,
+                  args: part.input,
+                  callId: part.toolCallId,
+                };
+                if (EDITING_TOOLS.has(part.toolName)) editedThisRound = true;
+                // 열람한 문서 경로를 기록한다 (openDocuments → 시스템 프롬프트)
+                try {
+                  const inp = part.input as Record<string, unknown>;
+                  if (part.toolName === "read_document") {
+                    this.recordOpenDocument(inp.path);
+                  } else if (part.toolName === "compare_documents") {
+                    this.recordOpenDocument(inp.pathA);
+                    this.recordOpenDocument(inp.pathB);
+                  } else if (
+                    part.toolName === "write_new_document" ||
+                    part.toolName === "write_new_spreadsheet"
+                  ) {
+                    this.recordOpenDocument(inp.path);
+                  }
+                } catch {
+                  // 방어적: 입력 접근 오류는 무시
                 }
-              } catch {
-                // 방어적: 입력 접근 오류는 무시
+                break;
               }
-              break;
-            }
-            case "tool-result": {
-              const isError = false; // tool-result는 성공
-              yield {
-                type: "tool-result",
-                callId: part.toolCallId,
-                result: part.output,
-                isError,
-              };
-              await store.appendToolResult(part.toolCallId, part.output, isError);
-              break;
-            }
-            case "tool-error": {
-              yield {
-                type: "tool-result",
-                callId: part.toolCallId,
-                result: String(part.error),
-                isError: true,
-              };
-              await store.appendToolResult(part.toolCallId, String(part.error), true);
-              break;
-            }
-            case "finish": {
-              const usage = part.totalUsage;
-              if (usage) {
-                totalInputTokens += usage.inputTokens ?? 0;
-                totalOutputTokens += usage.outputTokens ?? 0;
+              case "tool-result": {
+                const isError = false; // tool-result는 성공
+                yield {
+                  type: "tool-result",
+                  callId: part.toolCallId,
+                  result: part.output,
+                  isError,
+                };
+                await store.appendToolResult(part.toolCallId, part.output, isError);
+                break;
               }
-              sawFinish = true;
-              break;
+              case "tool-error": {
+                yield {
+                  type: "tool-result",
+                  callId: part.toolCallId,
+                  result: String(part.error),
+                  isError: true,
+                };
+                await store.appendToolResult(part.toolCallId, String(part.error), true);
+                break;
+              }
+              case "finish": {
+                const usage = part.totalUsage;
+                if (usage) {
+                  totalInputTokens += usage.inputTokens ?? 0;
+                  totalOutputTokens += usage.outputTokens ?? 0;
+                }
+                sawFinish = true;
+                break;
+              }
+              case "error": {
+                // 스트리밍 중 발생하는 제공자 오류는 이 파트로 도착한다(⑧ 주 경로).
+                // mapProviderError로 한국어화하고 힌트를 메시지에 접어 노출한다.
+                const errPart = part as { type: "error"; error: unknown };
+                yield {
+                  type: "error",
+                  message: formatAgentError(errPart.error),
+                  recoverable: false,
+                };
+                break;
+              }
+              default:
+                // 그 외 이벤트는 무시 (reasoning, source 등)
+                break;
             }
-            case "error": {
-              // 스트리밍 중 발생하는 제공자 오류는 이 파트로 도착한다(⑧ 주 경로).
-              // mapProviderError로 한국어화하고 힌트를 메시지에 접어 노출한다.
-              const errPart = part as { type: "error"; error: unknown };
-              yield {
-                type: "error",
-                message: formatAgentError(errPart.error),
-                recoverable: false,
-              };
-              break;
-            }
-            default:
-              // 그 외 이벤트는 무시 (reasoning, source 등)
-              break;
           }
+        } finally {
+          // 조기 종료(중단/done) 시 미소비 pendingNext 의 늦은 거부를 흡수(unhandledRejection 방지)
+          // + 하위 스트림 정리(중단 시 모델 호출 해제, best-effort).
+          pendingNext.catch(() => {});
+          void iterator.return?.();
         }
 
         // 라운드 완료 후 어시스턴트 메시지를 영속화(+ in-memory 누적)
