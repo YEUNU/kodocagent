@@ -39,8 +39,13 @@ export function App(): React.ReactElement {
   const [appState, setAppState] = useState<AppState>("idle");
   const [pendingProposal, setPendingProposal] = useState<Proposal | null>(null);
   const [model, setModel] = useState<string | null>(null);
+  const [provider, setProvider] = useState<string | null>(null);
   const [cwd, setCwd] = useState<string>("");
   const [configMissing, setConfigMissing] = useState(false);
+  // 설정(API 키) 모달 표시 — Topbar 톱니 버튼으로 재진입 (온보딩 이후에도 키 관리 가능)
+  const [showSettings, setShowSettings] = useState(false);
+  // 설정된 제공자 (boolean만 — 키 값은 절대 렌더러로 오지 않음)
+  const [hasKeys, setHasKeys] = useState<Record<string, boolean>>({});
   // 키가 있는 프로바이더 수 (2개 이상이면 모델 비교 가능)
   const [keyCount, setKeyCount] = useState(0);
   const [compareState, setCompareState] = useState<{
@@ -104,6 +109,8 @@ export function App(): React.ReactElement {
       .get()
       .then((cfg) => {
         setModel(cfg.model);
+        setProvider(cfg.provider);
+        setHasKeys(cfg.hasKeys);
         setKeyCount(Object.values(cfg.hasKeys).filter(Boolean).length);
         if (!Object.values(cfg.hasKeys).some(Boolean)) {
           setConfigMissing(true);
@@ -417,6 +424,15 @@ export function App(): React.ReactElement {
     [appState, handleSend],
   );
 
+  // 설정 모달 저장/취소 후: 스냅샷(키 boolean·기본 제공자·모델)을 반영하고 닫는다.
+  const handleSettingsComplete = useCallback((snapshot: ConfigSnapshot) => {
+    setModel(snapshot.model);
+    setProvider(snapshot.provider);
+    setHasKeys(snapshot.hasKeys);
+    setKeyCount(Object.values(snapshot.hasKeys).filter(Boolean).length);
+    setShowSettings(false);
+  }, []);
+
   const contextPct =
     lastInputTokens > 0
       ? Math.min(100, Math.round((lastInputTokens / CONTEXT_WINDOW) * 100))
@@ -455,6 +471,7 @@ export function App(): React.ReactElement {
         contextPct={contextPct}
         onSelectCwd={handleSelectCwd}
         onNewSession={handleNewSession}
+        onOpenSettings={() => setShowSettings(true)}
       />
       <div className="panes">
         <FilePane
@@ -503,6 +520,15 @@ export function App(): React.ReactElement {
           results={compareState.results}
           error={compareState.error}
           onClose={() => setCompareState(null)}
+        />
+      )}
+      {showSettings && (
+        <Onboarding
+          mode="settings"
+          hasKeys={hasKeys}
+          defaultProvider={(provider as "anthropic" | "openai" | "google" | null) ?? undefined}
+          onComplete={handleSettingsComplete}
+          onCancel={() => setShowSettings(false)}
         />
       )}
     </div>

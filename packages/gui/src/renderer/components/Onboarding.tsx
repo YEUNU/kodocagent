@@ -3,6 +3,14 @@ import type { ConfigSnapshot } from "../types.js";
 
 interface OnboardingProps {
   onComplete: (snapshot: ConfigSnapshot) => void;
+  /** "onboarding"(첫 실행·전체화면) | "settings"(설정에서 재진입·모달·취소 가능). 기본 onboarding. */
+  mode?: "onboarding" | "settings";
+  /** settings 모드 닫기/취소 (저장 없이) */
+  onCancel?: () => void;
+  /** 이미 설정된 제공자 (키 값 아님, boolean만 — 보안). 설정됨 안내·플레이스홀더용. */
+  hasKeys?: Partial<Record<Provider, boolean>>;
+  /** 초기 선택 제공자 */
+  defaultProvider?: Provider;
 }
 
 type Provider = "anthropic" | "openai" | "google";
@@ -14,9 +22,10 @@ const PROVIDERS: { id: Provider; label: string; tabLabel: string }[] = [
 ];
 
 export function Onboarding(props: OnboardingProps): React.ReactElement {
-  const { onComplete } = props;
+  const { onComplete, mode = "onboarding", onCancel, hasKeys, defaultProvider } = props;
+  const isSettings = mode === "settings";
 
-  const [selected, setSelected] = useState<Provider>("anthropic");
+  const [selected, setSelected] = useState<Provider>(defaultProvider ?? "anthropic");
   const [anthropicKey, setAnthropicKey] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
   const [googleKey, setGoogleKey] = useState("");
@@ -31,7 +40,12 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
 
   // 셋 중 최소 하나의 키만 있으면 저장 가능. 입력한 제공자로 자동 동작한다(provider 자동 선택).
   const anyKeyEntered = [anthropicKey, openaiKey, googleKey].some((k) => k.trim().length > 0);
-  const canSave = !saving && anyKeyEntered;
+  // settings 모드: 키가 이미 저장돼 있으므로 새 키 없이도 저장 가능(기본 제공자 변경 등).
+  // 빈 칸은 기존 키를 유지한다(saveSetup이 빈 값은 덮어쓰지 않음).
+  const canSave = !saving && (isSettings || anyKeyEntered);
+  // 설정됨 제공자는 키 칸을 비워도 됨을 플레이스홀더로 알린다(키 값 자체는 절대 표시 안 함).
+  const ph = (configured: boolean | undefined, fresh: string): string =>
+    configured ? "설정됨 — 새 키 입력 시 교체 (비워 두면 유지)" : fresh;
 
   function handleSave(): void {
     if (!canSave) return;
@@ -71,7 +85,8 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
   }
 
   return (
-    <div className="config-missing">
+    // 첫 실행은 전체화면(config-missing), 설정 재진입은 앱 위에 뜨는 모달(modal-scrim: fixed+스크림).
+    <div className={isSettings ? "modal-scrim" : "config-missing"}>
       <div
         className="wizard"
         style={{
@@ -92,14 +107,42 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
             borderBottom: "1px solid var(--chrome-border)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-            <span className="brand-mark">k</span>
-            <span style={{ fontSize: "var(--t-lg)", fontWeight: 700, color: "var(--text-strong)" }}>
-              kodocagent 설정
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              marginBottom: "6px",
+              justifyContent: "space-between",
+            }}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span className="brand-mark">k</span>
+              <span
+                style={{ fontSize: "var(--t-lg)", fontWeight: 700, color: "var(--text-strong)" }}
+              >
+                {isSettings ? "API 키 설정" : "kodocagent 설정"}
+              </span>
             </span>
+            {isSettings && onCancel && (
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={onCancel}
+                aria-label="설정 닫기"
+                disabled={saving}
+              >
+                <svg className="ico ico--sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6 6 18" />
+                </svg>
+              </button>
+            )}
           </div>
           <p style={{ fontSize: "var(--t-sm)", color: "var(--text-muted)", lineHeight: 1.5 }}>
-            사용할 AI 제공자와 API 키를 입력하세요. (키는 이 기기{" "}
+            {isSettings
+              ? "기본 제공자를 바꾸거나 API 키를 추가·교체할 수 있습니다. 비워 둔 키는 그대로 유지됩니다."
+              : "사용할 AI 제공자와 API 키를 입력하세요."}{" "}
+            (키는 이 기기{" "}
             <span style={{ fontFamily: "var(--font-mono)" }}>~/.kodocagent/config.json</span> 에만
             저장됩니다.)
           </p>
@@ -190,7 +233,7 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
                     id="key-anthropic"
                     className="field"
                     type={showAnthropicKey ? "text" : "password"}
-                    placeholder="sk-ant-…  (비워 두면 사용 안 함)"
+                    placeholder={ph(hasKeys?.anthropic, "sk-ant-…  (비워 두면 사용 안 함)")}
                     value={anthropicKey}
                     onChange={(e) => setAnthropicKey(e.target.value)}
                     style={{ paddingRight: "40px", fontFamily: "var(--font-mono)" }}
@@ -270,7 +313,7 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
                     id="key-openai"
                     className="field"
                     type={showOpenaiKey ? "text" : "password"}
-                    placeholder="sk-…  (비워 두면 사용 안 함)"
+                    placeholder={ph(hasKeys?.openai, "sk-…  (비워 두면 사용 안 함)")}
                     value={openaiKey}
                     onChange={(e) => setOpenaiKey(e.target.value)}
                     style={{ paddingRight: "40px", fontFamily: "var(--font-mono)" }}
@@ -350,7 +393,7 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
                     id="key-google"
                     className="field"
                     type={showGoogleKey ? "text" : "password"}
-                    placeholder="AIza…  (비워 두면 사용 안 함)"
+                    placeholder={ph(hasKeys?.google, "AIza…  (비워 두면 사용 안 함)")}
                     value={googleKey}
                     onChange={(e) => setGoogleKey(e.target.value)}
                     style={{ paddingRight: "40px", fontFamily: "var(--font-mono)" }}
@@ -479,8 +522,8 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
             </div>
           </div>
 
-          {/* 키가 하나도 없을 때 안내 — 셋 중 하나만 있으면 충분 */}
-          {!anyKeyEntered && (
+          {/* 키가 하나도 없을 때 안내 — 셋 중 하나만 있으면 충분 (settings 모드는 이미 키가 있으므로 생략) */}
+          {!isSettings && !anyKeyEntered && (
             <div
               style={{
                 display: "flex",
@@ -527,8 +570,13 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
             키는 이 기기에만 저장됩니다
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <button type="button" className="btn btn--ghost" onClick={handleSkip} disabled={saving}>
-              건너뛰기
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={isSettings ? onCancel : handleSkip}
+              disabled={saving}
+            >
+              {isSettings ? "취소" : "건너뛰기"}
             </button>
             <button
               type="button"
@@ -536,7 +584,7 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
               onClick={handleSave}
               disabled={!canSave}
             >
-              {saving ? "저장 중…" : "저장하고 시작"}
+              {saving ? "저장 중…" : isSettings ? "저장" : "저장하고 시작"}
             </button>
           </div>
         </div>

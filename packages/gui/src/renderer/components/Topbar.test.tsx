@@ -27,6 +27,7 @@ function baseProps() {
     contextPct: 40,
     onSelectCwd: vi.fn(),
     onNewSession: vi.fn(),
+    onOpenSettings: vi.fn(),
   };
 }
 
@@ -38,6 +39,13 @@ describe("Topbar — 콜백/비활성", () => {
     expect(props.onSelectCwd).toHaveBeenCalledTimes(1);
     await userEvent.click(screen.getByRole("button", { name: "새 세션" }));
     expect(props.onNewSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("설정 버튼이 onOpenSettings 콜백을 호출한다", async () => {
+    const props = baseProps();
+    render(<Topbar {...props} />);
+    await userEvent.click(screen.getByRole("button", { name: "설정 (API 키)" }));
+    expect(props.onOpenSettings).toHaveBeenCalledTimes(1);
   });
 
   it("running 상태에서 새 세션 버튼은 비활성", () => {
