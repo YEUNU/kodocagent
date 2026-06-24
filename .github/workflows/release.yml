@@ -58,4 +58,8 @@ jobs:
           cd - > /dev/null
           git tag "v$LOCAL"
           git push origin "v$LOCAL" || true
-          gh release create "v$LOCAL" --title "v$LOCAL" --generate-notes || true
+          # --latest=false 필수: CLI 릴리스를 GitHub "Latest" 에서 제외한다. GUI 자동업데이트
+          # (electron-updater)는 stable 채널에서 /releases/latest 의 tag 로 latest.yml 을 읽는데,
+          # CLI 릴리스가 "Latest" 가 되면 거기엔 업데이트 메타가 없어 GUI OTA 가 깨진다.
+          # (CLI 배포 실체는 npm 이라 GitHub "Latest" 배지는 GUI 앱이 갖는 게 맞다.)
+          gh release create "v$LOCAL" --title "v$LOCAL" --generate-notes --latest=false || true

@@ -140,9 +140,13 @@ jobs:
             gh release upload "$TAG" artifacts/* --clobber
           else
             echo "Release $TAG 신규 생성"
+            # --latest 명시: GUI 릴리스를 GitHub "Latest" 로 둔다. electron-updater stable 채널이
+            # /releases/latest 에서 latest.yml 을 읽으므로, 자동업데이트가 항상 최신 GUI 를 가리키게 한다.
+            # (CLI 릴리스는 release.yml 에서 --latest=false 로 제외 — 채널 충돌 방지)
             gh release create "$TAG" \
               --target "$GITHUB_SHA" \
               --title "GUI v$VERSION (unsigned)" \
               --notes "$NOTES" \
+              --latest \
               artifacts/*
           fi
