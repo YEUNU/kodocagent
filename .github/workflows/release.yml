@@ -39,6 +39,10 @@ jobs:
       # workspace:* devDependencies는 npm이 해석하지 못하므로 발행 직전 제거
       # (dist가 자급자족 번들이라 소비자에게 불필요).
       - name: Publish @kodocagent/cli (OIDC Trusted Publishing)
+        env:
+          # gh release create 가 인증에 쓰는 토큰. 없으면 release 페이지 생성이 조용히 실패한다
+          # (npm 발행·태그는 되지만 GitHub Release 노트가 안 생김).
+          GH_TOKEN: ${{ github.token }}
         run: |
           npm install -g npm@latest   # Trusted Publishing 요건: npm >=11.5.1
           LOCAL=$(node -p "require('./packages/cli/package.json').version")
