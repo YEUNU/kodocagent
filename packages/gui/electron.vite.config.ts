@@ -4,7 +4,15 @@ import { defineConfig } from "electron-vite";
 // 모든 bare specifier(글자/@ 로 시작 — @kodocagent/*·kordoc·@modelcontextprotocol/sdk·
 // electron·node 내장 등)를 외부화한다. 상대(./..)·절대(/)·가상(\0) 모듈만 번들된다.
 // (이 electron-vite 는 Rolldown 기반이라 external 에 함수가 아닌 string|RegExp 만 받는다.)
-const EXTERNAL_BARE = /^[a-zA-Z@]/;
+//
+// ⚠️ 크로스플랫폼 함정: Rolldown 은 external 정규식을 (1) 원본 specifier 와 (2) **해석된
+// 절대경로** 양쪽에 적용한다. `./agent-bridge.js` 같은 상대 import 는 (1)에선 안 걸리지만
+// 해석 후 경로가 Windows 에선 `C:\...\agent-bridge.ts` 로 시작 → 첫 글자 `C` 가 `[a-zA-Z@]`
+// 에 매칭돼 **외부화**되고 확장자가 `.ts` 로 재작성된다(맥/리눅스는 `/Users/...` 라 `/` 로
+// 시작 → 안 걸려 정상 번들). 결과: Windows 패키징 앱이 `index.js` 에서 `./agent-bridge.ts`
+// 를 import → 실행 즉시 `ERR_MODULE_NOT_FOUND` 크래시(gui-v0.5.0 Windows 회귀).
+// → 드라이브 문자 경로(`X:`)를 부정 룩어헤드로 제외해 상대 import 가 모든 OS 에서 번들되게 한다.
+const EXTERNAL_BARE = /^(?![a-zA-Z]:)[a-zA-Z@]/;
 
 export default defineConfig({
   main: {

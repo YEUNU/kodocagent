@@ -1,5 +1,11 @@
 # @kodocagent/gui
 
+## 0.5.1
+
+### Patch Changes
+
+- **Windows 패키징 앱 실행 즉시 크래시 수정**(`ERR_MODULE_NOT_FOUND: ...agent-bridge.ts`). 메인 외부화 정규식(`/^[a-zA-Z@]/`)이 Rolldown 의 **해석된 절대경로** 재검사 단계에서 Windows 드라이브 경로(`C:\...agent-bridge.ts`)의 첫 글자 `C` 까지 매칭해 상대 import 를 잘못 외부화(+`.js`→`.ts` 재작성)했다. 맥/리눅스는 경로가 `/` 로 시작해 영향이 없어 0.5.0 검증에서 누락됨. 드라이브 문자(`X:`) 부정 룩어헤드(`/^(?![a-zA-Z]:)[a-zA-Z@]/`)로 상대 import 가 모든 OS 에서 번들되게 고침. macOS 번들 무변경(회귀 없음) 확인.
+
 ## 0.5.0
 
 ### Minor Changes
