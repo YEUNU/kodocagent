@@ -1,5 +1,11 @@
 # @kodocagent/gui
 
+## 0.5.3
+
+### Patch Changes
+
+- **패키징 시 kordoc 버전 비결정 해석 수정**(0.5.2 Windows 빌드 실패의 근본 원인). `doc-tools`·`cli` 의 kordoc 의존이 `^3.4.1` 캐럿 범위였는데, npm 에 `kordoc@3.5.0` 이 새로 올라오자 `pnpm deploy --legacy`(락파일 무시 신규 해석)가 `3.5.0` 으로 해석 → `3.4.1` 패치(결정적 읽기 손상 교정)가 "unused patch" 로 빌드 실패(`ERR_PNPM_UNUSED_PATCH`). 게다가 패키징 앱이 미검증·미패치 `3.5.0` 을 실을 위험까지 있었다. kordoc 을 정확히 `3.4.1` 로 핀해 모든 해석이 결정적으로 패치된 버전을 쓰도록 고침. Windows `node-linker hoisted` 조건에서 deploy 재현 검증(unused-patch 없음·`kordoc@3.4.1_patch_hash=…` 패치 빌드 배치 확인). 0.5.2 의 교착·서명 수정도 그대로 포함.
+
 ## 0.5.2
 
 ### Patch Changes

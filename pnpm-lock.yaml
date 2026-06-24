@@ -73,7 +73,7 @@ importers:
         specifier: ^4.4.0
         version: 4.4.0
       kordoc:
-        specifier: ^3.4.1
+        specifier: 3.4.1
         version: 3.4.1(patch_hash=7865d0b565f60b2fd83e09e969bb5c05430f471f0a644609fcf7f5c47446d696)(pdfjs-dist@5.7.284)
       zod:
         specifier: ^4.4.3
@@ -147,7 +147,7 @@ importers:
         specifier: ^3.10.1
         version: 3.10.1
       kordoc:
-        specifier: ^3.4.1
+        specifier: 3.4.1
         version: 3.4.1(patch_hash=7865d0b565f60b2fd83e09e969bb5c05430f471f0a644609fcf7f5c47446d696)(pdfjs-dist@5.7.284)
       sanitize-html:
         specifier: ^2.17.5
