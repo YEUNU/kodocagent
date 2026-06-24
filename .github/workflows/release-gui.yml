@@ -74,7 +74,9 @@ jobs:
   release:
     needs: build
     # 태그 푸시면 항상, 수동 실행이면 dry_run=false 일 때만 Release 생성.
-    if: ${{ github.event_name == 'push' || github.event.inputs.dry_run == 'false' }}
+    # always() — 일부 OS 빌드가 실패해도 성공한 플랫폼 설치파일은 릴리스에 첨부한다
+    # (설치파일이 하나도 없으면 아래 가드에서 명확히 실패).
+    if: ${{ always() && (github.event_name == 'push' || github.event.inputs.dry_run == 'false') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -96,8 +98,15 @@ jobs:
             echo "::error::태그 ${{ github.ref_name }} ≠ package.json 버전 기반 ${{ steps.ver.outputs.tag }}. gui package.json 버전을 맞추세요."
             exit 1
           fi
-      - name: List collected artifacts
-        run: ls -lah artifacts
+      - name: List collected artifacts (설치파일이 하나도 없으면 실패)
+        run: |
+          ls -lah artifacts || true
+          count=$(find artifacts -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' \) 2>/dev/null | wc -l)
+          echo "설치파일 수: $count"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::빌드된 설치파일(.dmg/.exe/.AppImage)이 하나도 없습니다 — 모든 OS 빌드 실패."
+            exit 1
+          fi
       - name: Create or update GitHub Release (unsigned GUI)
         env:
           GH_TOKEN: ${{ github.token }}

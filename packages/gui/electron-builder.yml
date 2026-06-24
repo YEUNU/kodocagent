@@ -10,6 +10,9 @@
 
 appId: com.kodocagent.desktop
 productName: kodocagent
+# 실행 파일명을 명시한다. 미설정 시 package.json name(@kodocagent/gui)에서 파생돼
+# "@kodocagentgui"가 되는데, Linux AppImage는 executableName에 '@'를 허용하지 않아 빌드가 실패한다.
+executableName: kodocagent
 
 # electron 버전을 고정 명시한다. dist 는 `pnpm deploy --prod`(devDeps 제외)가 만든
 # 평탄 node_modules 에서 패키징하므로 electron(devDep)이 그 디렉터리에 없어

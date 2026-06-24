@@ -18,10 +18,12 @@
 
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const require = createRequire(import.meta.url);
 const isWin = process.platform === "win32";
 const guiDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = resolve(guiDir, "..", "..");
@@ -91,16 +93,15 @@ try {
     process.env.CSC_IDENTITY_AUTO_DISCOVERY === "true";
   const env = { ...process.env };
   if (!hasCert) env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
-  const builderBin = join(
-    guiDir,
-    "node_modules",
-    ".bin",
-    isWin ? "electron-builder.cmd" : "electron-builder",
+  // electron-builder 를 node 로 직접 실행한다. `.bin/electron-builder(.cmd)` 셤은 Windows 가
+  // node-linker=hoisted 일 때 상대경로가 깨져 "시스템이 경로를 찾을 수 없습니다"로 즉시 실패하므로,
+  // require.resolve(링커 무관)로 CLI 진입점을 찾아 process.execPath(node)로 돌린다(shell 불필요).
+  const builderCli = require.resolve("electron-builder/cli.js");
+  run(
+    process.execPath,
+    [builderCli, ...builderArgs, `-c.directories.output=${join(guiDir, "dist")}`],
+    { cwd: deployDir, env, shell: false },
   );
-  run(builderBin, [...builderArgs, `-c.directories.output=${join(guiDir, "dist")}`], {
-    cwd: deployDir,
-    env,
-  });
 } finally {
   rmSync(deployDir, { recursive: true, force: true });
 }
