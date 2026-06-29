@@ -17,12 +17,12 @@
     "audit": "pnpm audit --prod"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.16",
+    "@biomejs/biome": "^2.5.1",
     "@changesets/cli": "^2.31.0",
-    "@types/node": "^25.9.2",
+    "@types/node": "^26.0.1",
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/coverage-v8": "4.1.8",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9"
   }
 }
