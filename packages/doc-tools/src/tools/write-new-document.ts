@@ -46,12 +46,50 @@ function assertWindowsSafePath(absPath: string): void {
   }
 }
 
+/** 공문서 서식 프리셋(.hwpx 전용) — kordoc GongmunPresetInput(영문 키 + 한글 별칭)과 동기화. */
+const GONGMUN_PRESETS = [
+  "official",
+  "report",
+  "plan",
+  "notice",
+  "minutes",
+  "기안문",
+  "시행문",
+  "공문",
+  "공문서",
+  "보고서",
+  "계획서",
+  "계획",
+  "통지",
+  "알림",
+  "안내",
+  "회의록",
+] as const;
+
 export const writeNewDocumentSchema = z.object({
   path: z.string().describe("생성할 문서 경로 (cwd 기준 상대 경로 또는 절대 경로)"),
   markdown: z
     .string()
     .refine((s) => !s.includes("\u0000"), "내용에 NULL 문자를 포함할 수 없습니다")
     .describe("새 문서 내용 (마크다운 형식)"),
+  gongmunPreset: z
+    .enum(GONGMUN_PRESETS)
+    .optional()
+    .describe(
+      "공문서 서식 프리셋(.hwpx 전용). 지정 시 한국 행정 공문서 표준 서식(공식 여백·명조 15pt·" +
+        "항목부호 8단계)으로 생성. 'report'/'보고서'=□○- 보고서체, 'official'/'기안문'=법정 8단계, " +
+        "'minutes'/'회의록'=좁은 줄간격. 일반 문서는 비워 두세요.",
+    ),
+  gongmunFont: z
+    .enum(["myeongjo", "gothic"])
+    .optional()
+    .describe("본문 글꼴(공문 프리셋 시). myeongjo=명조(보고서 관행), gothic=고딕(전자결재 기본)."),
+  gongmunNumbering: z
+    .enum(["standard", "report"])
+    .optional()
+    .describe(
+      "항목부호 체계(공문 프리셋 시). standard=법정 8단계(1. 가. 1)…), report=보고서 불릿(□ ○ -).",
+    ),
 });
 
 export type WriteNewDocumentInput = z.infer<typeof writeNewDocumentSchema>;
@@ -97,10 +135,30 @@ export const writeNewDocumentTool: ToolDefinition<WriteNewDocumentInput> = {
     const warnings: string[] = [];
     let stagedData: Uint8Array;
 
+    const wantsGongmun = !!(input.gongmunPreset || input.gongmunFont || input.gongmunNumbering);
+    if (wantsGongmun && ext !== ".hwpx") {
+      warnings.push("공문서 서식 프리셋은 .hwpx에만 적용됩니다 — 이 형식에서는 무시됩니다.");
+    }
+
     if (ext === ".hwpx") {
-      // kordoc markdownToHwpx (템플릿 없음)
-      const hwpxBuffer = await markdownToHwpx(input.markdown);
+      // 공문 프리셋이 지정되면 한국 행정 공문서 표준 서식으로 렌더(미지정 시 기존 범용 변환).
+      const hwpxBuffer = wantsGongmun
+        ? await markdownToHwpx(input.markdown, {
+            gongmun: {
+              preset: input.gongmunPreset,
+              bodyFont: input.gongmunFont,
+              numbering: input.gongmunNumbering,
+            },
+          })
+        : await markdownToHwpx(input.markdown);
       stagedData = new Uint8Array(hwpxBuffer);
+      if (wantsGongmun) {
+        warnings.push(
+          `공문서 서식 프리셋 적용: ${input.gongmunPreset ?? "official"}` +
+            `${input.gongmunFont ? ` · ${input.gongmunFont}` : ""}` +
+            `${input.gongmunNumbering ? ` · ${input.gongmunNumbering} 번호체계` : ""}.`,
+        );
+      }
     } else if (ext === ".docx") {
       warnings.push("DOCX 생성: 복잡한 서식(머리글/각주/스타일)은 지원되지 않습니다.");
       const docxBuffer = await markdownToDocx(input.markdown);

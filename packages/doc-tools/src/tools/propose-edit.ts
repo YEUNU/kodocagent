@@ -30,6 +30,7 @@ import {
   resolveOutputPath,
   stageFile,
 } from "../staging.js";
+import { compareFingerprints, computeStructuralFingerprint } from "../structural-fingerprint.js";
 import { decodeTextFile } from "../text-encoding.js";
 import type { ProposeOutcome, ToolContext, ToolDefinition } from "../types.js";
 
@@ -243,9 +244,26 @@ export const proposeEditTool: ToolDefinition<ProposeEditInput> = {
           const { added, removed, modified } = compareResult.stats;
           const statsLine = `구조 변경: +${added} -${removed} ~${modified}`;
           diff = `${statsLine}\n\n${diff}`;
+
+          // 양식 적합성(conformance): 원본 양식 골격과 편집본 골격을 비교해 이탈(drift)을 경고로 노출.
+          // 텍스트 변경은 정상이므로 보지 않고, 표 격자·블록 구성·이미지/각주 손실 등 구조 변동만 본다.
+          const origBlocks = (originalResult as { blocks?: import("kordoc").IRBlock[] }).blocks;
+          const stagedBlocks = (stagedResult as { blocks?: import("kordoc").IRBlock[] }).blocks;
+          if (Array.isArray(origBlocks) && Array.isArray(stagedBlocks)) {
+            const d = compareFingerprints(
+              computeStructuralFingerprint(origBlocks),
+              computeStructuralFingerprint(stagedBlocks),
+            );
+            if (d.drift) {
+              warnings.push(
+                `양식 적합성 주의 — 편집 후 원본과 구조가 달라졌습니다(${d.details.join(", ")}). ` +
+                  "의도한 변경이 아니라면 표·구조를 보존하도록 다시 검토하세요.",
+              );
+            }
+          }
         }
       } catch {
-        // kordoc compare 실패는 무시 (optional)
+        // kordoc compare/양식검사 실패는 무시 (optional)
       }
     }
 
