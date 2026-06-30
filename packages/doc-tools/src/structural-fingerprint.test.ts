@@ -45,6 +45,18 @@ describe("compareFingerprints — 양식 drift", () => {
     expect(compareFingerprints(a, b).drift).toBe(false);
   });
 
+  it("구조 추가(표·제목)는 drift로 보지 않는다 — 손실만 감지(오탐 방지)", () => {
+    // 사용자가 표/제목을 새로 추가하는 것은 정당한 편집 — 양식 이탈이 아니다.
+    const a = computeStructuralFingerprint([heading(1, "제목"), para("본문")]);
+    const b = computeStructuralFingerprint([
+      heading(1, "제목"),
+      para("본문"),
+      table(3, 2),
+      heading(2, "추가 절"),
+    ]);
+    expect(compareFingerprints(a, b).drift).toBe(false);
+  });
+
   it("표 격자 변화를 drift로 보고한다", () => {
     const a = computeStructuralFingerprint([table(3, 2)]);
     const b = computeStructuralFingerprint([table(4, 2)]);

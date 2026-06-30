@@ -290,7 +290,6 @@ export class AgentSession {
     // turn-complete 는 모든 라운드 종료 후 1회만 방출(누적 토큰).
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
-    let sawFinish = false;
 
     try {
       while (true) {
@@ -455,7 +454,6 @@ export class AgentSession {
                   totalInputTokens += usage.inputTokens ?? 0;
                   totalOutputTokens += usage.outputTokens ?? 0;
                 }
-                sawFinish = true;
                 break;
               }
               case "error": {
@@ -506,18 +504,19 @@ export class AgentSession {
           verifyRounds++;
           const verifyMsg: ModelMessage = { role: "user", content: SELF_VERIFY_PROMPT };
           this.messages.push(verifyMsg);
-          await store.appendUser(SELF_VERIFY_PROMPT);
+          // 자동 주입 지시이므로 store에 영속화하지 않는다 — 재개 시 히스토리에 오염 방지.
+          // (인테이크 프롬프트와 동일한 패턴 — session.ts ~line 267 참조)
           continue; // 다음 반복 = 검증 라운드
         }
         break;
       }
 
-      // 모든 라운드 종료 — turn-complete 1회 방출(누적 토큰)
+      // 모든 라운드 종료 — turn-complete 1회 방출(누적 토큰).
+      // 스트림 오류로 finish 이벤트를 못 받아도 usage를 항상 정의된 객체로 방출한다.
+      // (오류 경로에서도 GUI 토큰 카운터가 undefined를 받지 않도록 0 이상의 값 보장)
       yield {
         type: "turn-complete",
-        usage: sawFinish
-          ? { inputTokens: totalInputTokens, outputTokens: totalOutputTokens }
-          : undefined,
+        usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens },
       };
     } catch (err: unknown) {
       if (signal.aborted) {

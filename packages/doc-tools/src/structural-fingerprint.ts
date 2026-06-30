@@ -125,13 +125,15 @@ export function compareFingerprints(
 ): FingerprintDrift {
   const details: string[] = [];
 
-  // 1) 구조 블록 타입 개수 변동 — 표·제목·이미지·구분선만 본다.
+  // 1) 구조 블록 타입 손실 감지 — 표·제목·이미지·구분선만 본다.
   //    단락/목록 개수 변화는 일반 텍스트 편집이라 양식 이탈로 보지 않는다(노이즈 방지).
+  //    추가(after > before)는 정당한 편집이므로 drift로 보지 않는다 — 손실(after < before)만 감지.
+  //    (각주 처리 line 149와 동일한 방향: 손실 전용)
   const STRUCTURAL = ["table", "heading", "image", "separator"];
   for (const t of STRUCTURAL) {
     const b = before.blockHistogram[t] ?? 0;
     const a = after.blockHistogram[t] ?? 0;
-    if (a !== b) details.push(`${TYPE_LABELS[t] ?? t} ${b}→${a}`);
+    if (a < b) details.push(`${TYPE_LABELS[t] ?? t} ${b}→${a}`);
   }
 
   // 2) 표 격자 — 개수가 같을 때 각 표의 행/열 변화(개수 변화는 1에서 이미 보고)

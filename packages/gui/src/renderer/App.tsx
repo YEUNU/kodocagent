@@ -37,7 +37,7 @@ function basename(p: string): string {
 export function App(): React.ReactElement {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [appState, setAppState] = useState<AppState>("idle");
-  const [pendingProposal, setPendingProposal] = useState<Proposal | null>(null);
+  const [pendingProposals, setPendingProposals] = useState<Proposal[]>([]);
   const [model, setModel] = useState<string | null>(null);
   const [provider, setProvider] = useState<string | null>(null);
   const [cwd, setCwd] = useState<string>("");
@@ -158,7 +158,7 @@ export function App(): React.ReactElement {
     };
     const s = samples[k];
     if (s) {
-      setPendingProposal({ id: "demo", stagedPath: "(데모)", warnings: [], ...s } as Proposal);
+      setPendingProposals([{ id: "demo", stagedPath: "(데모)", warnings: [], ...s } as Proposal]);
     }
   }, []);
 
@@ -249,7 +249,7 @@ export function App(): React.ReactElement {
         }
 
         case "approval-required": {
-          setPendingProposal(ev.proposal as Proposal);
+          setPendingProposals((prev) => [...prev, ev.proposal as Proposal]);
           break;
         }
 
@@ -306,6 +306,17 @@ export function App(): React.ReactElement {
           break;
         }
 
+        case "tool-result": {
+          // 정상 도구 결과는 UI에 표시하지 않지만, 실행 오류(isError)는 사용자에게 알린다.
+          if (ev.isError) {
+            setMessages((prev) => [
+              ...prev,
+              { id: nextId(), role: "error", message: `도구 오류: ${String(ev.result)}` },
+            ]);
+          }
+          break;
+        }
+
         default:
           break;
       }
@@ -355,6 +366,7 @@ export function App(): React.ReactElement {
     window.kodoc.chat.abort();
     setAppState("idle");
     currentAssistantIdRef.current = null;
+    setPendingProposals([]);
   }, []);
 
   const handleNewSession = useCallback(() => {
@@ -362,12 +374,14 @@ export function App(): React.ReactElement {
     setMessages([]);
     currentAssistantIdRef.current = null;
     setAppState("idle");
+    setPendingProposals([]);
   }, []);
 
   const handleSelectCwd = useCallback(async () => {
     const newCwd = await window.kodoc.cwd.select();
     if (newCwd) {
-      setCwd(newCwd);
+      // cwd 상태는 메인이 보내는 cwd:changed → onChange(166행)에서 setCwd가 처리하므로
+      // 여기서 중복 setCwd하지 않는다(불필요한 추가 렌더 제거). 세션 리셋만 수행.
       handleNewSession();
     }
   }, [handleNewSession]);
@@ -394,7 +408,7 @@ export function App(): React.ReactElement {
   const handleApprovalRespond = useCallback(
     (proposalId: string, approved: boolean, reason?: string) => {
       window.kodoc.approval.respond(proposalId, approved, reason);
-      setPendingProposal(null);
+      setPendingProposals((prev) => prev.slice(1));
     },
     [],
   );
@@ -440,6 +454,7 @@ export function App(): React.ReactElement {
 
   // 변경본/diff 탭: 대기 중 제안이 현재 활성 문서를 대상으로 할 때만 미리보기에 전달한다.
   // (targetPath는 상대/절대가 섞일 수 있어 파일명 기준으로 매칭)
+  const pendingProposal = pendingProposals[0] ?? null;
   const previewProposal =
     pendingProposal && activeFile && basename(pendingProposal.targetPath) === activeFile.name
       ? pendingProposal
@@ -450,6 +465,9 @@ export function App(): React.ReactElement {
       <Onboarding
         onComplete={(snapshot: ConfigSnapshot) => {
           setModel(snapshot.model);
+          setProvider(snapshot.provider);
+          setHasKeys(snapshot.hasKeys);
+          setKeyCount(Object.values(snapshot.hasKeys).filter(Boolean).length);
           setConfigMissing(false);
           setAppState("idle");
           refreshFiles();
@@ -477,6 +495,7 @@ export function App(): React.ReactElement {
         <FilePane
           files={files}
           activePath={activeFile?.path ?? null}
+          appState={appState}
           onSelect={handleSelectFile}
           onOpenDialog={handleSelectCwd}
           onDropFiles={handleDropFiles}

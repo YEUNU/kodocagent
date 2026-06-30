@@ -89,12 +89,19 @@ export function ApprovalDialog({ proposal, onRespond }: ApprovalDialogProps): Re
     first?.focus();
   }, []);
 
-  // Tab/Shift+Tab 포커스 트랩
+  // Tab/Shift+Tab 포커스 트랩 + Escape 처리
+  // biome-ignore lint/correctness/useExhaustiveDependencies: handleCancelReason은 상태 setter만 사용해 동작이 안정적 — showReason 변화에만 재바인딩하면 충분
   useEffect(() => {
     const modal = modalRef.current;
     if (!modal) return;
 
     function handleKeyDown(e: KeyboardEvent): void {
+      // Escape: 거절 사유 입력 중이면 사유 입력만 취소 (모달 자체는 닫지 않음 — 승인/거절 필수)
+      if (e.key === "Escape" && showReason) {
+        e.preventDefault();
+        handleCancelReason();
+        return;
+      }
       if (e.key !== "Tab") return;
       const focusable = Array.from(
         modal?.querySelectorAll<HTMLElement>(
@@ -120,7 +127,7 @@ export function ApprovalDialog({ proposal, onRespond }: ApprovalDialogProps): Re
 
     modal.addEventListener("keydown", handleKeyDown);
     return () => modal.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [showReason]);
 
   function handleApprove() {
     onRespond(id, true);
@@ -136,8 +143,14 @@ export function ApprovalDialog({ proposal, onRespond }: ApprovalDialogProps): Re
   }
 
   return (
-    <div className="modal-scrim" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-      <div className="modal" ref={modalRef}>
+    <div className="modal-scrim">
+      <div
+        className="modal"
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
         {/* ── Header ── */}
         <div className="modal__header">
           <div className="modal__title" id={titleId}>

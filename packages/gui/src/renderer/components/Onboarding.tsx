@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ConfigSnapshot } from "../types.js";
 
 interface OnboardingProps {
@@ -37,6 +37,60 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
   const [showOpenaiKey, setShowOpenaiKey] = useState(false);
   const [showGoogleKey, setShowGoogleKey] = useState(false);
   const [showLawKey, setShowLawKey] = useState(false);
+
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // settings 모드: 마운트 시 첫 인터랙티브 요소에 포커스
+  useEffect(() => {
+    if (!isSettings) return;
+    const modal = modalRef.current;
+    if (!modal) return;
+    const first = modal.querySelector<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    );
+    first?.focus();
+  }, [isSettings]);
+
+  // settings 모드: Tab/Shift+Tab 포커스 트랩 + Escape 닫기
+  useEffect(() => {
+    if (!isSettings) return;
+    const modal = modalRef.current;
+    if (!modal) return;
+
+    function handleKeyDown(e: KeyboardEvent): void {
+      if (e.key === "Escape") {
+        if (!saving && onCancel) {
+          e.preventDefault();
+          onCancel();
+        }
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const focusable = Array.from(
+        modal?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+
+    modal.addEventListener("keydown", handleKeyDown);
+    return () => modal.removeEventListener("keydown", handleKeyDown);
+  }, [isSettings, saving, onCancel]);
 
   // 셋 중 최소 하나의 키만 있으면 저장 가능. 입력한 제공자로 자동 동작한다(provider 자동 선택).
   const anyKeyEntered = [anthropicKey, openaiKey, googleKey].some((k) => k.trim().length > 0);
@@ -89,8 +143,13 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
     <div className={isSettings ? "modal-scrim" : "config-missing"}>
       <div
         className="wizard"
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={isSettings ? "API 키 설정" : "kodocagent 설정"}
         style={{
-          width: "560px",
+          width: "min(560px, 100%)",
+          maxHeight: "min(86vh, 100%)",
           background: "var(--chrome-surface)",
           border: "1px solid var(--chrome-border)",
           borderRadius: "var(--r-lg)",
@@ -156,6 +215,8 @@ export function Onboarding(props: OnboardingProps): React.ReactElement {
             flexDirection: "column",
             gap: "16px",
             overflowY: "auto",
+            flex: 1,
+            minHeight: 0,
           }}
         >
           {/* 에러 배너 */}

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { ProviderCompareResult } from "../types.js";
 
 interface CompareDialogProps {
@@ -25,9 +26,72 @@ export function CompareDialog({
   error,
   onClose,
 }: CompareDialogProps): React.ReactElement {
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // 마운트 시 첫 인터랙티브 요소에 포커스
+  useEffect(() => {
+    const modal = modalRef.current;
+    if (!modal) return;
+    const first = modal.querySelector<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    );
+    first?.focus();
+  }, []);
+
+  // Tab 포커스 트랩 + Escape로 닫기
+  useEffect(() => {
+    const modal = modalRef.current;
+    if (!modal) return;
+
+    function handleKeyDown(e: KeyboardEvent): void {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const focusable = Array.from(
+        modal?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+
+    modal.addEventListener("keydown", handleKeyDown);
+    return () => modal.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="modal-scrim" role="dialog" aria-modal="true" aria-label="모델 비교 결과">
-      <div className="modal">
+    // 읽기 전용 비교 모달 — 배경(스크림) 클릭으로 닫기(직접 클릭만). 키보드 닫기는 Escape·닫기 버튼이 담당.
+    // biome-ignore lint/a11y: 배경 오버레이는 마우스 편의용 — 다이얼로그 자체는 role/aria·포커스 트랩·Escape로 접근 가능
+    <div
+      className="modal-scrim"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="modal"
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="모델 비교 결과"
+      >
         <div className="modal__header">
           <div className="modal__title">모델 비교</div>
           <div className="t-sm t-muted" style={{ wordBreak: "break-word" }}>

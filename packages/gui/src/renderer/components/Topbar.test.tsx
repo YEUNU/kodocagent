@@ -54,6 +54,18 @@ describe("Topbar — 콜백/비활성", () => {
       true,
     );
   });
+
+  it("running 상태에서 폴더 선택 버튼은 비활성(고스트 메시지 레이스 방지)", () => {
+    render(<Topbar {...baseProps()} appState="running" />);
+    expect((screen.getByRole("button", { name: /docs/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("running 상태에서 설정 버튼은 비활성(saveSetup→init 레이스 방지)", () => {
+    render(<Topbar {...baseProps()} appState="running" />);
+    expect(
+      (screen.getByRole("button", { name: "설정 (API 키)" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
 });
 
 describe("Topbar — 표시 로직", () => {

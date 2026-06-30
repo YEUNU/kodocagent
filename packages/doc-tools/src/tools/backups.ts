@@ -343,6 +343,9 @@ export const restoreBackupTool: ToolDefinition<RestoreBackupInput> = {
     warnings.push(
       "복원을 실행하면 현재 파일도 백업된 뒤 덮어쓰여집니다(복원 자체도 되돌릴 수 있음).",
     );
+    warnings.push(
+      "이 문서가 한컴오피스·한글뷰어 등에서 열려 있다면 닫은 뒤 적용하세요. 열린 채로 적용하면 변경 내용이 화면에 바로 보이지 않거나, 프로그램에서 저장할 때 덮어써질 수 있습니다.",
+    );
 
     const summary = input.summary ?? `백업으로 되돌리기: ${targetBase}`;
     const chosenBackupPath = chosen.fullPath;

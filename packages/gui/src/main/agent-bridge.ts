@@ -8,6 +8,7 @@
  * 보안 원칙: API 키·키 파일 내용을 렌더러/IPC로 전달 금지 (boolean만).
  */
 
+import { realpathSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, resolve } from "node:path";
 import type { AgentEvent, AgentSessionOptions, ProviderComparisonResult } from "@kodocagent/core";
@@ -226,6 +227,9 @@ export class AgentBridge {
    * cwd 변경
    */
   async setCwd(newCwd: string): Promise<void> {
+    // 실행 중인 턴을 먼저 중단한다 — abort 없이 init()하면 구 for-await 루프가
+    // 고스트 이벤트를 계속 방출하고 busy=true가 유지된다.
+    this.abort();
     this.cwd = newCwd;
     await this.init();
   }
@@ -326,7 +330,16 @@ export class AgentBridge {
     try {
       const dir = KODOC_PATHS.backups;
       const names = await readdir(dir);
-      const cwdResolved = resolve(this.cwd);
+      // realpathSync로 심볼릭 링크를 풀어 비교한다 — resolve()만으로는 symlink 경로가
+      // 다른 문자열이 되어 같은 폴더임에도 백업이 필터링되는 오탐이 발생한다.
+      // 경로가 존재하지 않으면(드문 엣지케이스) resolve() fallback을 사용한다.
+      const cwdResolved = (() => {
+        try {
+          return realpathSync(this.cwd);
+        } catch {
+          return resolve(this.cwd);
+        }
+      })();
       const out: BackupEntry[] = [];
       for (const filename of names) {
         const m = filename.match(BACKUP_RE);
@@ -345,7 +358,15 @@ export class AgentBridge {
         } catch {
           // 사이드카 없음(구버전 백업) → 폴더를 알 수 없으므로 제외
         }
-        if (!sourcePath || resolve(dirname(sourcePath)) !== cwdResolved) continue;
+        if (!sourcePath) continue;
+        const sourceDir = (() => {
+          try {
+            return realpathSync(dirname(sourcePath));
+          } catch {
+            return resolve(dirname(sourcePath));
+          }
+        })();
+        if (sourceDir !== cwdResolved) continue;
         let mtimeMs = 0;
         try {
           mtimeMs = (await stat(join(dir, filename))).mtimeMs;
@@ -533,11 +554,17 @@ export class AgentBridge {
     }
     // 선택한 provider 에 키가 없으면 키가 있는 provider 로 자동 보정한다(셋 중 하나면 충분).
     config.provider = resolveActiveProvider(config) ?? config.provider;
+    // blank=keep: 빈 문자열/undefined는 "필드 미전송"으로 처리해 기존 키를 유지한다.
+    // AI 프로바이더 키(위 apiKeys 루프)와 동일한 semantics — 의도된 일관 설계.
+    // 키를 실제로 삭제하려면 별도 "키 삭제" API가 필요하며 현재 v1 범위 밖이다.
     if (typeof values.lawApiKey === "string" && values.lawApiKey.trim()) {
       config.lawApiKey = values.lawApiKey.trim();
     }
     await saveConfig(config);
     this.config = config;
+    // 실행 중인 턴을 먼저 중단한다 — abort 없이 init()하면 구 for-await 루프가
+    // 고스트 이벤트를 계속 방출하고 busy=true가 유지된다.
+    this.abort();
     await this.init();
     return this.getConfigSnapshot();
   }

@@ -179,8 +179,14 @@ export const proposeEditTool: ToolDefinition<ProposeEditInput> = {
         ext === ".hwp"
           ? "표·셀 편집이 필요하면 한글에서 .hwpx로 저장한 뒤 propose_cell_edit/propose_table_structure를 사용하세요."
           : "표 구조 변경은 propose_table_structure, 셀 값은 propose_cell_edit을 사용하세요.";
-      for (const s of patchResult.skipped) {
-        warnings.push(`일부 변경이 적용되지 않았습니다(${s.reason ?? "사유 미상"}). ${skipGuide}`);
+      // 스킵 경고를 집계해 단일 경고로 출력한다 (동일 이유가 N번 반복되지 않도록).
+      if (patchResult.skipped.length > 0) {
+        const skipReasons = [
+          ...new Set(patchResult.skipped.map((s) => s.reason ?? "사유 미상")),
+        ].join("; ");
+        warnings.push(
+          `${patchResult.skipped.length}개 블록·이미지에서 변경이 적용되지 않았습니다(${skipReasons}). ${skipGuide}`,
+        );
       }
 
       // 잘린 내용으로 전체 교체 시 뒷부분 영구 소실 경고

@@ -42,12 +42,17 @@ export function detectStructuralLoss(
     separator: "구분선",
   };
 
-  // 히스토그램 빌더
+  // 히스토그램 빌더 — 중첩 블록(children)도 재귀적으로 순회한다.
+  // (computeStructuralFingerprint의 walk()와 동일한 재귀 패턴)
   function histogram(blocks: IRBlock[]): Record<string, number> {
     const h: Record<string, number> = {};
-    for (const b of blocks) {
-      h[b.type] = (h[b.type] ?? 0) + 1;
-    }
+    const walk = (bs: IRBlock[]): void => {
+      for (const b of bs) {
+        h[b.type] = (h[b.type] ?? 0) + 1;
+        if (b.children && b.children.length > 0) walk(b.children);
+      }
+    };
+    walk(blocks);
     return h;
   }
 

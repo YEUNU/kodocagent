@@ -56,12 +56,12 @@ describe("compareProviders", () => {
     const results = await compareProviders(cfg, "요약해줘");
     expect(results).toHaveLength(3);
     const byProv = Object.fromEntries(results.map((r) => [r.provider, r]));
-    expect(byProv.anthropic.ok).toBe(true);
-    expect(byProv.anthropic.text).toContain("anthropic");
-    expect(byProv.anthropic.outputTokens).toBe(5);
-    expect(byProv.google.ok).toBe(true);
-    expect(byProv.openai.ok).toBe(false);
-    expect(byProv.openai.error).toContain("rate limit");
+    expect(byProv.anthropic?.ok).toBe(true);
+    expect(byProv.anthropic?.text).toContain("anthropic");
+    expect(byProv.anthropic?.outputTokens).toBe(5);
+    expect(byProv.google?.ok).toBe(true);
+    expect(byProv.openai?.ok).toBe(false);
+    expect(byProv.openai?.error).toContain("rate limit");
   });
 
   it("documentText 를 프롬프트 앞에 붙인다", async () => {

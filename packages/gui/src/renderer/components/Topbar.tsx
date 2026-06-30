@@ -53,7 +53,12 @@ export function Topbar(props: TopbarProps): React.ReactElement {
         <span className="topbar__brand">
           <span className="brand-mark">k</span> {brand}
         </span>
-        <button type="button" className="topbar__folder" onClick={onSelectCwd}>
+        <button
+          type="button"
+          className="topbar__folder"
+          onClick={onSelectCwd}
+          disabled={appState === "running"}
+        >
           <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
           </svg>
@@ -86,13 +91,13 @@ export function Topbar(props: TopbarProps): React.ReactElement {
           </span>
         )}
 
-        {/* 모델 버튼 */}
-        <button type="button" className="model-pick">
+        {/* 모델 표시 (선택 기능 미구현 — 클릭 불가) */}
+        <span className="model-pick" title={`현재 모델: ${model ?? "(기본값)"}`}>
           {model ?? "(기본값)"}
           <svg className="ico ico--sm" viewBox="0 0 24 24" aria-hidden="true">
             <path d="m6 9.5 6 6 6-6" />
           </svg>
-        </button>
+        </span>
 
         {/* 상태 */}
         <span className="topbar__state" data-state={appState}>
@@ -104,6 +109,7 @@ export function Topbar(props: TopbarProps): React.ReactElement {
           type="button"
           className="btn btn--ghost btn--sm"
           onClick={onOpenSettings}
+          disabled={appState === "running"}
           aria-label="설정 (API 키)"
           title="설정 (API 키)"
         >

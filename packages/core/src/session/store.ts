@@ -144,7 +144,10 @@ export class SessionStore {
     await this._appendRecord({ type: "assistant", data: message });
   }
 
-  /** 툴 결과 기록 */
+  /**
+   * 툴 결과 감사 기록 전용 — loadMessages()에서 재생되지 않는다.
+   * (대화 재생은 appendAssistant()가 담당; 툴 결과는 assistant 메시지에 이미 포함됨)
+   */
   async appendToolResult(callId: string, result: unknown, isError: boolean): Promise<void> {
     await this._appendRecord({ type: "tool-result", data: { callId, result, isError } });
   }

@@ -11,7 +11,7 @@
  * - 건너뛰기는 config.get → onComplete
  * - 키 입력은 기본 password(가림), 보기 토글로 text 전환
  */
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConfigSnapshot } from "../types.js";
@@ -124,5 +124,36 @@ describe("Onboarding — 키 가림", () => {
     ) as HTMLButtonElement;
     await userEvent.click(toggle);
     expect(input.type).toBe("text");
+  });
+});
+
+describe("Onboarding — settings 모드(모달)", () => {
+  const settingsHasKeys = { anthropic: true, openai: false, google: false };
+
+  it("settings 모드 모달은 role=dialog/aria-modal로 노출된다", () => {
+    render(
+      <Onboarding
+        mode="settings"
+        onComplete={vi.fn()}
+        onCancel={vi.fn()}
+        hasKeys={settingsHasKeys}
+      />,
+    );
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+  });
+
+  it("settings 모드에서 Escape 키로 onCancel(닫기)이 호출된다", () => {
+    const onCancel = vi.fn();
+    render(
+      <Onboarding
+        mode="settings"
+        onComplete={vi.fn()}
+        onCancel={onCancel}
+        hasKeys={settingsHasKeys}
+      />,
+    );
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

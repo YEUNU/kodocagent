@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { BackupEntry, FileEntry } from "../types.js";
 
 interface FilePaneProps {
   files: FileEntry[];
   activePath: string | null;
+  appState: "idle" | "running" | "config-missing";
   onSelect: (path: string) => void;
   onOpenDialog: () => void;
   onDropFiles: (absPaths: string[]) => void;
@@ -12,7 +13,8 @@ interface FilePaneProps {
 }
 
 export function FilePane(props: FilePaneProps): React.ReactElement {
-  const { files, activePath, onSelect, onOpenDialog, onDropFiles, backups, onRestore } = props;
+  const { files, activePath, appState, onSelect, onOpenDialog, onDropFiles, backups, onRestore } =
+    props;
   const [over, setOver] = useState(false);
 
   function handleDragOver(e: React.DragEvent<HTMLDivElement>): void {
@@ -37,7 +39,12 @@ export function FilePane(props: FilePaneProps): React.ReactElement {
     <aside className="pane">
       <div className="pane__header">
         <span className="pane__title">파일</span>
-        <button type="button" className="btn btn--ghost btn--sm" onClick={onOpenDialog}>
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          onClick={onOpenDialog}
+          disabled={appState === "running"}
+        >
           <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />
           </svg>
@@ -63,7 +70,10 @@ export function FilePane(props: FilePaneProps): React.ReactElement {
           <div className="file-empty">지원 문서가 없습니다</div>
         ) : (
           files.map((f) => {
-            const isActive = f.path === activePath;
+            // 목록 경로(f.path)는 basename, activePath는 선택 시 basename·드롭 시 절대경로일 수 있어
+            // basename 기준으로도 비교한다(드롭한 파일도 활성 하이라이트되도록).
+            const activeBase = activePath?.split(/[\\/]/).pop() ?? null;
+            const isActive = f.path === activePath || f.path === activeBase;
             const isHwp = f.ext === ".hwp";
 
             return (
@@ -87,7 +97,12 @@ export function FilePane(props: FilePaneProps): React.ReactElement {
                 )}
                 <span className="file__name">{f.name}</span>
                 {isHwp ? (
-                  <span className="file__badge file__badge--ro">변환</span>
+                  <span
+                    className="file__badge file__badge--ro"
+                    title=".hwp은 자동 변환 후 편집 가능(찾기·바꾸기 등 일부 정밀 편집은 .hwpx 권장)"
+                  >
+                    변환
+                  </span>
                 ) : f.writable ? (
                   <span className="file__badge file__badge--ok">편집</span>
                 ) : (
@@ -109,50 +124,71 @@ export function FilePane(props: FilePaneProps): React.ReactElement {
               되돌리기 타임라인
             </div>
             <ul className="timeline">
-              {backups.map((b) => (
-                <li key={b.filename}>
-                  <button
-                    type="button"
-                    className="timeline__item"
-                    style={{
-                      width: "100%",
-                      border: "none",
-                      background: "transparent",
-                      font: "inherit",
-                      textAlign: "left",
-                      alignItems: "flex-start",
-                    }}
-                    onClick={() => onRestore(b)}
-                    title={`${b.time}${b.summary ? ` · ${b.summary}` : ""} · ${b.name} 시점으로 되돌리기`}
-                  >
-                    <span className="timeline__time">{b.time.slice(11, 16)}</span>
-                    <span className="grow" style={{ overflow: "hidden", minWidth: 0 }}>
-                      <span
-                        style={{
-                          display: "block",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {b.summary ?? "백업"}
-                      </span>
-                      <span
+              {backups.map((b, i) => {
+                const dateOf = (t: string) => {
+                  const m = t.match(/^\s*(\d{4})\.\s*(\d{2})\.\s*(\d{2})/);
+                  return m ? `${m[1]}. ${m[2]}. ${m[3]}.` : "";
+                };
+                const dateLabel = dateOf(b.time);
+                const prev = i > 0 ? backups[i - 1] : undefined;
+                const showDate = dateLabel !== "" && dateLabel !== (prev ? dateOf(prev.time) : "");
+                return (
+                  <Fragment key={b.filename}>
+                    {showDate && (
+                      <li
                         className="t-faint"
-                        style={{
-                          display: "block",
-                          fontSize: "var(--t-xs)",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
+                        style={{ listStyle: "none", fontSize: "var(--t-xs)", padding: "8px 0 2px" }}
                       >
-                        {b.name}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
+                        {dateLabel}
+                      </li>
+                    )}
+                    <li>
+                      <button
+                        type="button"
+                        className="timeline__item"
+                        style={{
+                          width: "100%",
+                          border: "none",
+                          background: "transparent",
+                          font: "inherit",
+                          textAlign: "left",
+                          alignItems: "flex-start",
+                        }}
+                        onClick={() => onRestore(b)}
+                        title={`${b.time}${b.summary ? ` · ${b.summary}` : ""} · ${b.name} 시점으로 되돌리기`}
+                      >
+                        <span className="timeline__time">
+                          {b.time.match(/(\d{2}:\d{2}):\d{2}\s*$/)?.[1] ?? b.time}
+                        </span>
+                        <span className="grow" style={{ overflow: "hidden", minWidth: 0 }}>
+                          <span
+                            style={{
+                              display: "block",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {b.summary ?? "백업"}
+                          </span>
+                          <span
+                            className="t-faint"
+                            style={{
+                              display: "block",
+                              fontSize: "var(--t-xs)",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {b.name}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  </Fragment>
+                );
+              })}
             </ul>
           </>
         )}

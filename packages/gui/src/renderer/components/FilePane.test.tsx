@@ -43,6 +43,7 @@ function baseProps() {
     onDropFiles: vi.fn(),
     backups: [] as BackupEntry[],
     onRestore: vi.fn(),
+    appState: "idle" as const,
   };
 }
 
@@ -107,15 +108,17 @@ describe("FilePane — 되돌리기 타임라인", () => {
       {
         filename: "bak-1",
         name: "보고서.hwpx",
-        time: "2026-06-16 23:18:42",
+        time: "2026. 06. 17. 17:18:42",
         mtimeMs: 1,
         summary: "제목 수정",
       },
     ];
     render(<FilePane {...props} backups={backups} />);
     expect(screen.getByText("되돌리기 타임라인")).toBeTruthy();
-    // time.slice(11,16) → "23:18"
-    expect(screen.getByText("23:18")).toBeTruthy();
+    // 실제 런타임 포맷(ko-KR locale, 마침표 구분)에서 HH:MM 정확 추출.
+    // 과거 .slice(11,16)은 "7. 17" 같은 깨진 값을 반환했다 — 회귀 가드.
+    expect(screen.getByText("17:18")).toBeTruthy();
+    expect(screen.queryByText("7. 17")).toBeNull();
     await userEvent.click(screen.getByText("제목 수정"));
     expect(props.onRestore).toHaveBeenCalledWith(backups[0]);
   });

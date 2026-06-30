@@ -287,11 +287,15 @@ export async function cleanOldBackups(
   let kept = 0;
 
   for (const entry of entries) {
+    // 사이드카(점으로 시작)는 백업 파일 삭제 시 함께 처리하므로 독립 판정 제외
+    if (entry.startsWith(".")) continue;
     const fullPath = join(backupsRoot, entry);
     try {
       const info = await stat(fullPath);
       if (info.mtimeMs < cutoff) {
         await rm(fullPath, { recursive: true, force: true });
+        // 대응 사이드카도 best-effort로 함께 삭제 (고아 .meta.json 방지)
+        await rm(join(backupsRoot, `.${entry}.meta.json`), { force: true }).catch(() => undefined);
         deleted++;
       } else {
         kept++;

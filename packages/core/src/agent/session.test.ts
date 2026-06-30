@@ -565,7 +565,8 @@ describe("AgentSession — 자가 검증 루프", () => {
     expect(text).toContain("검증 완료");
     // turn-complete는 모든 라운드 후 1회만
     expect(events.filter((e) => e.type === "turn-complete")).toHaveLength(1);
-    // 검증 프롬프트가 대화에 주입됨
+    // 자가 검증 프롬프트는 store에 user 메시지로 영속화되지 않는다 —
+    // 세션 재개 시 자동 주입 지시가 사용자 발화로 히스토리에 오염되는 것을 방지(인테이크 패턴과 동일).
     const msgs = await store.loadMessages();
     const hasVerifyPrompt = msgs.some(
       (m) =>
@@ -573,7 +574,7 @@ describe("AgentSession — 자가 검증 루프", () => {
         typeof m.content === "string" &&
         m.content.includes("[자동 검증 단계]"),
     );
-    expect(hasVerifyPrompt).toBe(true);
+    expect(hasVerifyPrompt).toBe(false);
   });
 
   it("KODOC_SELF_VERIFY=0이면 검증 라운드를 건너뛴다", async () => {
