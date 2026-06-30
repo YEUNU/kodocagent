@@ -14,7 +14,12 @@ import type { SessionStore } from "../session/store.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import { compactMessages } from "./context.js";
 import type { AgentEvent } from "./events.js";
-import { buildSystemPromptParts, buildThrashNudge, SELF_VERIFY_PROMPT } from "./prompts.js";
+import {
+  buildSystemPromptParts,
+  buildThrashNudge,
+  INTAKE_PROMPT,
+  SELF_VERIFY_PROMPT,
+} from "./prompts.js";
 
 /**
  * 문서를 실제로 변경하는(승인 후 커밋되는) 편집 도구 집합.
@@ -258,11 +263,21 @@ export class AgentSession {
   async *run(userMessage: string, signal: AbortSignal): AsyncIterable<AgentEvent> {
     const { config, model, tools, store } = this.opts;
 
-    // 사용자 메시지 영속화
+    // 사용자 메시지 영속화 (원본 그대로 — 인테이크 지시는 히스토리에 저장하지 않는다)
     await store.appendUser(userMessage);
 
-    // 메시지 배열에 사용자 메시지 추가
-    const userMsg: ModelMessage = { role: "user", content: userMessage };
+    // 요청 분해 인테이크 — 세션 첫 실질 턴에서만, 사용자 메시지에 "능력-단위로 분해 후 진행"
+    // 지시를 함께 실어 첫 LLM 호출에 보낸다(별도 플래너 호출 없음). 약한 모델이 엉뚱한 도구를
+    // 쓰거나 산만해지는 것을 구조적으로 보정한다. KODOC_INTAKE=0 으로 비활성(평가 대조).
+    const isFirstTurn = this.messages.length === 0;
+    const intakeEnabled = process.env.KODOC_INTAKE !== "0";
+    const modelContent =
+      isFirstTurn && intakeEnabled
+        ? `${INTAKE_PROMPT}\n\n[사용자 요청]\n${userMessage}`
+        : userMessage;
+
+    // 메시지 배열에 사용자 메시지 추가(모델에 보낼 내용)
+    const userMsg: ModelMessage = { role: "user", content: modelContent };
     this.messages.push(userMsg);
 
     const aiSdkTools = tools.toAiSdkTools();

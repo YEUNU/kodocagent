@@ -1029,3 +1029,51 @@ describe("AgentSession — 승인 이벤트 전달(교착 회귀 방지)", () =>
     expect(events.some((e) => e.type === "turn-complete")).toBe(true);
   }, 10000);
 });
+
+describe("AgentSession — 요청 분해 인테이크", () => {
+  beforeEach(async () => {
+    await mkdir(testSessionsDir, { recursive: true });
+  });
+  afterEach(async () => {
+    await rm(testSessionsDir, { recursive: true, force: true });
+  });
+
+  async function runFirstTurn(model: LanguageModel, message: string): Promise<string> {
+    const store = await createStore();
+    const session = new AgentSession({
+      config: testConfig,
+      model,
+      tools: new ToolRegistry(),
+      approvalHandler: async () => ({ approved: true }),
+      store,
+      cwd: "/test",
+    });
+    const controller = new AbortController();
+    for await (const _e of session.run(message, controller.signal)) {
+      // 소비
+    }
+    const raw = model as unknown as import("ai/test").MockLanguageModelV3;
+    return JSON.stringify(raw.doStreamCalls[0]);
+  }
+
+  it("첫 턴에 요청 분해 인테이크가 사용자 메시지와 함께 주입된다", async () => {
+    const model = makeMockModel(makeStreamParts("처리하겠습니다"));
+    const callJson = await runFirstTurn(model, "이 문서 검토해줘");
+    expect(callJson).toContain("요청 분해"); // INTAKE_PROMPT 주입됨
+    expect(callJson).toContain("이 문서 검토해줘"); // 원본 요청도 포함
+  });
+
+  it("KODOC_INTAKE=0 이면 인테이크가 주입되지 않는다", async () => {
+    const prev = process.env.KODOC_INTAKE;
+    process.env.KODOC_INTAKE = "0";
+    try {
+      const model = makeMockModel(makeStreamParts("처리하겠습니다"));
+      const callJson = await runFirstTurn(model, "이 문서 검토해줘");
+      expect(callJson).not.toContain("요청 분해");
+      expect(callJson).toContain("이 문서 검토해줘");
+    } finally {
+      if (prev === undefined) delete process.env.KODOC_INTAKE;
+      else process.env.KODOC_INTAKE = prev;
+    }
+  });
+});
