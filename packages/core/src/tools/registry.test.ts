@@ -38,7 +38,7 @@ describe("ToolRegistry 승인 게이트 (두 단계)", () => {
     const tools = registry.toAiSdkTools();
     const result = await tools["test_tool"]!.execute!(
       { value: "hello" },
-      { toolCallId: "tc-1", messages: [], abortSignal: undefined },
+      { toolCallId: "tc-1", messages: [], abortSignal: undefined, context: undefined },
     );
     expect(executeFn).toHaveBeenCalledOnce();
     expect(result).toBe("실행됨");
@@ -80,7 +80,7 @@ describe("ToolRegistry 승인 게이트 (두 단계)", () => {
     const tools = registry.toAiSdkTools();
     const result = await tools["propose_edit"]!.execute!(
       { path: "/target/file.hwpx", newMarkdown: "# 새 제목", summary: "제목 변경" },
-      { toolCallId: "tc-1", messages: [], abortSignal: undefined },
+      { toolCallId: "tc-1", messages: [], abortSignal: undefined, context: undefined },
     );
 
     expect(proposeFn).toHaveBeenCalledOnce();
@@ -126,7 +126,7 @@ describe("ToolRegistry 승인 게이트 (두 단계)", () => {
     const tools = registry.toAiSdkTools();
     const result = await tools["propose_edit_reject"]!.execute!(
       { path: "/target/file.hwpx" },
-      { toolCallId: "tc-1", messages: [], abortSignal: undefined },
+      { toolCallId: "tc-1", messages: [], abortSignal: undefined, context: undefined },
     );
 
     // commit이 호출되지 않아야 함
@@ -170,7 +170,7 @@ describe("ToolRegistry 승인 게이트 (두 단계)", () => {
     const tools = registry.toAiSdkTools();
     const result = await tools["no_reason_reject"]!.execute!(
       {},
-      { toolCallId: "tc-1", messages: [], abortSignal: undefined },
+      { toolCallId: "tc-1", messages: [], abortSignal: undefined, context: undefined },
     );
 
     expect(String(result)).toContain("거절");
@@ -198,7 +198,7 @@ describe("ToolRegistry 승인 게이트 (두 단계)", () => {
     const tools = registry.toAiSdkTools();
     const result = await tools["error_propose"]!.execute!(
       { path: "/target/file.hwpx" },
-      { toolCallId: "tc-1", messages: [], abortSignal: undefined },
+      { toolCallId: "tc-1", messages: [], abortSignal: undefined, context: undefined },
     );
 
     expect(String(result)).toBe("오류: 파일을 찾을 수 없습니다.");
@@ -244,7 +244,7 @@ describe("ToolRegistry 승인 게이트 (두 단계)", () => {
     const tools = registry.toAiSdkTools();
     await tools["event_propose"]!.execute!(
       { path: "/target/file.hwpx" },
-      { toolCallId: "tc-1", messages: [], abortSignal: undefined },
+      { toolCallId: "tc-1", messages: [], abortSignal: undefined, context: undefined },
     );
 
     expect(emitterFn).toHaveBeenCalledOnce();
@@ -300,7 +300,7 @@ describe("열린 파일 경고 (OVERWRITE_KINDS)", () => {
     const tools = registry.toAiSdkTools();
     const result = await tools[`tool_${kind}`]!.execute!(
       {},
-      { toolCallId: "tc-warn", messages: [], abortSignal: undefined },
+      { toolCallId: "tc-warn", messages: [], abortSignal: undefined, context: undefined },
     );
     return String(result);
   }
@@ -357,7 +357,7 @@ describe("열린 파일 경고 (OVERWRITE_KINDS)", () => {
     const tools = registry.toAiSdkTools();
     await tools["tool_dup_warn"]!.execute!(
       {},
-      { toolCallId: "tc-dup", messages: [], abortSignal: undefined },
+      { toolCallId: "tc-dup", messages: [], abortSignal: undefined, context: undefined },
     );
 
     // proposal.warnings에 동일 문자열이 1번만 있어야 함
@@ -418,7 +418,7 @@ describe("가드 A — mtime lost-update 방지", () => {
       const tools = registry.toAiSdkTools();
       const result = await tools["mtime_test_tool"]!.execute!(
         {},
-        { toolCallId: "tc-mtime-1", messages: [], abortSignal: undefined },
+        { toolCallId: "tc-mtime-1", messages: [], abortSignal: undefined, context: undefined },
       );
 
       // commit이 호출되지 않아야 함
@@ -442,7 +442,7 @@ describe("가드 A — mtime lost-update 방지", () => {
       const tools = registry.toAiSdkTools();
       const result = await tools["mtime_test_tool"]!.execute!(
         {},
-        { toolCallId: "tc-mtime-2", messages: [], abortSignal: undefined },
+        { toolCallId: "tc-mtime-2", messages: [], abortSignal: undefined, context: undefined },
       );
 
       // commit이 호출되어야 함
@@ -496,7 +496,7 @@ describe("가드 A — mtime lost-update 방지", () => {
       const tools = registry.toAiSdkTools();
       const result = await tools["srcmtime_test_tool"]!.execute!(
         {},
-        { toolCallId: "tc-srcmtime-1", messages: [], abortSignal: undefined },
+        { toolCallId: "tc-srcmtime-1", messages: [], abortSignal: undefined, context: undefined },
       );
 
       // 베이스라인(staleMtimeMs)과 파일 실제 mtime이 다르므로 commit이 중단되어야 함
