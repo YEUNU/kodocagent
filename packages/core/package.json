@@ -29,12 +29,12 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^4.0.4",
-    "@ai-sdk/google": "^4.0.3",
-    "@ai-sdk/openai": "^4.0.4",
+    "@ai-sdk/anthropic": "4.0.2",
+    "@ai-sdk/google": "4.0.2",
+    "@ai-sdk/openai": "4.0.2",
     "@kodocagent/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "ai": "^7.0.5",
+    "ai": "7.0.6",
     "zod": "^4.4.3"
   },
   "devDependencies": {

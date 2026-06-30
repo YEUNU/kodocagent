@@ -42,7 +42,7 @@
   "devDependencies": {
     "@kodocagent/core": "workspace:*",
     "@types/sanitize-html": "^2.16.1",
-    "ai": "^7.0.5",
+    "ai": "7.0.6",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"
   }
