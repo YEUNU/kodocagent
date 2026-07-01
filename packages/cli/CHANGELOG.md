@@ -1,5 +1,12 @@
 # kodocagent
 
+## 0.10.0
+
+### Minor Changes
+
+- **요청 분해 인테이크를 매 수정·작성 턴으로 확장** — 기존엔 세션 첫 턴에서만 요청을 도구 능력 단위로 분해했으나, 이제 사용자가 수정·작성을 요청하는 **모든 턴**에서 동작합니다. 프롬프트가 스스로 판단해 단순 질문·읽기·요약 턴에는 분해를 건너뜁니다(비편집 턴 오버헤드 없음). `KODOC_INTAKE=0` 으로 비활성 가능.
+- 의존성 최신화: `@vitest/coverage-v8` 4.1.9, GitHub Actions(`upload-artifact` v7·`download-artifact` v8·`checkout` v7).
+
 ## 0.7.1
 
 ### Patch Changes
