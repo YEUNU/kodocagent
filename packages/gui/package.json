@@ -1,6 +1,6 @@
 {
   "name": "@kodocagent/gui",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "description": "kodocagent Electron 데스크톱 GUI",
   "private": true,
   "type": "module",
