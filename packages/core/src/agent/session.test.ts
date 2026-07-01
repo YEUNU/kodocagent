@@ -1064,6 +1064,30 @@ describe("AgentSession — 요청 분해 인테이크", () => {
     expect(callJson).toContain("이 문서 검토해줘"); // 원본 요청도 포함
   });
 
+  it("후속 턴(첫 턴이 아니어도)에도 인테이크가 주입된다 — 수정/작성 요청마다 동작", async () => {
+    const model = makeMockModel(makeStreamParts("처리하겠습니다"));
+    const store = await createStore();
+    const session = new AgentSession({
+      config: testConfig,
+      model,
+      tools: new ToolRegistry(),
+      approvalHandler: async () => ({ approved: true }),
+      store,
+      cwd: "/test",
+    });
+    const controller = new AbortController();
+    for await (const _e of session.run("먼저 읽어줘", controller.signal)) {
+      // 소비 (첫 턴)
+    }
+    for await (const _e of session.run("이제 3쪽 표를 수정해줘", controller.signal)) {
+      // 소비 (후속 턴)
+    }
+    const raw = model as unknown as import("ai/test").MockLanguageModelV3;
+    const secondCall = JSON.stringify(raw.doStreamCalls[1]);
+    expect(secondCall).toContain("요청 분해"); // 후속 턴에도 INTAKE_PROMPT 주입됨
+    expect(secondCall).toContain("이제 3쪽 표를 수정해줘"); // 해당 턴 원본 요청 포함
+  });
+
   it("KODOC_INTAKE=0 이면 인테이크가 주입되지 않는다", async () => {
     const prev = process.env.KODOC_INTAKE;
     process.env.KODOC_INTAKE = "0";
