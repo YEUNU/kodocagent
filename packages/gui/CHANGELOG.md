@@ -1,5 +1,12 @@
 # @kodocagent/gui
 
+## 0.5.7
+
+### Patch Changes
+
+- **Electron 42 → 43 업그레이드** — 데스크톱 앱 런타임(Chromium/Node)을 최신 메이저로 올렸습니다. 로컬 macOS 패키징 스모크(`@electron/rebuild` electronVersion=43.0.0 로 네이티브 `sharp`·`@napi-rs/canvas` 재빌드 + 앱 ad-hoc 서명) 통과. `electron-builder.yml` 의 `electronVersion` 도 43.0.0 으로 동기화.
+- 빌드 도구 `vite` 8.0.16 → 8.1.2.
+
 ## 0.5.6
 
 ### Patch Changes
