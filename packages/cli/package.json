@@ -64,6 +64,6 @@
     "@kodocagent/doc-tools": "workspace:*",
     "@kodocagent/shared": "workspace:*",
     "tsup": "^8.5.1",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   }
 }
