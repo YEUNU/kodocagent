@@ -178,6 +178,37 @@ kodocagent config set law-key <발급받은_LAW_OC_키>
 - 툴 네임스페이스: `mcp__<서버명>__<툴명>`
 - [awesome-mcp-korea](https://github.com/darjeeling/awesome-mcp-korea)의 한국 서비스 MCP 서버를 플러그인처럼 연결할 수 있습니다.
 
+#### Parallel로 웹 자료 조사하기 (선택)
+
+[Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp)를 연결하면 Parallel 계정이나 API 키 없이 무료 웹 검색과 페이지 내용 가져오기를 사용할 수 있습니다. 익명 검색은 Fast 모드를 사용하며, 탐색과 가벼운 사용에 적합합니다.
+
+프로젝트 루트의 `.kodocagent/mcp.json`에서 `mcpServers`에 아래 항목을 추가하세요(파일이 없으면 생성). 기존 항목은 유지하세요. 프로젝트 파일을 사용하면 전역 MCP 파일이 없는 경우에도 기본 `korean-law` 서버가 유지됩니다.
+
+```json
+{
+  "mcpServers": {
+    "parallel-search": {
+      "url": "https://search.parallel.ai/mcp",
+      "headers": { "User-Agent": "kodocagent" },
+      "allowedTools": ["web_search", "web_fetch"]
+    }
+  }
+}
+```
+
+해당 프로젝트 디렉터리에서 연결과 툴 목록을 확인한 뒤 채팅을 시작하세요:
+
+```bash
+kodocagent mcp test parallel-search
+kodocagent
+```
+
+연결 테스트는 툴 목록만 확인하며 검색을 실행하지 않습니다. 채팅 예시: "Parallel로 취업규칙 작성에 관한 최신 공개 가이드라인을 검색하고, 관련 페이지를 가져와 출처 URL과 함께 요약해 줘."
+
+툴 이름은 `mcp__parallel-search__web_search`, `mcp__parallel-search__web_fetch`입니다. 검색어와 가져올 URL은 Parallel로 전송되므로 비공개 문서 내용이나 개인정보를 요청에 포함하지 마세요. 한국 법령의 공식 조회에는 기존 `korean-law`를 사용하세요.
+
+사용을 중단하려면 `parallel-search` 항목에 `"disabled": true`를 추가하거나 해당 항목을 삭제하세요. 연결에 실패하면 `https://search.parallel.ai/mcp`에 대한 네트워크 접근을 확인한 뒤 `kodocagent mcp test parallel-search`를 다시 실행하세요.
+
 ---
 
 ## CLI 명령

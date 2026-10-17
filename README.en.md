@@ -178,6 +178,37 @@ You can add MCP servers in `~/.kodocagent/mcp.json` or in a project-root `.kodoc
 - Tool namespace: `mcp__<server>__<tool>`
 - You can connect Korean-service MCP servers from [awesome-mcp-korea](https://github.com/darjeeling/awesome-mcp-korea) like plugins.
 
+#### Optional web research with Parallel
+
+[Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) adds free web search and page fetching without a Parallel account or API key. Anonymous searches use Fast mode and are intended for exploration and light use.
+
+Merge this entry into `mcpServers` in the project-root `.kodocagent/mcp.json` (create the file if needed). Keep any existing entries. Using the project file also preserves the bundled `korean-law` server when no global MCP file exists.
+
+```json
+{
+  "mcpServers": {
+    "parallel-search": {
+      "url": "https://search.parallel.ai/mcp",
+      "headers": { "User-Agent": "kodocagent" },
+      "allowedTools": ["web_search", "web_fetch"]
+    }
+  }
+}
+```
+
+From that project directory, check the connection and available tools:
+
+```bash
+kodocagent mcp test parallel-search
+kodocagent
+```
+
+The connection check lists tools; it does not run a search. In chat, try: "Use Parallel to find recent public guidance on writing an employee handbook, fetch the relevant pages, and summarize them with source URLs."
+
+The tools are named `mcp__parallel-search__web_search` and `mcp__parallel-search__web_fetch`. Search queries and fetched URLs are sent to Parallel, so leave confidential document text and personal data out of requests. For authoritative Korean statute lookups, keep using `korean-law`.
+
+To turn this off, add `"disabled": true` to the `parallel-search` entry, or remove that entry. If connection fails, check network access to `https://search.parallel.ai/mcp` and retry `kodocagent mcp test parallel-search`.
+
 ---
 
 ## CLI commands
